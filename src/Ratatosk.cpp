@@ -22,9 +22,9 @@ void PrintCite() {
 
 void PrintUsage() {
 
-    cout << endl << "Polifrost " << POLIFROST_VERSION << endl << endl;
-    cout << "Hybrid correction of Single Molecule Sequencing reads" << endl << endl;
-    cout << "Usage: Polifrost [PARAMETERS]" << endl << endl;
+    cout << endl << "Ratatosk " << POLIFROST_VERSION << endl << endl;
+    cout << "Phased hybrid error correction of long reads using colored de Bruijn graphs" << endl << endl;
+    cout << "Usage: Ratatosk [PARAMETERS]" << endl << endl;
     cout << "[PARAMETERS]:" << endl << endl;
     cout << "   > Mandatory with required argument:" << endl << endl <<
     "   -i, --in-short-files        Input short read files (FASTA/FASTQ possibly gzipped)" << endl <<
