@@ -122,12 +122,21 @@ While Ratatosk is a reference-free method, a reference-guided preprocessing of t
 ```
 ```
 
+## Advanced options
+
+- **Quality scores** (`-q`)
+
+By default, Ratatosk outputs the corrected long reads without quality scores in FASTA format. By using `-q`, corrected reads are output with quality scores in FASTQ format. The output quality score of a base reflects how confident is Ratatosk in the correction of that base. Given a minimum quality score *X* (`-q X`), all corrected bases have a quality score ranging from *X* to 40 while uncorrected bases have a quality score of 0. Note that Ratatosk uses Phred33 with scores ranging from 0 to 40.
+
+- **Trimming** (`-t`)
+
+By default, Ratatosk outputs all bases (corrected and uncorrected). By using `-t`, bases with a low correction quality score are trimmed. Specifically, given a minimum quality score *X* (`-t X`), only subsequences of the corrected long reads for which the bases have a correction quality score equal to or larger than *X* are output. Each output subsequence will have as name `>name/i` (FASTA output) or `@name/i` (FASTQ output) where `name` is the input name of the long read and `i` is an integer subsequence ID for read `name`. Note that only subsequences larger than the *k*-mer size in Ratatosk (63) are output.
 
 ## Notes
 
-- Ratatosk works best with paired-end short reads in input (`-i`): reads from the same pair **must** have the same FASTA/FASTQ name (if the reads are extracted from a BAM file, use `samtools bam2fq -n`). The order of the reads in the input file(s) does not matter.
+- Ratatosk works best with paired-end short reads in input (`-i`): reads from the same pair **must** have the same FASTA/FASTQ name (if the reads are extracted from a BAM file, use `samtools bam2fq -n`).
 
-- Several temporary files are written to disk. Those files have the same prefix name as the output file (`-o`) but are deleted at the end of Ratatosk execution. Given an input long read file (`-l`) of size *L* GB, ensure that the output folder has at least about *2.5L* GB of free space.
+- Several temporary files are written to disk. These files have the same prefix name as the output file (`-o`) but are deleted at the end of Ratatosk execution. Given an input long read file (`-l`) of size *L* GB, ensure that the output folder has at least about 2.5xL GB of free space.
 
 ## FAQ
 
@@ -141,11 +150,15 @@ Yes, a text file containing one input filename per line with no empty lines can 
 
 **Does Ratatosk work with input short reads which are not paired-end reads?**
 
-Yes, although Ratatosk works best with input paired-end short reads. You can mix paired-end and non-paired-end reads in input as well.
+Yes, although Ratatosk works best with paired-end short reads in input. You can mix paired-end and non-paired-end reads in input as well.
 
-**Are the output corrected long reads in the same order as the uncorrected input long reads?**
+**Are the output corrected long reads in the same order as the input uncorrected long reads?**
 
-Yes if Ratatosk was run with a single thread, no otherwise.
+Yes if Ratatosk was run with a single thread, otherwise the output order is random.
+
+**Is it fine if my input reads contain non-{A,C,G,T} characters?**
+
+Yes but they won't be corrected nor used in the graph index.
 
 ## Troubleshooting
 

@@ -569,7 +569,7 @@ int main(int argc, char *argv[]) {
                 v_km_centroids = addCoverage(dbg, opt_pass1, false, true);
                 partitions = createPartitions(dbg, v_km_centroids, dbg.nbKmers() / opt_pass1.nb_partitions, opt_pass1.nb_threads, opt_pass1.verbose);
 
-                mergeGrapLongReads(dbg, opt_pass1, partitions);
+                //mergeGrapLongReads(dbg, opt_pass1, partitions);
                 detectSNPs(dbg, opt_pass1, partitions);
 
                 v_km_centroids.clear();
@@ -595,17 +595,17 @@ int main(int argc, char *argv[]) {
             if (partitions != nullptr) delete[] partitions;
 
             const string sr_graph = opt.filename_long_out + "_sr.gfa";
-            const string lr_graph = opt.filename_long_out + "_lr.fasta";
+            //const string lr_graph = opt.filename_long_out + "_lr.fasta";
 
             const int sr_graph_format = FileParser::getFileFormat(sr_graph.c_str());
-            const int lr_graph_format = FileParser::getFileFormat(lr_graph.c_str());
+            //const int lr_graph_format = FileParser::getFileFormat(lr_graph.c_str());
 
             Correct_Opt opt_pass2(opt);
 
             opt_pass2.filename_ref_in.clear();
 
             if (sr_graph_format != -1) opt_pass2.filename_ref_in.push_back(sr_graph);
-            if (lr_graph_format != -1) opt_pass2.filename_ref_in.push_back(lr_graph);
+            //if (lr_graph_format != -1) opt_pass2.filename_ref_in.push_back(lr_graph);
 
             opt_pass2.filename_seq_in.clear();
             opt_pass2.filename_seq_in.insert(opt_pass2.filename_seq_in.end(), opt_pass2.filenames_helper_long_in.begin(), opt_pass2.filenames_helper_long_in.end());
@@ -653,7 +653,7 @@ int main(int argc, char *argv[]) {
 
             // Clean up data on disk
             if (remove(sr_graph.c_str()) != 0) cerr << "Ratatosk::Ratatosk(): Couldn't remove temporary file" << endl;
-            if (remove(lr_graph.c_str()) != 0) cerr << "Ratatosk::Ratatosk(): Couldn't remove temporary file" << endl;
+            //if (remove(lr_graph.c_str()) != 0) cerr << "Ratatosk::Ratatosk(): Couldn't remove temporary file" << endl;
             if (remove(opt_pass1.filename_long_out.c_str()) != 0) cerr << "Ratatosk::Ratatosk(): Couldn't remove temporary file" << endl;
         }
     }
