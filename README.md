@@ -61,7 +61,7 @@ sudo apt-get install build-essential cmake zlib1g-dev
 
   By default, the installation creates a binary (*Ratatosk*)
 
-## Interface:
+## Usage:
 
 ```
 Ratatosk
@@ -105,33 +105,43 @@ Usage: Ratatosk [PARAMETERS]
    -v, --verbose            Print information messages during execution
 ```
 
-## Usage
+## ***de novo*** correction
 
-Ratatosk works best with paired-end short reads in input (`-i`). For paired-end short reads, the reads from the same pair *must* have the same FASTA/FASTQ name (if the reads are extracted from a BAM file, use `samtools bam2fq -n`). The order of the reads in the input file(s) does not matter.
+```
+Ratatosk -v -c 16 -i short_reads.fastq -l long_reads.fastq -o corrected_long_reads
+```
+Ratatosk corrects the long read file (`-l long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-i short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *corrected_long_reads.*
 
-Several temporary files are written to disk. Those files have the same prefix name as the output file given by `-o` but are deleted at the end of Ratatosk execution. Given an input long read file (`-l`) of size *L* GB, ensure that the output folder has at least about 2.5L GB of free space.
+## Reference-guided correction
 
-### Examples
+While Ratatosk is a reference-free method, a reference-guided preprocessing of the input data is proposed to improve the correction, redcue the running time and distribute the workload over many nodes of an HPC. First, short and long reads with good mapping quality are distributed over bins corresponding to segments of the reference genome they map to. Bins are corrected independently. Then, unmapped long reads and long reads with low mapping quality are corrected *de novo* using all short reads and the previously corrected long read bins. More details are provided in.
 
-- ***de novo*** **correction**
-  ```
-  Ratatosk -v -c 16 -i short_reads.fastq -l long_reads.fastq -o corrected_long_reads
-  ```
-  Ratatosk corrects the long read file (`-l long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-i short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *corrected_long_reads.*
+1. Map the long and short reads. We advise [bwa-mem](https://github.com/lh3/bwa) to map the short reads and [minimap2](https://github.com/lh3/minimap2) for the long reads. BAM files must be sorted and indexed (`samtools sort` and `samtools index`).
+
+2. Bin the reads:
+```
+```
+
+
+## Notes
+
+- Ratatosk works best with paired-end short reads in input (`-i`): reads from the same pair **must** have the same FASTA/FASTQ name (if the reads are extracted from a BAM file, use `samtools bam2fq -n`). The order of the reads in the input file(s) does not matter.
+
+- Several temporary files are written to disk. Those files have the same prefix name as the output file (`-o`) but are deleted at the end of Ratatosk execution. Given an input long read file (`-l`) of size *L* GB, ensure that the output folder has at least about *2.5L* GB of free space.
 
 ## FAQ
 
-**Can I provide in input multiple files?**
+**Can I provide multiple read files in input?**
 
 Yes, files must be separated by a space character for parameter `-i` and `-l`.
 
-**Can I provide in input a file which is a list of files?**
+**Can I provide a file which is a list of read files in input?**
 
 Yes, a text file containing one input filename per line with no empty lines can be given in input.
 
-**Does Ratatosk works with input short reads which are not paired-end reads?**
+**Does Ratatosk work with input short reads which are not paired-end reads?**
 
-Yes, although Ratatosk works best with input paired-end short reads. You can also mix paired-end and non-paired-end reads in input.
+Yes, although Ratatosk works best with input paired-end short reads. You can mix paired-end and non-paired-end reads in input as well.
 
 **Are the output corrected long reads in the same order as the uncorrected input long reads?**
 
