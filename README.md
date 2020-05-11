@@ -107,7 +107,14 @@ Usage: Ratatosk [PARAMETERS]
 
 ## ***de novo*** correction
 
-See [reference-guided preprocessing](https://github.com/GuillaumeHolley/Ratatosk/tree/master/scripts/reference_guiding)
+```
+Ratatosk -v -c 16 -i short_reads.fastq -l long_reads.fastq -o corrected_long_reads
+```
+Ratatosk corrects the long read file (`-l long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-i short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *corrected_long_reads.*
+
+## Reference-guided correction
+
+See [reference-guided preprocessing](https://github.com/GuillaumeHolley/Ratatosk/tree/master/scripts/reference_guiding).
 
 ## Advanced options
 
@@ -123,7 +130,7 @@ See [reference-guided preprocessing](https://github.com/GuillaumeHolley/Ratatosk
 
 - Ratatosk works best with paired-end short reads in input (`-i`): reads from the same pair **must** have the same FASTA/FASTQ name (if the reads are extracted from a BAM file, use `samtools bam2fq -n`).
 
-- Several temporary files are written to disk. These files have the same prefix name as the output file (`-o`) but are deleted at the end of Ratatosk execution. Given an input long read file (`-l`) of size *L* GB, ensure that the output folder has at least about *2.5L* GB of free space.
+- Several temporary files are written to disk. These files have the same prefix name as the output file (`-o`) but are deleted at the end of Ratatosk execution. Given an input long read file (`-l`) of size *X* GB, ensure that the output folder has at least about *2.5X* GB of free space.
 
 ## FAQ
 
