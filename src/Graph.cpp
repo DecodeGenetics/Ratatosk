@@ -1889,7 +1889,7 @@ pair<string, string> quickAndDirty(const CompactedDBG<UnitigData>& dbg, const st
 	return {sss.str(), ssq.str()};
 }
 
-void mergeGrapLongReads(CompactedDBG<UnitigData>& dbg_sr, const Correct_Opt& opt, const Roaring* part_neighbors) {
+/*void mergeGrapLongReads(CompactedDBG<UnitigData>& dbg_sr, const Correct_Opt& opt, const Roaring* part_neighbors) {
 
     ofstream graph_file_out;
     ostream graph_out(0);
@@ -2430,6 +2430,295 @@ void mergeGrapLongReads(CompactedDBG<UnitigData>& dbg_sr, const Correct_Opt& opt
     }
 
     if (opt.verbose) cout << "Ratatosk::mergeGrapLongReads(): Graph has " << dbg_sr.size() << " unitigs and " << dbg_sr.nbKmers() << " k-mers" << endl;
+}*/
+
+void mergeGrapLongReads(CompactedDBG<UnitigData>& dbg_sr, const Correct_Opt& opt, const vector<string>& v_ref_filenames) {
+
+	const size_t k = dbg_sr.getK();
+	const size_t g = dbg_sr.getG();
+
+	CompactedDBG<UnitigData> dbg_lr(opt.k);
+
+	BlockedBloomFilter bf;
+	FileParser fp;
+
+    string s;
+
+    size_t len_read = 0;
+    size_t pos_read = 0;
+    size_t nb_seq = 0;
+
+    const size_t max_len_seq = 1024;
+    const size_t thread_seq_buf_sz = opt.read_chunksize * max_len_seq;
+
+    auto reading_function = [&](char* seq_buf, size_t& seq_buf_sz) {
+
+        size_t file_id = 0;
+
+        const size_t sz_buf = thread_seq_buf_sz - k;
+
+        const char* s_str = s.c_str();
+
+        seq_buf_sz = 0;
+
+        while (seq_buf_sz < sz_buf) {
+
+            const bool new_reading = (pos_read >= len_read);
+
+            if (!new_reading || fp.read(s, file_id)) {
+
+                nb_seq += new_reading;
+                pos_read &= static_cast<size_t>(new_reading) - 1;
+
+                len_read = s.length();
+                s_str = s.c_str();
+
+                if (len_read >= k){
+
+                    if ((thread_seq_buf_sz - seq_buf_sz - 1) < (len_read - pos_read)){
+
+                        strncpy(&seq_buf[seq_buf_sz], &s_str[pos_read], thread_seq_buf_sz - seq_buf_sz - 1);
+
+                        seq_buf[thread_seq_buf_sz - 1] = '\0';
+
+                        pos_read += sz_buf - seq_buf_sz;
+                        seq_buf_sz = thread_seq_buf_sz;
+
+                        break;
+                    }
+                    else {
+
+                        strcpy(&seq_buf[seq_buf_sz], &s_str[pos_read]);
+
+                        seq_buf_sz += (len_read - pos_read) + 1;
+                        pos_read = len_read;
+                    }
+                }
+                else pos_read = len_read;
+            }
+            else return true;
+        }
+
+        return false;
+    };
+
+	// Build Bloom filter of reference
+	{
+		// Kmer stream estimation of the number of unique k-mers in reference
+		{
+		    KmerStream_Build_opt kms_opt;
+
+		    size_t nb_unique_kmers_ref;
+
+		    kms_opt.threads = opt.nb_threads;
+		    kms_opt.verbose = opt.verbose;
+		    kms_opt.k = k;
+		    kms_opt.g = g;
+		    kms_opt.q = 0;
+
+		    kms_opt.files = v_ref_filenames;
+
+		    KmerStream kms(kms_opt);
+
+		    nb_unique_kmers_ref = max(1UL, kms.KmerF0());
+		}
+
+		// Create Bloom filter for reference
+		{
+			const bool multi_threaded = (opt.nb_threads != 1);
+
+			s.clear();
+
+		    len_read = 0;
+		    pos_read = 0;
+		    nb_seq = 0;
+
+		    fp = FileParser(v_ref_filenames);
+		    bf = std::move(BlockedBloomFilter(nb_unique_kmers_ref, opt.nb_bits_unique_kmers_bf));
+
+		    // Main worker thread
+		    auto worker_function = [&](char* seq_buf, const size_t seq_buf_sz) {
+
+		        char* str = seq_buf;
+		        const char* str_end = seq_buf + seq_buf_sz;
+
+		        while (str < str_end) { // for each input
+
+		            const int len = strlen(str);
+
+		            for (char* s = str; s != str + len; ++s) *s &= 0xDF; // Put characters in upper case
+
+		            KmerHashIterator<RepHash> it_kmer_h(str, len, k), it_kmer_h_end;
+		            minHashIterator<RepHash> it_min(str, len, k, g, RepHash(), true);
+
+		            for (; it_kmer_h != it_kmer_h_end; ++it_kmer_h) {
+
+		                const pair<uint64_t, int> p_ = *it_kmer_h; // <k-mer hash, k-mer position in sequence>
+
+		                it_min += (p_.second - it_min.getKmerPosition()); //If one or more k-mer were jumped because contained non-ACGT char.
+
+		                bf.insert(p_.first, it_min.getHash(), multi_threaded);
+		            }
+
+		            str += len + 1;
+		        }
+		    };
+
+		    {
+		        bool stop = false;
+
+		        vector<thread> workers; // need to keep track of threads so we can join them
+
+		        mutex mutex_file;
+
+		        for (size_t t = 0; t < opt.nb_threads; ++t){
+
+		            workers.emplace_back(
+
+		                [&]{
+
+		                    char* buffer_seq = new char[thread_seq_buf_sz]();
+
+		                    size_t buffer_seq_sz = 0;
+
+		                    while (true) {
+
+		                        {
+		                            unique_lock<mutex> lock(mutex_file);
+
+		                            if (stop) {
+
+		                                delete[] buffer_seq;
+		                                return;
+		                            }
+
+		                            stop = reading_function(buffer_seq, buffer_seq_sz);
+		                        }
+
+		                        worker_function(buffer_seq, buffer_seq_sz);
+		                    }
+
+		                    delete[] buffer_seq;
+		                }
+		            );
+		        }
+
+		        for (auto& t : workers) t.join();
+		    }
+
+		    fp.close();
+		}
+	}
+
+	{
+		vector<string> v_in_long_reads;
+
+	    len_read = 0;
+	    pos_read = 0;
+	    nb_seq = 0;
+
+    	v_in_long_reads.insert(v_in_long_reads.end(), opt.filenames_long_in.begin(), opt.filenames_long_in.end());
+    	v_in_long_reads.insert(v_in_long_reads.end(), opt.filenames_helper_long_in.begin(), opt.filenames_helper_long_in.end());
+
+		s.clear();
+
+   	    fp = FileParser(v_in_long_reads);
+
+	    auto worker_function = [&](char* seq_buf, const size_t seq_buf_sz) {
+
+			vector<Kmer> v_km;
+
+	        char* str = seq_buf;
+	        const char* str_end = seq_buf + seq_buf_sz;
+
+	        while (str < str_end) { // for each input
+
+	            const int len = strlen(str);
+
+	            for (char* s = str; s != str + len; ++s) *s &= 0xDF; // Put characters in upper case
+
+	            KmerHashIterator<RepHash> it_kmer_h(str, len, k), it_kmer_h_end;
+	            minHashIterator<RepHash> it_min(str, len, k, g, RepHash(), true);
+
+	            for (; it_kmer_h != it_kmer_h_end; ++it_kmer_h) {
+
+	                const pair<uint64_t, int> p_ = *it_kmer_h; // <k-mer hash, k-mer position in sequence>
+
+	                it_min += (p_.second - it_min.getKmerPosition()); //If one or more k-mer were jumped because contained non-ACGT char.
+
+	                if (bf.contains(p_.first, it_min.getHash())) { // Kmer is in the bloom filter
+
+	                	const Kmer km(str + p_.first);
+
+	                	if (dbg_sr.find(km).isEmpty) v_km.push_back(km); // Kmer is not in the graph
+	                }
+	            }
+
+	            str += len + 1;
+	        }
+
+	        return v_km
+	    };
+
+	    {
+	        bool stop = false;
+
+	        vector<thread> workers; // need to keep track of threads so we can join them
+
+	        mutex mutex_file;
+	        mutex mutex_graph;
+
+	        for (size_t t = 0; t < opt.nb_threads; ++t){
+
+	            workers.emplace_back(
+
+	                [&]{
+
+	                    char* buffer_seq = new char[thread_seq_buf_sz]();
+
+	                    size_t buffer_seq_sz = 0;
+
+	                    while (true) {
+
+	                        {
+	                            unique_lock<mutex> lock(mutex_file);
+
+	                            if (stop) {
+
+	                                delete[] buffer_seq;
+	                                return;
+	                            }
+
+	                            stop = reading_function(buffer_seq, buffer_seq_sz);
+	                        }
+
+	                        const vector<Kmer> v_km = worker_function(buffer_seq, buffer_seq_sz);
+
+	                        if (!v_km.empty()) {
+
+	                        	unique_lock<mutex> lock(mutex_graph);
+
+	                        	for (const auto& km : v_km) {
+
+	                        		const string km_str = km.toString();
+
+	                        		dbg_lr.add(km_str);
+	                        	}
+	                        }
+	                    }
+
+	                    delete[] buffer_seq;
+	                }
+	            );
+	        }
+
+	        for (auto& t : workers) t.join();
+	    }
+
+	    fp.close();
+	}
+
+	for (const auto& um : dbg_lr) dbg_sr.add(um.referenceUnitigToString());
 }
 
 void mergeGraphUnmapped(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const string& filenameOut){

@@ -114,9 +114,18 @@ Ratatosk corrects the long read file (`-l long_reads.fastq`) with 16 threads (`-
 
 ## Reference-guided correction
 
-While Ratatosk is a reference-free method, a reference-guided preprocessing of the input data is proposed to improve the correction, redcue the running time and distribute the workload over many nodes of an HPC. First, short and long reads with good mapping quality are distributed over bins corresponding to segments of the reference genome they map to. Bins are corrected independently. Then, unmapped long reads and long reads with low mapping quality are corrected *de novo* using all short reads and the previously corrected long read bins. More details are provided in.
+While Ratatosk is a reference-free method, a reference-guided preprocessing of the input data is proposed to:
+- improve the correction
+- reduce the running time
+- distribute the workload over many nodes of an HPC
 
-1. Map the long and short reads. We advise [bwa-mem](https://github.com/lh3/bwa) to map the short reads and [minimap2](https://github.com/lh3/minimap2) for the long reads. BAM files must be sorted and indexed (`samtools sort` and `samtools index`).
+Here is an overview of the preprocessing:
+1. Short and long reads are mapped to a reference genome
+2. Short and long reads with good mapping quality are distributed over bins corresponding to segments of the reference genome they map to
+3. Bins are corrected independently
+4. Unmapped long reads and long reads with low mapping quality are corrected *de novo* using all short reads. Correction is assisted by the previously corrected long read bins.
+
+As the input of the pipeline are BAM files, we recommend [bwa-mem](https://github.com/lh3/bwa) to map the short reads and [minimap2](https://github.com/lh3/minimap2) for the long reads. BAM files must be sorted and indexed (`samtools sort` and `samtools index`).
 
 2. Bin the reads:
 ```
@@ -126,11 +135,11 @@ While Ratatosk is a reference-free method, a reference-guided preprocessing of t
 
 - **Quality scores** (`-q`)
 
-By default, Ratatosk outputs the corrected long reads without quality scores in FASTA format. By using `-q`, corrected reads are output with quality scores in FASTQ format. The output quality score of a base reflects how confident is Ratatosk in the correction of that base. Given a minimum quality score *X* (`-q X`), all corrected bases have a quality score ranging from *X* to 40 while uncorrected bases have a quality score of 0. Note that Ratatosk uses Phred33 with scores ranging from 0 to 40.
+  By default, Ratatosk outputs the corrected long reads without quality scores in FASTA format. By using `-q`, corrected reads are output with quality scores in FASTQ format. The output quality score of a base reflects how confident is Ratatosk in the correction of that base. Given a minimum quality score *X* (`-q X`), all corrected bases have a quality score ranging from *X* to 40 while uncorrected bases have a quality score of 0. Note that Ratatosk uses Phred33 with scores ranging from 0 to 40.
 
 - **Trimming** (`-t`)
 
-By default, Ratatosk outputs all bases (corrected and uncorrected). By using `-t`, bases with a low correction quality score are trimmed. Specifically, given a minimum quality score *X* (`-t X`), only subsequences of the corrected long reads for which the bases have a correction quality score equal to or larger than *X* are output. Each output subsequence will have as name `>name/i` (FASTA output) or `@name/i` (FASTQ output) where `name` is the input name of the long read and `i` is an integer subsequence ID for read `name`. Note that only subsequences larger than the *k*-mer size in Ratatosk (63) are output.
+  By default, Ratatosk outputs all bases (corrected and uncorrected). By using `-t`, bases with a low correction quality score are trimmed. Specifically, given a minimum quality score *X* (`-t X`), only subsequences of the corrected long reads for which the bases have a correction quality score equal to or larger than *X* are output. Each output subsequence will have as name `>name/i` (FASTA) or `@name/i` (FASTQ) where `name` is the input name of the long read and `i` is an integer subsequence ID for read `name`. Note that only subsequences larger than the *k*-mer size in Ratatosk (63) are output.
 
 ## Notes
 
