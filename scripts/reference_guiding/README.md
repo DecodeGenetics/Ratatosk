@@ -19,7 +19,7 @@ While Ratatosk is a reference-free method, a reference-guided preprocessing of t
 * [samtools](https://htslib.org)
 * [Ratatosk & Bifrost](https://github.com/GuillaumeHolley/Ratatosk)
 
-The following python3 module is required:
+The following python3 modules are required:
 * [pysam](https://pysam.readthedocs.io)
 
 ## Usage
@@ -37,15 +37,15 @@ bash scripts/reference_guiding/Ratatosk.sh <reference_genome.fa> <short_reads.ba
 - `<short_reads.bam>`: BAM file of the input paired-end short reads
 - `<long_reads.bam>`: BAM file of the input long reads
 - `<output_prefix>`: Output path where temporary and output files are written. This path must contain enough space to run the binning. See notes below.
-- `<slurm_partition>`: Slurm partition where the sbatch jobs will be submitted. If no partition is given, the default Slurm partition *nomosix* is used.
+- `<slurm_partition>`: Slurm partition where the sbatch jobs are submitted. If no partition is given, the default Slurm partition *nomosix* is used.
 
 **Output**
 
-Upon completion of the script, the corrected long reads are available in `<output_prefix>/ratatosk/sample_corrected.fastq`. Folder `<output_prefix>/segments` contains temporary files and can be deleted.
+Upon completion of the script, the corrected long reads are available in `<output_prefix>/ratatosk/sample_corrected.fastq`. Folder `<output_prefix>/segments` contains temporary files that can be deleted.
 
 **Important**
 
 Script `scripts/reference_guiding/Ratatosk.sh` is a work in progress. Here are a few considerations to run it that will be subsequently improved:
 
-- This script was designed specifically to run on a human genome dataset. As such, the script assumes that a machine wih at least 48 cores and 350 GB of RAM is available on the Slum partition selected.
+- This script was designed specifically to run on a human genome dataset. As such, the script assumes that a machine with at least 48 cores and 350 GB of RAM is available on the Slum partition selected.
 - Given a short reads FASTA/FASTQ file of size *X* GB and a long reads FASTA/FASTQ file of size *Y* GB, the output path *output_prefix* must have at least 2.5X + 2.5Y GB of disk available

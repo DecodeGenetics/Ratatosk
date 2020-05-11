@@ -1,0 +1,304 @@
+#!usr/bin/env python3
+
+import sys
+import os
+import math
+import pysam
+import argparse
+
+import multiprocessing as mp
+
+from statistics import mean
+
+def outputUnmappedLowQualLR(out_prefix_filename, mapq, ref_unbin, multithreaded):
+
+	global lr_bams
+
+	out_f = open(out_prefix_filename + "_lr_unknown.fq", "w") # Output file
+
+	for bamf in lr_bams:
+
+		it_bamf = bamf.fetch(multiple_iterators=multithreaded, until_eof=True) # fetch() also gets unmapped reads here
+
+		for record in it_bamf:
+
+			# Discard 0-length reads, unmapped reads, secondary and supplementary alignments.
+			if ((record.reference_name in ref_unbin) or (record.is_unmapped == True) or ((record.mapping_quality < mapq)) and (record.query_length != 0) and (record.is_secondary == False) and (record.is_supplementary == False)):
+
+				# Output LR
+				out_f.write('>' + record.query_name + '\n' + record.query_sequence + '\n')
+				
+				# If has qualities, just output those
+				if (len(record.query_qualities) != 0):
+				
+					qual = [chr(x+33) for x in record.query_qualities]
+				
+					out_f.write('+' + '\n' + "".join(qual) + '\n')
+
+	out_f.close()
+
+def outputUnmappedLowQualSR(out_prefix_filename, mapq, qs, multithreaded):
+
+	global sr_bams
+
+	out_f = open(out_prefix_filename + "_sr_unmapped.fa", "w") # Output file for unmapped or low qual SR
+	out_junk_f = open(out_prefix_filename + "_sr_discarded.fa", "w") # Ouput file for discarded unmapped or low qual SR (junk)
+
+	for bamf in sr_bams:
+
+		it_bamf = bamf.fetch(multiple_iterators=multithreaded, until_eof=True) # fetch() also gets unmapped reads here
+
+		for record in it_bamf:
+
+			# Discard 0-length reads, unmapped reads, secondary and supplementary alignments.
+			if ((record.is_unmapped == True) or ((record.mapping_quality < mapq)) and (record.query_length != 0) and (record.is_secondary == False) and (record.is_supplementary == False)):
+
+				if (len(record.query_qualities) == 0): out_f.write('>' + record.query_name + '\n' + record.query_sequence + '\n')
+				elif (mean(record.query_qualities) < qs): out_junk_f.write('>' + record.query_name + '\n' + record.query_sequence + '\n')
+				else:
+
+					# TEST: Mask bases with low quality score
+					pos_low_qual = [ i for i in range(len(record.query_qualities)) if (record.query_qualities[i] < 10) ]
+					query_sequence = list(record.query_sequence)
+					qual = [chr(x+33) for x in record.query_qualities]
+					
+					for pos in pos_low_qual: query_sequence[pos] = 'N'
+
+					out_f.write('>' + record.query_name + '\n' + ''.join(query_sequence) + '\n')
+					out_f.write('+' + '\n' + "".join(qual) + '\n')
+
+	out_f.close()
+	out_junk_f.close()
+	
+def segmentBAM(out_prefix_filename, chr_name, lr_start_pos_ref, lr_end_pos_ref, chr_len, mapq_sr, mapq_lr, multithreaded):
+
+	global sr_bams
+	global lr_bams
+
+	buffer_sz = 1000000 # Size buffer to add to SR reads boundaries
+
+	sr_start_pos_ref = chr_len # SR start position
+	sr_end_pos_ref = 0 # SR end position
+
+	out_sr_filename = out_prefix_filename + "_sr_" + chr_name + "_" + str(lr_start_pos_ref) + ".fa" # Output name SR file
+	out_lr_filename = out_prefix_filename + "_lr_" + chr_name + "_" + str(lr_start_pos_ref) + ".fq" # Output name LR file
+
+	out_sr_f = open(out_sr_filename, "w") # Output file for SR
+	out_lr_f = open(out_lr_filename, "w") # Output file for LR
+
+	nb_sr = 0 # Number of SR extracted for that region
+	nb_lr = 0 # Number of LR extracted for that region
+
+	for lr_bamf in lr_bams:
+
+		it_lr_bamf = lr_bamf.fetch(chr_name, lr_start_pos_ref, lr_end_pos_ref, multiple_iterators=multithreaded)
+
+		for record in it_lr_bamf:
+
+			# If long read starts in the region and its mapq is good enough
+			if (record.reference_start >= lr_start_pos_ref) and (record.reference_start <= lr_end_pos_ref) and (record.mapping_quality >= mapq_lr):
+
+				# Discard 0-length reads, unmapped reads, secondary and supplementary alignments.
+				if (record.query_length != 0) and (record.is_unmapped == False) and (record.is_secondary == False) and (record.is_supplementary == False):
+
+					# Set the boundaries where we need to fetch the SR
+					sr_start_pos_ref = min(sr_start_pos_ref, record.reference_start)
+					sr_end_pos_ref = max(sr_end_pos_ref, record.reference_start + record.reference_length - 1)
+
+					# Output LR
+					out_lr_f.write('>' + record.query_name + '\n' + record.query_sequence + '\n')
+
+					# If has qualities, just output those
+					if (len(record.query_qualities) != 0):
+
+						qual = [chr(x+33) for x in record.query_qualities]
+
+						out_lr_f.write('+' + '\n' + "".join(qual) + '\n')
+
+					nb_lr += 1 # Increase count of LR extracted
+
+	if (nb_lr != 0): # If there are long reads to correct for that region
+
+		# Increase SR boundaries by buffer_sz
+		sr_start_pos_ref = max(sr_start_pos_ref - buffer_sz, 0)
+		sr_end_pos_ref = min(sr_end_pos_ref + buffer_sz, chr_len)
+
+		for sr_bamf in sr_bams:
+
+			it_sr_bamf = sr_bamf.fetch(chr_name, sr_start_pos_ref, sr_end_pos_ref, multiple_iterators=multithreaded)
+
+			for record in it_sr_bamf:
+
+				# If short read starts in the region and its mapq is good enough
+				if (record.reference_start >= sr_start_pos_ref) and (record.reference_start <= sr_end_pos_ref) and (record.mapping_quality >= mapq_sr):
+
+					# Discard 0-length reads, unmapped reads, secondary and supplementary alignments.
+					if (record.query_length != 0) and (record.is_unmapped == False) and (record.is_secondary == False) and (record.is_supplementary == False):
+
+						# TEST: Mask bases with low quality score
+						if (len(record.query_qualities) != 0):
+
+							pos_low_qual = [ i for i in range(len(record.query_qualities)) if (record.query_qualities[i] < 10) ]
+							query_sequence = list(record.query_sequence)
+							
+							for pos in pos_low_qual: query_sequence[pos] = 'N'
+
+							out_sr_f.write('>' + record.query_name + '\n' + ''.join(query_sequence) + '\n')
+
+						# Output LR
+						else: out_sr_f.write('>' + record.query_name + '\n' + record.query_sequence + '\n')
+
+						nb_sr += 1 # Increase count of LR extracted
+
+	out_sr_f.close()
+	out_lr_f.close()
+
+def checkReferenceCompatibility(sr_filenames, lr_filenames):
+
+	ref_s_inter = set()
+	ref_s_union = set()
+
+	ref_d_inter = {}
+	ref_d_diff = {}
+
+	filenames = sr_filenames + lr_filenames
+	first_file = True
+
+	for filename in filenames:
+
+		ref_file = set()
+		bamf = pysam.AlignmentFile(filename, "rb")
+
+		for chr_name in bamf.references: ref_file.add((chr_name, bamf.get_reference_length(chr_name)))
+
+		if (first_file == True):
+
+			ref_s_inter = ref_file
+			ref_s_union = ref_file
+			first_file = False
+
+		else:
+
+			ref_s_inter = ref_s_inter.intersection(ref_file)
+			ref_s_union = ref_s_union.union(ref_file)
+
+	ref_s_diff = ref_s_union.difference(ref_s_inter)
+
+	if (len(ref_s_diff) != 0):
+
+		print("Input BAM files have different reference chromsomes/contigs.")
+		print("Using the intersection for binning. LR mapping to unbinned chromsomes/contigs are written to bin 'unknown' for genome-wide correction")
+		print(" ")
+
+		print("Intersection is:")
+		for contig in ref_s_inter: print("-" + contig[0] + " " + str(contig[1]))
+
+		print(" ")
+		print("Difference is:")
+		for contig in ref_s_diff: print("-" + contig[0] + " " + str(contig[1]))
+
+	for contig in ref_s_inter: ref_d_inter[contig[0]] = contig[1]
+	for contig in ref_s_diff: ref_d_diff[contig[0]] = contig[1]
+
+	return (ref_d_inter, ref_s_diff)
+
+if __name__ == '__main__':
+
+	# Default values
+	nb_threads = 1
+	sr_filenames = []
+	lr_filename = []
+	out_prefix_filename = ""
+	len_segment = 5000000
+	mapq_sr = 0
+	mapq_lr = 30
+	qs_sr = 20
+
+	# Parse arguments
+	parser = argparse.ArgumentParser(prog='segmentBAM', description='Segment BAM files of short reads and long reads')
+
+	required = parser.add_argument_group('Required arguments')
+
+	required.add_argument('-s', '--short_read_bam', action='append', help='filename of a short read bam file', required=True)
+	required.add_argument('-l', '--long_read_bam', action='append', help='filename of a long read bam file', required=True)
+	required.add_argument('-o', '--out_prefix_filename', action='store', help='Prefix of the output filenames', required=True)
+
+	required.add_argument('-t', '--threads', action='store', help='Number of threads to use (default is 1)', required=True)
+	required.add_argument('-b', '--buffer_size', action='store', help='Length of segments in bp (default is 5,000,000)', required=True)
+	required.add_argument('-m', '--mapq_short', action='store', help='Minimum MAPQ of short reads (default is 0)', required=True)
+	required.add_argument('-n', '--mapq_long', action='store', help='Minimum MAPQ of long reads (default is 30)', required=True)
+	required.add_argument('-q', '--qual_score_long', action='store', help='Minimum mean quality score of unmapped short reads (default is 20)', required=True)
+
+	args = parser.parse_args()
+	args_d = vars(args)
+
+	for k,v in args_d.items():
+
+		if ((k == "s") or (k == "short_read_bam")): sr_filenames = v
+		elif ((k == "l") or (k == "long_read_bam")): lr_filenames = v
+		elif ((k == "t") or (k == "threads")): nb_threads = int(v)
+		elif ((k == "o") or (k == "out_prefix_filename")): out_prefix_filename = v
+		elif ((k == "b") or (k == "buffer_size")): len_segment = int(v)
+		elif ((k == "m") or (k == "mapq_short")): mapq_sr = int(v)
+		elif ((k == "n") or (k == "mapq_long")): mapq_lr = int(v)
+		elif ((k == "q") or (k == "qual_score_long")): qs_sr = int(v)
+
+	# Minor consistency check on arguments
+	if (len(sr_filenames) == 0): sys.exit("No input short read BAM provided as input")
+	if (len(lr_filenames) == 0): sys.exit("No input long read BAM provided as input")
+	if (nb_threads <= 0): sys.exit("Cannot use less than 1 thread")
+	if (nb_threads > mp.cpu_count()): sys.exit("Cannot use more than " + str(mp.cpu_count()) + "threads")
+	if (len_segment <= 0): sys.exit("Cannot use segments length that are less than 0")
+	if (mapq_sr < 0): sys.exit("Cannot use MAPQ less than 0 for short reads")
+	if (mapq_sr > 60): sys.exit("Cannot use MAPQ greater than 60 for short reads")
+	if (mapq_lr < 0): sys.exit("Cannot use MAPQ less than 0 for long reads")
+	if (mapq_lr > 60): sys.exit("Cannot use MAPQ greater than 60 for long reads")
+	if (qs_sr < 0): sys.exit("Cannot use quality score less than 0 for short reads")
+	if (qs_sr > 40): sys.exit("Cannot use quality score greater than 40 for short reads")
+
+	# Check that all BAM files use the same reference file
+	ref_bin, ref_unbin = checkReferenceCompatibility(sr_filenames, lr_filenames)
+
+	# Open BAM files
+	lr_bams = []
+	sr_bams = []
+
+	for lr_filename in lr_filenames:
+
+		lr_bamf = pysam.AlignmentFile(lr_filename, "rb")
+		lr_bams.append(lr_bamf)
+
+	for sr_filename in sr_filenames:
+
+		sr_bamf = pysam.AlignmentFile(sr_filename, "rb")
+		sr_bams.append(sr_bamf)
+	
+	# Segments into different files SR and LR from same regions with (MAPQ >= mapq)
+	if (nb_threads == 1):
+
+		for chr_name, chr_len in ref_bin.items():
+			
+			# Segment SR and LR with MAPQ>mapq into bins
+			for i in range(0, chr_len, len_segment): segmentBAM(out_prefix_filename, chr_name, i, min(i + len_segment - 1, chr_len), chr_len, mapq_sr, mapq_lr, False)
+
+		outputUnmappedLowQualLR(out_prefix_filename, mapq_lr, ref_unbin, False) # Output to file all LR which are either unmapped or with (MAPQ < mapq)
+		outputUnmappedLowQualSR(out_prefix_filename, mapq_sr, qs_sr, False) # Output to file all SR which are unmapped
+	else:
+		
+		thread_pool = mp.Pool(nb_threads) # Create pool of threads
+
+		thread_pool.apply_async(outputUnmappedLowQualLR, args=(out_prefix_filename, mapq_lr, ref_unbin, True))
+		thread_pool.apply_async(outputUnmappedLowQualSR, args=(out_prefix_filename, mapq_sr, qs_sr, True))
+
+		for chr_name, chr_len in ref_bin.items():
+			
+			for i in range(0, chr_len, len_segment): # Segment SR and LR with MAPQ>mapq into bins
+
+				thread_pool.apply_async(segmentBAM, args=(out_prefix_filename, chr_name, i, min(i + len_segment - 1, chr_len), chr_len, mapq_sr, mapq_lr, True))
+
+		thread_pool.close() 
+		thread_pool.join()
+
+	# Close BAM files
+	for lr_bamf in lr_bams: lr_bamf.close()
+	for sr_bamf in sr_bams: sr_bamf.close()
