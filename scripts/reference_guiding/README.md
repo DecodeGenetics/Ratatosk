@@ -33,11 +33,11 @@ bash scripts/reference_guiding/Ratatosk.sh <reference_genome.fa> <short_reads.ba
 
 **Input**
 
-- *reference_genome.fa*: FASTA file of the reference genome to which the input short and long reads are mapped to.
-- *short_reads.bam*: BAM file of the input paired-end short reads
-- *long_reads.bam*: BAM file of the input long reads
-- *output_prefix*: Output path where temporary and output files are written. This path must contain enough space to run the binning. See notes below.
-- *slurm_partition*: Slurm partition where the sbatch jobs will be submitted. If no partition is given, the default Slurm partition *nomosix* is used.
+- `<reference_genome.fa>`: FASTA file of the reference genome to which the input short and long reads are mapped to.
+- `<short_reads.bam>`: BAM file of the input paired-end short reads
+- `<long_reads.bam>`: BAM file of the input long reads
+- `<output_prefix>`: Output path where temporary and output files are written. This path must contain enough space to run the binning. See notes below.
+- `<slurm_partition>`: Slurm partition where the sbatch jobs will be submitted. If no partition is given, the default Slurm partition *nomosix* is used.
 
 **Output**
 
