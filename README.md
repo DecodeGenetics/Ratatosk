@@ -107,29 +107,7 @@ Usage: Ratatosk [PARAMETERS]
 
 ## ***de novo*** correction
 
-```
-Ratatosk -v -c 16 -i short_reads.fastq -l long_reads.fastq -o corrected_long_reads
-```
-Ratatosk corrects the long read file (`-l long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-i short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *corrected_long_reads.*
-
-## Reference-guided correction
-
-While Ratatosk is a reference-free method, a reference-guided preprocessing of the input data is proposed to:
-- improve the correction
-- reduce the running time
-- distribute the workload over many nodes of an HPC
-
-Here is an overview of the preprocessing:
-1. Short and long reads are mapped to a reference genome
-2. Short and long reads with good mapping quality are distributed over bins corresponding to segments of the reference genome they map to
-3. Bins are corrected independently
-4. Unmapped long reads and long reads with low mapping quality are corrected *de novo* using all short reads. Correction is assisted by the previously corrected long read bins.
-
-As the input of the pipeline are BAM files, we recommend [bwa-mem](https://github.com/lh3/bwa) to map the short reads and [minimap2](https://github.com/lh3/minimap2) for the long reads. BAM files must be sorted and indexed (`samtools sort` and `samtools index`).
-
-2. Bin the reads:
-```
-```
+See [reference-guided preprocessing](https://github.com/GuillaumeHolley/Ratatosk/tree/master/scripts/reference_guiding)
 
 ## Advanced options
 
@@ -145,7 +123,7 @@ As the input of the pipeline are BAM files, we recommend [bwa-mem](https://githu
 
 - Ratatosk works best with paired-end short reads in input (`-i`): reads from the same pair **must** have the same FASTA/FASTQ name (if the reads are extracted from a BAM file, use `samtools bam2fq -n`).
 
-- Several temporary files are written to disk. These files have the same prefix name as the output file (`-o`) but are deleted at the end of Ratatosk execution. Given an input long read file (`-l`) of size *L* GB, ensure that the output folder has at least about 2.5xL GB of free space.
+- Several temporary files are written to disk. These files have the same prefix name as the output file (`-o`) but are deleted at the end of Ratatosk execution. Given an input long read file (`-l`) of size *L* GB, ensure that the output folder has at least about *2.5L* GB of free space.
 
 ## FAQ
 

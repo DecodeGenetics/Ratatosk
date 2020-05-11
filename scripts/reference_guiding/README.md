@@ -26,9 +26,9 @@ The following python3 modules are required:
 
 1. As the input of the pipeline is BAM files, we recommend [bwa-mem](https://github.com/lh3/bwa) to map the short reads and [minimap2](https://github.com/lh3/minimap2) for the long reads. Input BAM files must be sorted and indexed (`samtools sort` and `samtools index`).
 
-2. Script `scripts/reference_guiding/Ratatosk.sh` is a bash script submitting sbatch commands. It performs the read binning, correction and merging:
+2. Script `Ratatosk.sh` is a bash script submitting sbatch commands. It performs the read binning, correction and merging:
 ```
-bash scripts/reference_guiding/Ratatosk.sh <reference_genome.fa> <short_reads.bam> <long_reads.bam> <output_prefix> <slurm_partition>
+bash Ratatosk.sh <reference_genome.fa> <short_reads.bam> <long_reads.bam> <output_prefix> <slurm_partition>
 ```
 
 **Input**
@@ -45,7 +45,7 @@ Upon completion of the script, the corrected long reads are available in `<outpu
 
 **Important**
 
-Script `scripts/reference_guiding/Ratatosk.sh` is a work in progress. Here are a few considerations to run it that will be subsequently improved:
+Script `Ratatosk.sh` is a work in progress. Here are a few considerations to run it that will be subsequently improved:
 
-- This script was designed specifically to run on a human genome dataset. As such, the script assumes that a machine with at least 48 cores and 350 GB of RAM is available on the Slum partition selected.
-- Given a short reads FASTA/FASTQ file of size *X* GB and a long reads FASTA/FASTQ file of size *Y* GB, the output path *output_prefix* must have at least 2.5X + 2.5Y GB of disk available
+- This script was designed specifically to run on a human genome dataset. As such, the script assumes that a machine with at least **48 cores** and **350 GB of RAM** is available on the Slum partition selected.
+- Given a short reads FASTA/FASTQ file of size *X* GB and a long reads FASTA/FASTQ file of size *Y* GB, the output path *output_prefix* must have at least **2.5X + 2.5Y GB** of disk available
