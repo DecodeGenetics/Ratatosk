@@ -10,7 +10,7 @@ While Ratatosk is a reference-free method, a reference-guided preprocessing of t
 1. Short and long reads are mapped to a reference genome.
 2. Short and long reads with good mapping quality are distributed over bins corresponding to segments of the reference genome they map to.
 3. Bins are corrected independently.
-4. Unmapped long reads and long reads with low mapping quality are corrected *de novo* using all short reads. The correction is assisted by the previously corrected long read bins.
+4. Unmapped and low mapping quality long reads are corrected *de novo* using all short reads. The correction is assisted by the previously corrected long read bins.
 
 ## Requirements
 
