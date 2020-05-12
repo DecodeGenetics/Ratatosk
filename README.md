@@ -49,17 +49,35 @@ sudo apt-get install build-essential cmake zlib1g-dev
 
 ## Installation
 
+1. Clone the Git repository
   ```
   git clone --recursive https://github.com/GuillaumeHolley/Ratatosk.git
-  cd Ratatosk && mkdir build && cd build
+  cd Ratatosk
+  ```
+2. Install Bifrost (with MAX_KMER_SIZE=64)
+   ```
+  cd Bifrost && mkdir build && cd build
+  cmake -DMAX_KMER_SIZE=64 ..
+  make
+  make install
+  cd ..
+  ```
+3. Install Ratatosk
+   ```
+  mkdir build && cd build
   cmake ..
   make
   make install
   ```
 
-  `make install` might requires `sudo` (`sudo make install`) to proceed. If you want to install Ratatosk in a non-default path, replace `cmake ..` with `cmake -DCMAKE_INSTALL_PREFIX=/my/path/ ..` where `/my/path/` is where you want to see the Ratatosk binary installed. Do not forget to had this path to your environment variables (see [Troubleshooting](#troubleshooting)). If you encounter any problem during the installation, see the [Troubleshooting](#troubleshooting) section.
+**Note**
+`make install` might requires `sudo` (`sudo make install`) to proceed. If you want to install Ratatosk and Bifrost in a non-default path, add the option `-DCMAKE_INSTALL_PREFIX=/my/path/ ..` to the cmake commands where `/my/path/` is where you want to see the Ratatosk binary installed. Do not forget to had this path to your environment variables (see [Troubleshooting](#troubleshooting)). If you encounter any problem during the installation, see the [Troubleshooting](#troubleshooting) section.
 
-  By default, the installation creates a binary (*Ratatosk*)
+By default, the installation creates:
+* a Ratatosk binary (*Ratatosk*)
+* a Bifrost binary (*Bifrost*)
+* a dynamic Bifrost library (*libbifrost.so* for Unix or *libbifrost.dylib* for MacOS)
+* a static Bifrost library (*libbifrost.a*)
 
 ## Usage:
 

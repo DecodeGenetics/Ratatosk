@@ -53,4 +53,4 @@ The following python3 modules are required:
 	Script `Ratatosk.sh` is a work in progress. Here are a few considerations to run it that will be subsequently improved:
 
 	- This script was designed specifically to run on a human genome dataset. As such, the script assumes that a machine with at least **48 cores** and **350 GB of RAM** is available on the Slum partition selected.
-	- Given a short reads FASTA/FASTQ file of size *X* GB and a long reads FASTA/FASTQ file of size *Y* GB, the output path *output_prefix* must have at least **2.5X + 2.5Y GB** of disk available
+	- Given a short reads FASTA/FASTQ file of size *X* GB and a long reads FASTA/FASTQ file of size *Y* GB, the output path *output_prefix* must have at least **2.5X + 2.5Y GB** of disk available.
