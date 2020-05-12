@@ -77,7 +77,7 @@ By default, the installation creates:
 * a static Bifrost library (*libbifrost.a*)
 
 **Notes**
-`make install` might requires `sudo` (`sudo make install`) to proceed. If you want to install Ratatosk and Bifrost in a non-default path, add the option `-DCMAKE_INSTALL_PREFIX=/some/path/ ..` to the `cmake` commands where `/some/path/` is where you want to see the Ratatosk and Bifrost files installed. Do not forget to add this path to your environment variables (see [Troubleshooting](#troubleshooting)). If you encounter any problem during the installation, see the [Troubleshooting](#troubleshooting) section.
+`make install` might require `sudo` (`sudo make install`) to proceed. If you want to install Ratatosk and Bifrost in a non-default path, add the option `-DCMAKE_INSTALL_PREFIX=/some/path/ ..` to the `cmake` commands where `/some/path/` is where you want to see the Ratatosk and Bifrost files installed. Do not forget to add this path to your environment variables (see [Troubleshooting](#troubleshooting)). If you encounter any problem during the installation, see the [Troubleshooting](#troubleshooting) section.
 
 ## Usage:
 
