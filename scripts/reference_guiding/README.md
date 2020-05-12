@@ -27,31 +27,31 @@ The following python3 modules are required:
 1. As the input of the pipeline is BAM files, we recommend [bwa-mem](https://github.com/lh3/bwa) to map the short reads and [minimap2](https://github.com/lh3/minimap2) for the long reads. Input BAM files must be sorted and indexed (`samtools sort` and `samtools index`).
 
 2. Script `Ratatosk.sh` is a bash script submitting sbatch commands. It performs the read binning, correction and merging:
-```
-bash Ratatosk.sh <reference_genome.fa> <short_reads.bam> <long_reads.bam> <output_prefix> <slurm_partition>
-```
+	```
+	bash Ratatosk.sh <reference_genome.fa> <short_reads.bam> <long_reads.bam> <output_prefix> <slurm_partition>
+	```
 
-**Input**
+	**Input**
 
-- `<reference_genome.fa>`: FASTA file of the reference genome to which the input short and long reads are mapped to.
-- `<short_reads.bam>`: BAM file of the input paired-end short reads
-- `<long_reads.bam>`: BAM file of the input long reads
-- `<output_prefix>`: Output path where temporary and output files are written. This path must contain enough space to run the binning. See notes below.
-- `<slurm_partition>`: Slurm partition where the sbatch jobs are submitted. If no partition is given, the default Slurm partition *nomosix* is used.
+	- `<reference_genome.fa>`: FASTA file of the reference genome to which the input short and long reads are mapped to.
+	- `<short_reads.bam>`: BAM file of the input paired-end short reads
+	- `<long_reads.bam>`: BAM file of the input long reads
+	- `<output_prefix>`: Output path where temporary and output files are written. This path must contain enough space to run the binning. See notes below.
+	- `<slurm_partition>`: Slurm partition where the sbatch jobs are submitted. If no partition is given, the default Slurm partition *nomosix* is used.
 
-**Output**
+	**Output**
 
-Upon completion of the script, the corrected long reads are available in `<output_prefix>/ratatosk/sample_corrected.fastq`. Folder `<output_prefix>/segments` contains temporary files that can be deleted.
+	Upon completion of the script, the corrected long reads are available in `<output_prefix>/ratatosk/sample_corrected.fastq`. Folder `<output_prefix>/segments` contains temporary files that can be deleted.
 
-**Important**
+	**Important**
 
-Script `Ratatosk.sh` is a work in progress. Here are a few considerations to run it that will be subsequently improved:
+	Script `Ratatosk.sh` is a work in progress. Here are a few considerations to run it that will be subsequently improved:
 
-- This script was designed specifically to run on a human genome dataset. As such, the script assumes that a machine with at least **48 cores** and **350 GB of RAM** is available on the Slum partition selected.
-- Given a short reads FASTA/FASTQ file of size *X* GB and a long reads FASTA/FASTQ file of size *Y* GB, the output path *output_prefix* must have at least **2.5X + 2.5Y GB** of disk available
+	- This script was designed specifically to run on a human genome dataset. As such, the script assumes that a machine with at least **48 cores** and **350 GB of RAM** is available on the Slum partition selected.
+	- Given a short reads FASTA/FASTQ file of size *X* GB and a long reads FASTA/FASTQ file of size *Y* GB, the output path *output_prefix* must have at least **2.5X + 2.5Y GB** of disk available
 
 3. Check the status of the Slurm jobs:
-```
-squeue -u <username>
-```
-Here you should see 4 jobs with prefix name `Ratatosk_`.
+	```
+	squeue -u <username>
+	```
+	You should see 4 jobs with prefix name `Ratatosk_`.
