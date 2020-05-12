@@ -33,18 +33,18 @@ void PrintUsage() {
     "                               Input long read files can be provided as a list in a TXT file (one file per line)" << endl <<
     "   -o, --out-file              Output corrected long read file" << endl <<
     endl << "   > Optional with required argument:" << endl << endl <<
-    "   -c, --cores                 Number of cores (default is 1)" << endl <<
-    "   -t, --trimming              Trim bases with Q-score < t with 0 <= t <= 40 (default is t=0, no trimming)" << endl <<
-    "                               Note that only sub-read with length >= k are output if t > 0" << endl <<
-    "   -q, --quality               Output quality scores such that corrected bases have Q-score >= t (default is t=0, no output)" << endl <<
+    "   -c, --cores                 Number of cores (default: 1)" << endl <<
+    "   -q, --quality               Output Quality Scores: corrected bases get QS >= t (default: t=0, no output)" << endl <<
+    "   -t, --trimming              Trim bases with quality score < t (default: t=0, no trimming)" << endl <<
+    "                               Only sub-read with length >= 63 are output if t > 0" << endl <<
     "   -u, --in-unmap-short-files  Input unmapped short read files (FASTA/FASTQ possibly gzipped)"  << endl <<
     "                               Input unmapped short read files can be provided as a list in a TXT file (one file per line)" << endl <<
     "   -p, --in-helper-long-files  Input high quality long read files (FASTA/FASTQ possibly gzipped)" << endl <<
     "                               Input high quality long read files can be provided as a list in a TXT file (one file per line)" << endl <<
     "                               Those reads are *not* corrected but help the correction." << endl <<
-    "   -m, --in-unmap-graph-file   Input graph file of unmapped reads (default is no input graph)" << endl <<
-    "   -g, --in-graph-file         Input graph file (default is no input graph)" << endl <<
-    "   -w, --out-graph-file        Output graph file (default is no output graph)" << endl <<
+    "   -m, --in-unmap-graph-file   Input graph file of unmapped reads (default: no input graph)" << endl <<
+    "   -g, --in-graph-file         Input graph file (default: no input graph)" << endl <<
+    //"   -w, --out-graph-file        Output graph file (default is no output graph)" << endl <<
     endl << "   > Optional with no argument:" << endl << endl <<
     "   -v, --verbose            Print information messages during execution" << endl << endl;
 }

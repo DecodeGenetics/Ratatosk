@@ -87,18 +87,17 @@ Usage: Ratatosk [PARAMETERS]
 
    > Optional with required argument:
 
-   -c, --cores                 Number of cores (default is 1)
-   -t, --trimming              Trim bases with Q-score < t with 0 <= t <= 40 (default is t=0, no trimming)
-                               Note that only sub-read with length >= k are output if t > 0
-   -q, --quality               Output quality scores such that corrected bases have Q-score >= t (default is t=0, no output)
-   -u, --in-unmap-short-files  Input unmapped short read files (FASTA/FASTQ possibly gzipped)
-                               Input unmapped short read files can be provided as a list in a TXT file (one file per line)
-   -p, --in-helper-long-files  Input high quality long read files (FASTA/FASTQ possibly gzipped)
-                               Input high quality long read files can be provided as a list in a TXT file (one file per line)
-                               Those reads are *not* corrected but help the correction.
-   -m, --in-unmap-graph-file   Input graph file of unmapped reads (default is no input graph)
-   -g, --in-graph-file         Input graph file (default is no input graph)
-   -w, --out-graph-file        Output graph file (default is no output graph)
+    -c, --cores                 Number of cores (default: 1)
+    -q, --quality               Output Quality Scores: corrected bases get QS >= t (default: t=0, no output)
+    -t, --trimming              Trim bases with quality score < t (default: t=0, no trimming)
+                                Only sub-read with length >= 63 are output if t > 0
+    -u, --in-unmap-short-files  Input unmapped short read files (FASTA/FASTQ possibly gzipped)
+                                Input unmapped short read files can be provided as a list in a TXT file (one file per line)
+    -p, --in-helper-long-files  Input high quality long read files (FASTA/FASTQ possibly gzipped)
+                                Input high quality long read files can be provided as a list in a TXT file (one file per line)
+                                Those reads are *not* corrected but help the correction
+    -m, --in-unmap-graph-file   Input graph file of unmapped reads (default: no input graph)
+    -g, --in-graph-file         Input graph file (default: no input graph)
 
    > Optional with no argument:
 
@@ -108,9 +107,9 @@ Usage: Ratatosk [PARAMETERS]
 ## ***de novo*** correction
 
 ```
-Ratatosk -v -c 16 -i short_reads.fastq -l long_reads.fastq -o corrected_long_reads
+Ratatosk -v -c 16 -i short_reads.fastq -l long_reads.fastq -o out_long_reads
 ```
-Ratatosk corrects the long read file (`-l long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-i short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *corrected_long_reads.*
+Ratatosk corrects the long read file (`-l long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-i short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads_corrected* (`-o out_long_reads`).
 
 ## Reference-guided correction
 

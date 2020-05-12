@@ -62,7 +62,7 @@ then
 	mapfile -t CHR_LENGTHS < <(samtools view -H "${SHORT_READS_BAM}" | grep "@SQ" | awk '{print substr($3,4,length($3))}')
 
 	# Extract bins
-	CMD="python3 segmentBAM.py -s ${SHORT_READS_BAM} -l ${LONG_READS_BAM} -t 24 -o ${OUT_PREFIX}/segments -b ${BIN_SZ} -m ${MIN_MAPQ_SR} -n ${MIN_MAPQ_LR} -q ${MIN_QS_SR};"
+	CMD="python3 segmentBAM.py -s ${SHORT_READS_BAM} -l ${LONG_READS_BAM} -t 24 -o ${OUT_PREFIX}/segments/sample -b ${BIN_SZ} -m ${MIN_MAPQ_SR} -n ${MIN_MAPQ_LR} -q ${MIN_QS_SR};"
 	CMD="${CMD} samtools bam2fq -@ 24 -n ${SHORT_READS_BAM} | gzip >${OUT_PREFIX}/segments/sample_sr.fastq.gz;"
 	
 	SLURM_OUT=$(sbatch -p ${PARTITION} -J extractBins --mem=24G --cpus-per-task=24 -t 2-0:0 -o extractBins.slurm.log --wrap="${CMD}")
@@ -92,11 +92,15 @@ then
 
 	# Bin correction
 	echo "#!/bin/bash" > ${PREFIX_FILE_BIN}
+	echo "" >> ${PREFIX_FILE_BIN}
 	echo "#SBATCH --partition=${PARTITION}" >> ${PREFIX_FILE_BIN}
 	echo "#SBATCH --job-name=correctSegONT1" >> ${PREFIX_FILE_BIN}
 	echo "#SBATCH --mem=16G" >> ${PREFIX_FILE_BIN}
 	echo "#SBATCH --time=2-0:0" >> ${PREFIX_FILE_BIN}
 	echo "#SBATCH --cpus-per-task=8" >> ${PREFIX_FILE_BIN}
+	echo "" >> ${PREFIX_FILE_BIN}
+	echo "set -e" >> ${PREFIX_FILE_BIN}
+	echo "set -o pipefail" >> ${PREFIX_FILE_BIN}
 
 	# For all ONT reads with mapq good enough, correct chromsome by chromosome, then bin by bin
 	for j in $(seq 0 $((${#CHR_NAMES[@]})))
