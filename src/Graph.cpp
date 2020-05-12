@@ -2354,7 +2354,6 @@ void mergeGrapLongReads(CompactedDBG<UnitigData>& dbg_sr, const Correct_Opt& opt
 	CompactedDBG<UnitigData> dbg_lr(opt.k);
 
 	BlockedBloomFilter bf;
-	FileParser fp;
 
     string s;
 
@@ -2365,7 +2364,7 @@ void mergeGrapLongReads(CompactedDBG<UnitigData>& dbg_sr, const Correct_Opt& opt
     const size_t max_len_seq = 1024;
     const size_t thread_seq_buf_sz = opt.read_chunksize * max_len_seq;
 
-    auto reading_function = [&](char* seq_buf, size_t& seq_buf_sz) {
+    auto reading_function = [&](FileParser& fp, char* seq_buf, size_t& seq_buf_sz) {
 
         size_t file_id = 0;
 
@@ -2418,11 +2417,11 @@ void mergeGrapLongReads(CompactedDBG<UnitigData>& dbg_sr, const Correct_Opt& opt
 
 	// Build Bloom filter of reference
 	{
+		size_t nb_unique_kmers_ref;
+
 		// Kmer stream estimation of the number of unique k-mers in reference
 		{
 		    KmerStream_Build_opt kms_opt;
-
-		    size_t nb_unique_kmers_ref;
 
 		    kms_opt.threads = opt.nb_threads;
 		    kms_opt.verbose = opt.verbose;
@@ -2439,6 +2438,8 @@ void mergeGrapLongReads(CompactedDBG<UnitigData>& dbg_sr, const Correct_Opt& opt
 
 		// Create Bloom filter for reference
 		{
+		    FileParser fp(v_ref_filenames);
+
 			const bool multi_threaded = (opt.nb_threads != 1);
 
 			s.clear();
@@ -2447,7 +2448,6 @@ void mergeGrapLongReads(CompactedDBG<UnitigData>& dbg_sr, const Correct_Opt& opt
 		    pos_read = 0;
 		    nb_seq = 0;
 
-		    fp = FileParser(v_ref_filenames);
 		    bf = std::move(BlockedBloomFilter(nb_unique_kmers_ref, opt.nb_bits_unique_kmers_bf));
 
 		    // Main worker thread
@@ -2506,7 +2506,7 @@ void mergeGrapLongReads(CompactedDBG<UnitigData>& dbg_sr, const Correct_Opt& opt
 		                                return;
 		                            }
 
-		                            stop = reading_function(buffer_seq, buffer_seq_sz);
+		                            stop = reading_function(fp, buffer_seq, buffer_seq_sz);
 		                        }
 
 		                        worker_function(buffer_seq, buffer_seq_sz);
@@ -2536,7 +2536,7 @@ void mergeGrapLongReads(CompactedDBG<UnitigData>& dbg_sr, const Correct_Opt& opt
 
 		s.clear();
 
-   	    fp = FileParser(v_in_long_reads);
+   	    FileParser fp(v_in_long_reads);
 
 	    auto worker_function = [&](char* seq_buf, const size_t seq_buf_sz) {
 
@@ -2571,7 +2571,7 @@ void mergeGrapLongReads(CompactedDBG<UnitigData>& dbg_sr, const Correct_Opt& opt
 	            str += len + 1;
 	        }
 
-	        return v_km
+	        return v_km;
 	    };
 
 	    {
@@ -2603,7 +2603,7 @@ void mergeGrapLongReads(CompactedDBG<UnitigData>& dbg_sr, const Correct_Opt& opt
 	                                return;
 	                            }
 
-	                            stop = reading_function(buffer_seq, buffer_seq_sz);
+	                            stop = reading_function(fp, buffer_seq, buffer_seq_sz);
 	                        }
 
 	                        const vector<Kmer> v_km = worker_function(buffer_seq, buffer_seq_sz);

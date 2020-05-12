@@ -32,7 +32,9 @@ size_t detectSTRs(CompactedDBG<UnitigData>& dbg, const size_t max_len_cycle, con
 Roaring* createPartitions(CompactedDBG<UnitigData>& dbg, const vector<Kmer>& centroids, const double mean_len_to_neighbor, const size_t nb_threads, const bool verbose);
 
 void mergeGraphUnmapped(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const string& filenameOut);
-void mergeGrapLongReads(CompactedDBG<UnitigData>& dbg_sr, const Correct_Opt& opt, const Roaring* part_neighbors = nullptr);
+
+//void mergeGrapLongReads(CompactedDBG<UnitigData>& dbg_sr, const Correct_Opt& opt, const Roaring* part_neighbors = nullptr);
+void mergeGrapLongReads(CompactedDBG<UnitigData>& dbg_sr, const Correct_Opt& opt, const vector<string>& v_ref_filenames);
 
 void writeGraphData(const string& output_filename, const CompactedDBG<UnitigData>& dbg, const bool verbose = false);
 bool readGraphData(const string& input_filename, CompactedDBG<UnitigData>& dbg, const bool verbose = false);

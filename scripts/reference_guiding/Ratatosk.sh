@@ -50,22 +50,26 @@ then
 	echo "Output prefix: ${OUT_PREFIX}"
 	echo "Slurm partition: ${PARTITION}"
 
-	mkdir "${OUT_PREFIX}"
-
 	PREFIX_PATH_SEG="${OUT_PREFIX}/segments"
 	PREFIX_PATH_CORRECTED="${OUT_PREFIX}/ratatosk"
+
 	PREFIX_FILE_BIN="${OUT_PREFIX}/bin.sh"
 	NAME_SR_UNMAPPED_IN_FILE="${PREFIX_PATH_SEG}/sample_sr_unmapped"
+
+	# Creating folders
+	mkdir "${OUT_PREFIX}"
+	mkdir "${PREFIX_PATH_SEG}"
+	mkdir "${PREFIX_PATH_CORRECTED}"
 
 	# Load chromosomes names and lengths in array
 	mapfile -t CHR_NAMES < <(samtools view -H "${SHORT_READS_BAM}" | grep "@SQ" | awk '{print substr($2,4,length($2))}')
 	mapfile -t CHR_LENGTHS < <(samtools view -H "${SHORT_READS_BAM}" | grep "@SQ" | awk '{print substr($3,4,length($3))}')
 
 	# Extract bins
-	CMD="python3 segmentBAM.py -s ${SHORT_READS_BAM} -l ${LONG_READS_BAM} -t 24 -o ${OUT_PREFIX}/segments/sample -b ${BIN_SZ} -m ${MIN_MAPQ_SR} -n ${MIN_MAPQ_LR} -q ${MIN_QS_SR};"
-	CMD="${CMD} samtools bam2fq -@ 24 -n ${SHORT_READS_BAM} | gzip >${OUT_PREFIX}/segments/sample_sr.fastq.gz;"
+	CMD="python3 segmentBAM.py -s ${SHORT_READS_BAM} -l ${LONG_READS_BAM} -t 24 -o ${PREFIX_PATH_SEG}/sample -b ${BIN_SZ} -m ${MIN_MAPQ_SR} -n ${MIN_MAPQ_LR} -q ${MIN_QS_SR};"
+	CMD="${CMD} samtools bam2fq -@ 24 -n ${SHORT_READS_BAM} | gzip >${PREFIX_PATH_SEG}/sample_sr.fastq.gz;"
 	
-	SLURM_OUT=$(sbatch -p ${PARTITION} -J extractBins --mem=24G --cpus-per-task=24 -t 2-0:0 -o extractBins.slurm.log --wrap="${CMD}")
+	SLURM_OUT=$(sbatch -p ${PARTITION} -J Ratatosk_extractBins --mem=24G --cpus-per-task=24 -t 2-0:0 -o extractBins.slurm.log --wrap="${CMD}")
 
 	# Extract job ID from SLURM output.
 	if ! echo ${SLURM_OUT} | grep -q "[1-9][0-9]*$"; then
@@ -79,7 +83,7 @@ then
 	# Extract graph of unmapped reads
 	CMD="Bifrost build -v -t 24 -k 63 -s ${NAME_SR_UNMAPPED_IN_FILE}.fa -o ${NAME_SR_UNMAPPED_IN_FILE}_graph"
 
-	SLURM_OUT=$(sbatch -p ${PARTITION} -J buildUnmapped --dependency=afterok:${JOB_ID} --mem=48G --cpus-per-task=24 -t 1-0:0 -o _buildUnmapped.slurm.log --wrap="${CMD}")
+	SLURM_OUT=$(sbatch -p ${PARTITION} -J Ratatosk_buildUnmapped --dependency=afterok:${JOB_ID} --mem=48G --cpus-per-task=24 -t 1-0:0 -o _buildUnmapped.slurm.log --wrap="${CMD}")
 
 	# Extract job ID from SLURM output.
 	if ! echo ${SLURM_OUT} | grep -q "[1-9][0-9]*$"; then
@@ -94,7 +98,7 @@ then
 	echo "#!/bin/bash" > ${PREFIX_FILE_BIN}
 	echo "" >> ${PREFIX_FILE_BIN}
 	echo "#SBATCH --partition=${PARTITION}" >> ${PREFIX_FILE_BIN}
-	echo "#SBATCH --job-name=correctSegONT1" >> ${PREFIX_FILE_BIN}
+	echo "#SBATCH --job-name=Ratatosk_correctSegONT1" >> ${PREFIX_FILE_BIN}
 	echo "#SBATCH --mem=16G" >> ${PREFIX_FILE_BIN}
 	echo "#SBATCH --time=2-0:0" >> ${PREFIX_FILE_BIN}
 	echo "#SBATCH --cpus-per-task=8" >> ${PREFIX_FILE_BIN}
@@ -120,7 +124,7 @@ then
 				NAME_LR_OUT_FILE="${NAME_LR_IN_FILE}_corrected"
 	
 				CMD="if [ -f ${NAME_LR_IN_FILE}.fq ] && [ -s ${NAME_LR_IN_FILE}.fq ]; then if [ -f ${NAME_SR_IN_FILE}.fa ] && [ -s ${NAME_SR_IN_FILE}.fa ]; then" # Check input file exists as they should
-				CMD="${CMD} /usr/bin/time -v /odinn/users/guillaumeh/software/Ratatosk/build/src/Ratatosk -v -c 8 -q 13 -i ${NAME_SR_IN_FILE}.fa -u ${NAME_SR_UNMAPPED_IN_FILE}.fa -m ${NAME_SR_UNMAPPED_IN_FILE}_graph.gfa -l ${NAME_LR_IN_FILE}.fq -o ${NAME_LR_OUT_FILE};"  # Ratatosk correction
+				CMD="${CMD} /usr/bin/time -v Ratatosk -v -c 8 -q 13 -i ${NAME_SR_IN_FILE}.fa -u ${NAME_SR_UNMAPPED_IN_FILE}.fa -m ${NAME_SR_UNMAPPED_IN_FILE}_graph.gfa -l ${NAME_LR_IN_FILE}.fq -o ${NAME_LR_OUT_FILE};"  # Ratatosk correction
 				CMD="${CMD} else cp ${NAME_LR_IN_FILE}.fq ${NAME_LR_OUT_FILE}.fastq; fi; fi;"
 	
 				echo "${CMD}" >> ${PREFIX_FILE_BIN}
@@ -140,10 +144,10 @@ then
 	fi
 
 	CMD="cat \$(ls -t ${PREFIX_PATH_SEG}/sample_lr_*_corrected.fastq) > ${PREFIX_PATH_SEG}/sample_lr_map.fastq;" # Concat corrected bins
-	CMD="${CMD} Ratatosk -v -c 48 -q 13 -i ${OUT_PREFIX}/segments/sample_sr.fastq.gz -l ${PREFIX_PATH_SEG}/sample_lr_unknown.fq -p ${PREFIX_PATH_SEG}/sample_lr_map.fastq -o ${PREFIX_PATH_SEG}/sample_lr_unknown_corrected;" # Ratatosk
-	CMD="${CMD} cat ${PREFIX_PATH_SEG}/sample_lr_map.fastq ${PREFIX_PATH_SEG}/sample_lr_unknown_corrected.fastq > ${PREFIX_PATH_SEG}/sample_corrected.fastq" # Concat corrected bins
+	CMD="${CMD} Ratatosk -v -c 48 -q 13 -i ${PREFIX_PATH_SEG}/sample_sr.fastq.gz -l ${PREFIX_PATH_SEG}/sample_lr_unknown.fq -p ${PREFIX_PATH_SEG}/sample_lr_map.fastq -o ${PREFIX_PATH_SEG}/sample_lr_unknown_corrected;" # Ratatosk
+	CMD="${CMD} cat ${PREFIX_PATH_SEG}/sample_lr_map.fastq ${PREFIX_PATH_SEG}/sample_lr_unknown_corrected.fastq > ${PREFIX_PATH_CORRECTED}/sample_corrected.fastq" # Concat corrected bins
 
-	SLURM_OUT=$(sbatch -p ${PARTITION} -J correctSegONT2 --dependency=afterok:${JOB_ID} --mem=350G --cpus-per-task=48 -t 7-0:0 -o correctSegONT2.slurm.log --wrap="${CMD}")
+	SLURM_OUT=$(sbatch -p ${PARTITION} -J Ratatosk_correctSegONT2 --dependency=afterok:${JOB_ID} --mem=350G --cpus-per-task=48 -t 7-0:0 -o correctSegONT2.slurm.log --wrap="${CMD}")
 
 	# Extract job ID from SLURM output.
 	if ! echo ${SLURM_OUT} | grep -q "[1-9][0-9]*$"; then
