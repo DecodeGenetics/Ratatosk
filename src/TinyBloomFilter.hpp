@@ -1,5 +1,5 @@
-#ifndef POLIFROST_TINYBF_HPP
-#define POLIFROST_TINYBF_HPP
+#ifndef RATATOSK_TINYBF_HPP
+#define RATATOSK_TINYBF_HPP
 
 #include <iostream>
 

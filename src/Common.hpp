@@ -1,5 +1,5 @@
-#ifndef POLIFROST_COMMON_HPP
-#define POLIFROST_COMMON_HPP
+#ifndef RATATOSK_COMMON_HPP
+#define RATATOSK_COMMON_HPP
 
 #include <iostream>
 
@@ -8,8 +8,7 @@
 #include "PairID.hpp"
 #include "TinyBloomFilter.hpp"
 
-#define POLIFROST_VERSION "0.1"
-#define POLIFROST_EMAIL "guillaumeholley@gmail.com"
+#define RATATOSK_VERSION "0.1"
 
 struct Correct_Opt : CDBG_Build_opt {
 

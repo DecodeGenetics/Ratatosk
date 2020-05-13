@@ -12,7 +12,7 @@ using namespace std;
 
 void PrintVersion() {
 
-    cout << POLIFROST_VERSION << endl;
+    cout << RATATOSK_VERSION << endl;
 }
 
 void PrintCite() {
@@ -22,7 +22,7 @@ void PrintCite() {
 
 void PrintUsage() {
 
-    cout << endl << "Ratatosk " << POLIFROST_VERSION << endl << endl;
+    cout << endl << "Ratatosk " << RATATOSK_VERSION << endl << endl;
     cout << "Phased hybrid error correction of long reads using colored de Bruijn graphs" << endl << endl;
     cout << "Usage: Ratatosk [PARAMETERS]" << endl << endl;
     cout << "[PARAMETERS]:" << endl << endl;
@@ -43,13 +43,13 @@ void PrintUsage() {
     "                               Input high quality long read files can be provided as a list in a TXT file (one file per line)" << endl <<
     "                               Those reads are *not* corrected but help the correction." << endl <<
     "   -m, --in-unmap-graph-file   Input graph file of unmapped reads (default: no input graph)" << endl <<
-    "   -g, --in-graph-file         Input graph file (default: no input graph)" << endl <<
+    //"   -g, --in-graph-file         Input graph file (default: no input graph)" << endl <<
     //"   -w, --out-graph-file        Output graph file (default is no output graph)" << endl <<
     endl << "   > Optional with no argument:" << endl << endl <<
     "   -v, --verbose            Print information messages during execution" << endl << endl;
 }
 
-bool parse_ProgramOptions(int argc, char **argv, Correct_Opt& opt) {
+int parse_ProgramOptions(int argc, char **argv, Correct_Opt& opt) {
 
     int option_index = 0, c;
 
@@ -72,30 +72,25 @@ bool parse_ProgramOptions(int argc, char **argv, Correct_Opt& opt) {
         {0,                         0,                  0,  0 }
     };
 
+    if (strcmp(argv[1], "--version") == 0) return 1; // Print version
+    else if (strcmp(argv[1], "--help") == 0) return 2; // print help
+
     while ((c = getopt_long(argc, argv, opt_string, long_options, &option_index)) != -1) {
 
         switch (c) {
 
-            case 'i': {
-
-                for (--optind; (optind < argc) && (*argv[optind] != '-'); ++optind) opt.filename_seq_in.push_back(argv[optind]);
+            case 'i':
+                opt.filename_seq_in.push_back(optarg);
                 break;
-            }
-            case 'l': {
-
-                for (--optind; (optind < argc) && (*argv[optind] != '-'); ++optind) opt.filenames_long_in.push_back(argv[optind]);
+            case 'l':
+                opt.filenames_long_in.push_back(optarg);
                 break;
-            }
-            case 'u': {
-
-                for (--optind; (optind < argc) && (*argv[optind] != '-'); ++optind) opt.filenames_unmapped_short_in.push_back(argv[optind]);
+            case 'u':
+                opt.filenames_unmapped_short_in.push_back(optarg);
                 break;
-            }
-            case 'p': {
-
-                for (--optind; (optind < argc) && (*argv[optind] != '-'); ++optind) opt.filenames_helper_long_in.push_back(argv[optind]);
+            case 'p':
+                opt.filenames_helper_long_in.push_back(optarg);
                 break;
-            }
             case 'm':
                 opt.filename_unmapped_short_graph_in = optarg;
                 break;
@@ -120,11 +115,11 @@ bool parse_ProgramOptions(int argc, char **argv, Correct_Opt& opt) {
             case 'v':
                 opt.verbose = true;
                 break;
-            default: return false;
+            default: break;
         }
     }
 
-    return true;
+    return 0;
 }
 
 bool check_ProgramOptions(Correct_Opt& opt) {
@@ -489,172 +484,177 @@ int main(int argc, char *argv[]) {
 
         Correct_Opt opt;
 
-        CompactedDBG<UnitigData> dbg(opt.k);
+        const int parse = parse_ProgramOptions(argc, argv, opt);
 
-        const bool parse = parse_ProgramOptions(argc, argv, opt);
-
-        if (!parse || !check_ProgramOptions(opt)) return 0;
+        if (parse == 1) PrintVersion();
+        else if (parse == 2) PrintUsage();
         else {
 
-            Correct_Opt opt_pass1(opt);
+            if (!check_ProgramOptions(opt)) return 0;
+            else {
 
-            Roaring* partitions = nullptr;
+                CompactedDBG<UnitigData> dbg(opt.k);
 
-            vector<Kmer> v_km_centroids;
+                Correct_Opt opt_pass1(opt);
 
-            // Pass 1
-            {
-                // Build graphs of ONT and Illumina separately
-                if (opt_pass1.filename_graph_in.length() == 0){
+                Roaring* partitions = nullptr;
 
-                    if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Building graph from short reads." << endl;
+                vector<Kmer> v_km_centroids;
 
-                    dbg.build(opt_pass1); // Build graph from short reads
+                // Pass 1
+                {
+                    // Build graphs of ONT and Illumina separately
+                    if (opt_pass1.filename_graph_in.length() == 0){
 
-                    // Unmapped short reads are provided andmust be integrated in the short read graph
-                    if (!opt_pass1.filenames_unmapped_short_in.empty() && (dbg.length() != 0)){
+                        if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Building graph from short reads." << endl;
 
-                        const bool unmapped_graph_built = (opt_pass1.filename_unmapped_short_graph_in.length() != 0);
-                        const string prefixFilenameOutSR = opt_pass1.filename_long_out + "_sr";
+                        dbg.build(opt_pass1); // Build graph from short reads
 
-                        if (!unmapped_graph_built){ // Graph of unmapped reads hasn't been built
+                        // Unmapped short reads are provided andmust be integrated in the short read graph
+                        if (!opt_pass1.filenames_unmapped_short_in.empty() && (dbg.length() != 0)){
 
-                            if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Building graph from unmapped short reads." << endl;
+                            const bool unmapped_graph_built = (opt_pass1.filename_unmapped_short_graph_in.length() != 0);
+                            const string prefixFilenameOutSR = opt_pass1.filename_long_out + "_sr";
 
-                            Correct_Opt opt_unmapped(opt_pass1);
+                            if (!unmapped_graph_built){ // Graph of unmapped reads hasn't been built
 
-                            opt_unmapped.filename_seq_in = opt_pass1.filenames_unmapped_short_in;
-                            opt_pass1.filename_unmapped_short_graph_in = prefixFilenameOutSR + "_unmapped";
+                                if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Building graph from unmapped short reads." << endl;
 
-                            CompactedDBG<UnitigData> unmapped_dbg(opt_unmapped.k);
+                                Correct_Opt opt_unmapped(opt_pass1);
 
-                            unmapped_dbg.build(opt_unmapped);
-                            unmapped_dbg.write(opt_pass1.filename_unmapped_short_graph_in, opt_pass1.nb_threads, false, opt_pass1.verbose);
+                                opt_unmapped.filename_seq_in = opt_pass1.filenames_unmapped_short_in;
+                                opt_pass1.filename_unmapped_short_graph_in = prefixFilenameOutSR + "_unmapped";
 
-                            opt_pass1.filename_unmapped_short_graph_in += ".fasta";
+                                CompactedDBG<UnitigData> unmapped_dbg(opt_unmapped.k);
+
+                                unmapped_dbg.build(opt_unmapped);
+                                unmapped_dbg.write(opt_pass1.filename_unmapped_short_graph_in, opt_pass1.nb_threads, false, opt_pass1.verbose);
+
+                                opt_pass1.filename_unmapped_short_graph_in += ".fasta";
+                            }
+
+                            if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Merging short read graph with unmapped short read graph." << endl;
+
+                            mergeGraphUnmapped(dbg, opt_pass1, prefixFilenameOutSR);
+
+                            if (!unmapped_graph_built && (remove(opt_pass1.filename_unmapped_short_graph_in.c_str()) != 0)) cout << "Ratatosk::Ratatosk(): Warning: Temporary file could not be removed" << endl;
                         }
-
-                        if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Merging short read graph with unmapped short read graph." << endl;
-
-                        mergeGraphUnmapped(dbg, opt_pass1, prefixFilenameOutSR);
-
-                        if (!unmapped_graph_built && (remove(opt_pass1.filename_unmapped_short_graph_in.c_str()) != 0)) cout << "Ratatosk::Ratatosk(): Warning: Temporary file could not be removed" << endl;
                     }
+                    else { // Read graph from ONT + Illumina from disk
+
+                        if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Reading graph of short and long reads." << endl;
+
+                        dbg.read(opt_pass1.filename_graph_in, opt_pass1.nb_threads, opt_pass1.verbose);
+                    }
+
+                    if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Cleaning graph." << endl;
+
+                    dbg.simplify(opt_pass1.deleteIsolated, opt_pass1.clipTips, opt_pass1.verbose);
+                    dbg.write(string(opt_pass1.filename_long_out + "_sr"), opt_pass1.nb_threads, true, opt_pass1.verbose);
+                    dbg.clear();
+
+                    opt_pass1.k = 31;
+                    opt_pass1.filename_ref_in = vector<string>(1, string(opt_pass1.filename_long_out + "_sr.gfa"));
+                    opt_pass1.filename_seq_in = vector<string>();
+
+                    dbg = CompactedDBG<UnitigData>(opt_pass1.k);
+                    dbg.build(opt_pass1);
+
+                    opt_pass1.filename_ref_in = vector<string>();
+                    opt_pass1.filename_seq_in = opt.filename_seq_in;
+
+                    if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Adding coverage to vertices and edges (1/2)." << endl;
+
+                    v_km_centroids = addCoverage(dbg, opt_pass1, false, true);
+                    partitions = createPartitions(dbg, v_km_centroids, dbg.nbKmers() / opt_pass1.nb_partitions, opt_pass1.nb_threads, opt_pass1.verbose);
+
+                    //mergeGrapLongReads(dbg, opt_pass1, partitions);
+                    detectSNPs(dbg, opt_pass1, partitions);
+
+                    v_km_centroids.clear();
+
+                    if (opt_pass1.prefixFilenameOut.length() != 0){
+
+                        if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Writing graph." << endl;
+
+                        dbg.write(opt_pass1.prefixFilenameOut, opt_pass1.nb_threads, false, opt_pass1.verbose);
+                    }
+
+                    opt_pass1.filename_long_out += string((opt_pass1.out_qual != 0) ? "2.fastq" : "2.fasta");
+
+                    if (dbg.length() != 0){
+
+                        if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Correcting long reads (1/2)." << endl;
+
+                        search(dbg, opt_pass1, false, partitions);
+                    }
+                    else if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Graph is empty, no correction can be done. Output uncorrected reads." << endl;
                 }
-                else { // Read graph from ONT + Illumina from disk
 
-                    if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Reading graph of short and long reads." << endl;
+                if (partitions != nullptr) delete[] partitions;
 
-                    dbg.read(opt_pass1.filename_graph_in, opt_pass1.nb_threads, opt_pass1.verbose);
-                }
+                const string sr_graph = opt.filename_long_out + "_sr.gfa";
+                //const string lr_graph = opt.filename_long_out + "_lr.fasta";
 
-                if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Cleaning graph." << endl;
+                const int sr_graph_format = FileParser::getFileFormat(sr_graph.c_str());
+                //const int lr_graph_format = FileParser::getFileFormat(lr_graph.c_str());
 
-                dbg.simplify(opt_pass1.deleteIsolated, opt_pass1.clipTips, opt_pass1.verbose);
-                dbg.write(string(opt_pass1.filename_long_out + "_sr"), opt_pass1.nb_threads, true, opt_pass1.verbose);
-                dbg.clear();
+                Correct_Opt opt_pass2(opt);
 
-                opt_pass1.k = 31;
-                opt_pass1.filename_ref_in = vector<string>(1, string(opt_pass1.filename_long_out + "_sr.gfa"));
-                opt_pass1.filename_seq_in = vector<string>();
+                opt_pass2.filename_ref_in.clear();
 
-                dbg = CompactedDBG<UnitigData>(opt_pass1.k);
-                dbg.build(opt_pass1);
+                if (sr_graph_format != -1) opt_pass2.filename_ref_in.push_back(sr_graph);
+                //if (lr_graph_format != -1) opt_pass2.filename_ref_in.push_back(lr_graph);
 
-                opt_pass1.filename_ref_in = vector<string>();
-                opt_pass1.filename_seq_in = opt.filename_seq_in;
+                opt_pass2.filename_seq_in.clear();
+                opt_pass2.filename_seq_in.insert(opt_pass2.filename_seq_in.end(), opt_pass2.filenames_helper_long_in.begin(), opt_pass2.filenames_helper_long_in.end());
 
-                if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Adding coverage to vertices and edges (1/2)." << endl;
+                opt_pass2.filenames_long_in.clear();
+                opt_pass2.filenames_long_in.push_back(opt_pass1.filename_long_out);
 
-                v_km_centroids = addCoverage(dbg, opt_pass1, false, true);
-                partitions = createPartitions(dbg, v_km_centroids, dbg.nbKmers() / opt_pass1.nb_partitions, opt_pass1.nb_threads, opt_pass1.verbose);
+                opt_pass2.filename_long_out += string((opt_pass2.out_qual != 0) ? ".fastq" : ".fasta");
 
-                //mergeGrapLongReads(dbg, opt_pass1, partitions);
-                detectSNPs(dbg, opt_pass1, partitions);
+                opt_pass2.min_cov_vertices = 1;
+                opt_pass2.min_cov_edges = 1;
 
-                v_km_centroids.clear();
-
-                if (opt_pass1.prefixFilenameOut.length() != 0){
-
-                    if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Writing graph." << endl;
-
-                    dbg.write(opt_pass1.prefixFilenameOut, opt_pass1.nb_threads, false, opt_pass1.verbose);
-                }
-
-                opt_pass1.filename_long_out += string((opt_pass1.out_qual != 0) ? "2.fastq" : "2.fasta");
-
+                // Pass 2
                 if (dbg.length() != 0){
 
-                    if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Correcting long reads (1/2)." << endl;
+                    if (opt_pass2.verbose) cout << "Ratatosk::Ratatosk(): Creating new graph" << endl;
 
-                    search(dbg, opt_pass1, false, partitions);
+                    dbg = CompactedDBG<UnitigData>(opt_pass2.k);
+
+                    dbg.build(opt_pass2);
+
+                    if (opt_pass2.verbose) cout << "Ratatosk::Ratatosk(): Adding coverage to vertices and edges (2/2)." << endl;
+
+                    opt_pass2.filename_seq_in.push_back(opt_pass1.filename_long_out);
+
+                    addCoverage(dbg, opt_pass2, true, true);
+                    detectSNPs(dbg, opt_pass2, nullptr);
+
+                    if (dbg.length() != 0) {
+
+                        if (opt_pass2.verbose) cout << "Ratatosk::Ratatosk(): Correcting long reads (2/2)." << endl;
+
+                        search(dbg, opt_pass2, true, nullptr);
+                    }
+                    else if (opt_pass2.verbose){
+
+                        cout << "Ratatosk::Ratatosk(): Graph is empty, no correction can be done. (2/2)" << endl;
+
+                        copyFile(opt_pass2.filename_long_out, opt_pass2.filenames_long_in);
+                    }
+
+                    //remove(opt.filenames_long_in[0].c_str());
                 }
-                else if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Graph is empty, no correction can be done. Output uncorrected reads." << endl;
+                else copyFile(opt_pass2.filename_long_out, opt.filenames_long_in); // Graph is empty, LR cannot be corrected
+
+                // Clean up data on disk
+                if (remove(sr_graph.c_str()) != 0) cerr << "Ratatosk::Ratatosk(): Couldn't remove temporary file" << endl;
+                //if (remove(lr_graph.c_str()) != 0) cerr << "Ratatosk::Ratatosk(): Couldn't remove temporary file" << endl;
+                if (remove(opt_pass1.filename_long_out.c_str()) != 0) cerr << "Ratatosk::Ratatosk(): Couldn't remove temporary file" << endl;
             }
-
-            if (partitions != nullptr) delete[] partitions;
-
-            const string sr_graph = opt.filename_long_out + "_sr.gfa";
-            //const string lr_graph = opt.filename_long_out + "_lr.fasta";
-
-            const int sr_graph_format = FileParser::getFileFormat(sr_graph.c_str());
-            //const int lr_graph_format = FileParser::getFileFormat(lr_graph.c_str());
-
-            Correct_Opt opt_pass2(opt);
-
-            opt_pass2.filename_ref_in.clear();
-
-            if (sr_graph_format != -1) opt_pass2.filename_ref_in.push_back(sr_graph);
-            //if (lr_graph_format != -1) opt_pass2.filename_ref_in.push_back(lr_graph);
-
-            opt_pass2.filename_seq_in.clear();
-            opt_pass2.filename_seq_in.insert(opt_pass2.filename_seq_in.end(), opt_pass2.filenames_helper_long_in.begin(), opt_pass2.filenames_helper_long_in.end());
-
-            opt_pass2.filenames_long_in.clear();
-            opt_pass2.filenames_long_in.push_back(opt_pass1.filename_long_out);
-
-            opt_pass2.filename_long_out += string((opt_pass2.out_qual != 0) ? ".fastq" : ".fasta");
-
-            opt_pass2.min_cov_vertices = 1;
-            opt_pass2.min_cov_edges = 1;
-
-            // Pass 2
-            if (dbg.length() != 0){
-
-                if (opt_pass2.verbose) cout << "Ratatosk::Ratatosk(): Creating new graph" << endl;
-
-                dbg = CompactedDBG<UnitigData>(opt_pass2.k);
-
-                dbg.build(opt_pass2);
-
-                if (opt_pass2.verbose) cout << "Ratatosk::Ratatosk(): Adding coverage to vertices and edges (2/2)." << endl;
-
-                opt_pass2.filename_seq_in.push_back(opt_pass1.filename_long_out);
-
-                addCoverage(dbg, opt_pass2, true, true);
-                detectSNPs(dbg, opt_pass2, nullptr);
-
-                if (dbg.length() != 0) {
-
-                    if (opt_pass2.verbose) cout << "Ratatosk::Ratatosk(): Correcting long reads (2/2)." << endl;
-
-                    search(dbg, opt_pass2, true, nullptr);
-                }
-                else if (opt_pass2.verbose){
-
-                    cout << "Ratatosk::Ratatosk(): Graph is empty, no correction can be done. (2/2)" << endl;
-
-                    copyFile(opt_pass2.filename_long_out, opt_pass2.filenames_long_in);
-                }
-
-                //remove(opt.filenames_long_in[0].c_str());
-            }
-            else copyFile(opt_pass2.filename_long_out, opt.filenames_long_in); // Graph is empty, LR cannot be corrected
-
-            // Clean up data on disk
-            if (remove(sr_graph.c_str()) != 0) cerr << "Ratatosk::Ratatosk(): Couldn't remove temporary file" << endl;
-            //if (remove(lr_graph.c_str()) != 0) cerr << "Ratatosk::Ratatosk(): Couldn't remove temporary file" << endl;
-            if (remove(opt_pass1.filename_long_out.c_str()) != 0) cerr << "Ratatosk::Ratatosk(): Couldn't remove temporary file" << endl;
         }
     }
 }

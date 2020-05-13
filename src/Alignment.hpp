@@ -1,5 +1,5 @@
-#ifndef POLIFROST_ALIGNMENT_HPP
-#define POLIFROST_ALIGNMENT_HPP
+#ifndef RATATOSK_ALIGNMENT_HPP
+#define RATATOSK_ALIGNMENT_HPP
 
 #include <iostream>
 #include <cfloat>
