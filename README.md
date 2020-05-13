@@ -173,7 +173,7 @@ See [reference-guided preprocessing](https://github.com/GuillaumeHolley/Ratatosk
 
 **Can I provide multiple read files in input?**
 
-Yes, files must be separated by a space character for parameter `-i` and `-l`.
+Yes, use mutiple times parameters `-i`/`-l`/`-u`/`-p`, once for each input file.
 
 **Can I provide a file which is a list of read files in input?**
 
