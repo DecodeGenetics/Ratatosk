@@ -23,28 +23,46 @@ void PrintCite() {
 void PrintUsage() {
 
     cout << endl << "Ratatosk " << RATATOSK_VERSION << endl << endl;
+
     cout << "Phased hybrid error correction of long reads using colored de Bruijn graphs" << endl << endl;
-    cout << "Usage: Ratatosk [PARAMETERS]" << endl << endl;
-    cout << "[PARAMETERS]:" << endl << endl;
+
+    cout << "Usage: Ratatosk [COMMAND] [PARAMETERS]" << endl << endl;
+
+    cout << "[COMMAND]:" << endl << endl;
+
+    cout << "   correct                      Correct a set of erroneous long reads using accurate short reads" << endl;
+    cout << "   index                        Build a graph index for accurate short reads" << endl << endl;
+
+    cout << "[PARAMETERS]: correct" << endl << endl;
     cout << "   > Mandatory with required argument:" << endl << endl <<
-    "   -i, --in-short-files        Input short read files (FASTA/FASTQ possibly gzipped)" << endl <<
-    "                               Input short read files can be provided as a list in a TXT file (one file per line)" << endl <<
-    "   -l, --in-long-files         Input long read files (FASTA/FASTQ possibly gzipped)" << endl <<
-    "                               Input long read files can be provided as a list in a TXT file (one file per line)" << endl <<
+    "   -i, --in-short-files        Input short read file (FASTA/FASTQ possibly gzipped)" << endl <<
+    "                               List of input short read files in a TXT file (one file per line)" << endl <<
+    "   -l, --in-long-files         Input long read file (FASTA/FASTQ possibly gzipped)" << endl <<
+    "                               List of input long read files in a TXT file (one file per line)" << endl <<
     "   -o, --out-file              Output corrected long read file" << endl <<
     endl << "   > Optional with required argument:" << endl << endl <<
     "   -c, --cores                 Number of cores (default: 1)" << endl <<
     "   -q, --quality               Output Quality Scores: corrected bases get QS >= t (default: t=0, no output)" << endl <<
     "   -t, --trimming              Trim bases with quality score < t (default: t=0, no trimming)" << endl <<
     "                               Only sub-read with length >= 63 are output if t > 0" << endl <<
-    "   -u, --in-unmap-short-files  Input unmapped short read files (FASTA/FASTQ possibly gzipped)"  << endl <<
-    "                               Input unmapped short read files can be provided as a list in a TXT file (one file per line)" << endl <<
-    "   -p, --in-helper-long-files  Input high quality long read files (FASTA/FASTQ possibly gzipped)" << endl <<
-    "                               Input high quality long read files can be provided as a list in a TXT file (one file per line)" << endl <<
+    "   -u, --in-unmap-short-files  Input unmapped short read file (FASTA/FASTQ possibly gzipped)"  << endl <<
+    "                               List of input unmapped short read files in a TXT file (one file per line)" << endl <<
+    "   -p, --in-helper-long-files  Input high quality long read file (FASTA/FASTQ possibly gzipped)" << endl <<
+    "                               List of input high quality long read files in a TXT file (one file per line)" << endl <<
     "                               Those reads are *not* corrected but help the correction." << endl <<
     "   -m, --in-unmap-graph-file   Input graph file of unmapped reads (default: no input graph)" << endl <<
     //"   -g, --in-graph-file         Input graph file (default: no input graph)" << endl <<
     //"   -w, --out-graph-file        Output graph file (default is no output graph)" << endl <<
+    endl << "   > Optional with no argument:" << endl << endl <<
+    "   -v, --verbose            Print information messages during execution" << endl << endl;
+
+    cout << "[PARAMETERS]: index" << endl << endl;
+    cout << "   > Mandatory with required argument:" << endl << endl <<
+    "   -i, --in-short-files        Input short read files (FASTA/FASTQ possibly gzipped)" << endl <<
+    "                               List of input short read files in a TXT file (one file per line)" << endl <<
+    "   -w, --out-graph-file        Output graph file (default is no output graph)" << endl <<
+    endl << "   > Optional with required argument:" << endl << endl <<
+    "   -c, --cores                 Number of cores (default: 1)" << endl <<
     endl << "   > Optional with no argument:" << endl << endl <<
     "   -v, --verbose            Print information messages during execution" << endl << endl;
 }
@@ -73,7 +91,10 @@ int parse_ProgramOptions(int argc, char **argv, Correct_Opt& opt) {
     };
 
     if (strcmp(argv[1], "--version") == 0) return 1; // Print version
-    else if (strcmp(argv[1], "--help") == 0) return 2; // print help
+    if (strcmp(argv[1], "--help") == 0) return 2; // print help
+
+    if (strcmp(argv[1], "correct") == 0) opt.correct = true;
+    if (strcmp(argv[1], "index") == 0) opt.index = true;
 
     while ((c = getopt_long(argc, argv, opt_string, long_options, &option_index)) != -1) {
 
@@ -217,91 +238,110 @@ bool check_ProgramOptions(Correct_Opt& opt) {
         ret = false;
     }
 
-    if ((opt.trim_qual < 0) || (opt.trim_qual > 40)){
-
-        cerr << "Ratatosk::Ratatosk(): Quality score trimming threshold cannot be less than 0 or more than 40 (" << opt.trim_qual << " given)." << endl;
-        ret = false;  
-    }
-
-    if ((opt.out_qual < 0) || (opt.out_qual > 40)){
-
-        cerr << "Ratatosk::Ratatosk(): Minimum quality score for corrected bases cannot be less than 1 or more than 40 (" << opt.out_qual << " given)." << endl;
-        ret = false;  
-    }
-
     if (opt.filename_seq_in.empty()) {
 
         cerr << "Ratatosk::Ratatosk(): Missing input short read files." << endl;
         ret = false;
     }
-    else if (opt.filenames_long_in.empty()) {
+    else ret = ret && check_files(opt.filename_seq_in);
 
-        cerr << "Ratatosk::Ratatosk(): Missing input long read files." << endl;
-        ret = false;
-    }
-    else {
+    if (opt.correct) {
 
-        ret = ret && check_files(opt.filename_seq_in);
-        ret = ret && check_files(opt.filenames_long_in);
-    }
+        if ((opt.trim_qual < 0) || (opt.trim_qual > 40)){
 
-    if (!opt.filenames_helper_long_in.empty()) ret = ret && check_files(opt.filenames_helper_long_in);
-    if (!opt.filenames_unmapped_short_in.empty()) ret = ret && check_files(opt.filenames_unmapped_short_in);
-
-    if (opt.filename_unmapped_short_graph_in.length() != 0){
-
-        if (opt.filenames_unmapped_short_in.empty()) {
-
-            cerr << "Ratatosk::Ratatosk(): Graph file of the unmapped short reads must be accompanied by the unmapped short reads (-u)." << endl;
-            ret = false;
+            cerr << "Ratatosk::Ratatosk(): Quality score trimming threshold cannot be less than 0 or more than 40 (" << opt.trim_qual << " given)." << endl;
+            ret = false;  
         }
 
-        vector<string> v_tmp(1, opt.filename_unmapped_short_graph_in);
+        if ((opt.out_qual < 0) || (opt.out_qual > 40)){
 
-        ret = ret && check_files(v_tmp);
+            cerr << "Ratatosk::Ratatosk(): Minimum quality score for corrected bases cannot be less than 1 or more than 40 (" << opt.out_qual << " given)." << endl;
+            ret = false;  
+        }
+
+        if (opt.filenames_long_in.empty()) {
+
+            cerr << "Ratatosk::Ratatosk(): Missing input long read files." << endl;
+            ret = false;
+        }
+        else ret = ret && check_files(opt.filenames_long_in);
+
+        if (!opt.filenames_helper_long_in.empty()) ret = ret && check_files(opt.filenames_helper_long_in);
+        if (!opt.filenames_unmapped_short_in.empty()) ret = ret && check_files(opt.filenames_unmapped_short_in);
+
+        if (opt.filename_unmapped_short_graph_in.length() != 0){
+
+            if (opt.filenames_unmapped_short_in.empty()) {
+
+                cerr << "Ratatosk::Ratatosk(): Graph file of the unmapped short reads must be accompanied by the unmapped short reads (-u)." << endl;
+                ret = false;
+            }
+
+            vector<string> v_tmp(1, opt.filename_unmapped_short_graph_in);
+
+            ret = ret && check_files(v_tmp);
+        }
+
+        if (opt.filename_long_out.length() == 0){
+
+            cerr << "Ratatosk::Ratatosk(): Missing output long read file." << endl;
+            ret = false;
+        }
+        else {
+
+            FILE* fp = fopen(opt.filename_long_out.c_str(), "w");
+
+            if (fp == NULL) {
+
+                cerr << "Ratatosk::Ratatosk(): Could not open output long read file for writing: " << opt.filename_long_out << "." << endl;
+                ret = false;
+            }
+            else {
+
+                fclose(fp);
+
+                if (remove(opt.filename_long_out.c_str()) != 0) cerr << "Ratatosk::Ratatosk(): Could not remove temporary file " << opt.filename_long_out << "." << endl;
+            }
+        }
+
+        if (opt.filename_graph_in.length() != 0){
+
+            if (!check_file_exists(opt.filename_graph_in)){
+
+                cerr << "Ratatosk::Ratatosk(): Input graph file does not exist." << endl;
+                ret = false;
+            }
+            else {
+
+                FILE* fp = fopen(opt.filename_graph_in.c_str(), "r");
+
+                if (fp == NULL) {
+
+                    cerr << "Ratatosk::Ratatosk(): Could not read input graph file " << opt.filename_graph_in << "." << endl;
+                    ret = false;
+                }
+                else fclose(fp);
+            }
+        }
     }
+    else if (opt.index) {
 
-    if (opt.filename_long_out.length() == 0){
+        const string graph_out = opt.prefixFilenameOut + ".gfa";
 
-        cerr << "Ratatosk::Ratatosk(): Missing output long read file." << endl;
-        ret = false;
+        FILE* fp = fopen(graph_out.c_str(), "w");
+
+        if (fp == NULL) {
+
+            cerr << "Ratatosk::Ratatosk(): Could not open output index file for writing: " << graph_out << "." << endl;
+            ret = false;
+        }
+        else {
+
+            fclose(fp);
+
+            if (remove(graph_out.c_str()) != 0) cerr << "Ratatosk::Ratatosk(): Could not remove temporary file " << graph_out << "." << endl;
+        }
     }
-    else {
-
-	    FILE* fp = fopen(opt.filename_long_out.c_str(), "w");
-
-	    if (fp == NULL) {
-
-	        cerr << "Ratatosk::Ratatosk(): Could not open output long read file for writing: " << opt.filename_long_out << "." << endl;
-	        ret = false;
-	    }
-	    else {
-
-	        fclose(fp);
-
-	        if (remove(opt.filename_long_out.c_str()) != 0) cerr << "Ratatosk::Ratatosk(): Could not remove temporary file " << opt.filename_long_out << "." << endl;
-	    }
-	}
-
-    if (opt.filename_graph_in.length() != 0){
-
-	    if (!check_file_exists(opt.filename_graph_in)){
-
-	        cerr << "Ratatosk::Ratatosk(): Input graph file does not exist." << endl;
-	        ret = false;
-	    }
-	    else {
-
-	        FILE* fp = fopen(opt.filename_graph_in.c_str(), "r");
-
-	        if (fp == NULL) {
-
-	            cerr << "Ratatosk::Ratatosk(): Could not read input graph file " << opt.filename_graph_in << "." << endl;
-	            ret = false;
-	        }
-	        else fclose(fp);
-	    }
-	}
 
     return ret;
 }
@@ -491,7 +531,8 @@ int main(int argc, char *argv[]) {
         else {
 
             if (!check_ProgramOptions(opt)) return 0;
-            else {
+
+            if (opt.correct) {
 
                 CompactedDBG<UnitigData> dbg(opt.k);
 
@@ -654,6 +695,13 @@ int main(int argc, char *argv[]) {
                 if (remove(sr_graph.c_str()) != 0) cerr << "Ratatosk::Ratatosk(): Couldn't remove temporary file" << endl;
                 //if (remove(lr_graph.c_str()) != 0) cerr << "Ratatosk::Ratatosk(): Couldn't remove temporary file" << endl;
                 if (remove(opt_pass1.filename_long_out.c_str()) != 0) cerr << "Ratatosk::Ratatosk(): Couldn't remove temporary file" << endl;
+            }
+            else if (opt.index) {
+
+                CompactedDBG<> dbg(opt.k);
+
+                dbg.build(opt);
+                dbg.write(opt.prefixFilenameOut, opt.nb_threads, true, opt.verbose);
             }
         }
     }

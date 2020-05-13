@@ -87,35 +87,55 @@ Ratatosk
 
 displays the command line interface:
 ```
-Ratatosk x.y
+Ratatosk 0.1
 
 Phased hybrid error correction of long reads using colored de Bruijn graphs
 
-Usage: Ratatosk [PARAMETERS]
+Usage: Ratatosk [COMMAND] [PARAMETERS]
 
-[PARAMETERS]:
+[COMMAND]:
+
+   correct                    Correct a set of erroneous long reads using accurate short reads
+   index                      Build a graph index for accurate short reads
+
+[PARAMETERS]: correct
 
    > Mandatory with required argument:
 
-   -i, --in-short-files        Input short read files (FASTA/FASTQ possibly gzipped)
-                               Input short read files can be provided as a list in a TXT file (one file per line)
-   -l, --in-long-files         Input long read files (FASTA/FASTQ possibly gzipped)
-                               Input long read files can be provided as a list in a TXT file (one file per line)
+   -i, --in-short-files        Input short read file (FASTA/FASTQ possibly gzipped)
+                               List of input short read files in a TXT file (one file per line)
+   -l, --in-long-files         Input long read file (FASTA/FASTQ possibly gzipped)
+                               List of input long read files in a TXT file (one file per line)
    -o, --out-file              Output corrected long read file
 
    > Optional with required argument:
 
-    -c, --cores                 Number of cores (default: 1)
-    -q, --quality               Output Quality Scores: corrected bases get QS >= t (default: t=0, no output)
-    -t, --trimming              Trim bases with quality score < t (default: t=0, no trimming)
-                                Only sub-read with length >= 63 are output if t > 0
-    -u, --in-unmap-short-files  Input unmapped short read files (FASTA/FASTQ possibly gzipped)
-                                Input unmapped short read files can be provided as a list in a TXT file (one file per line)
-    -p, --in-helper-long-files  Input high quality long read files (FASTA/FASTQ possibly gzipped)
-                                Input high quality long read files can be provided as a list in a TXT file (one file per line)
-                                Those reads are *not* corrected but help the correction
-    -m, --in-unmap-graph-file   Input graph file of unmapped reads (default: no input graph)
-    -g, --in-graph-file         Input graph file (default: no input graph)
+   -c, --cores                 Number of cores (default: 1)
+   -q, --quality               Output Quality Scores: corrected bases get QS >= t (default: t=0, no output)
+   -t, --trimming              Trim bases with quality score < t (default: t=0, no trimming)
+                               Only sub-read with length >= 63 are output if t > 0
+   -u, --in-unmap-short-files  Input unmapped short read file (FASTA/FASTQ possibly gzipped)
+                               List of input unmapped short read files in a TXT file (one file per line)
+   -p, --in-helper-long-files  Input high quality long read file (FASTA/FASTQ possibly gzipped)
+                               List of input high quality long read files in a TXT file (one file per line)
+                               Those reads are *not* corrected but help the correction.
+   -m, --in-unmap-graph-file   Input graph file of unmapped reads (default: no input graph)
+
+   > Optional with no argument:
+
+   -v, --verbose            Print information messages during execution
+
+[PARAMETERS]: index
+
+   > Mandatory with required argument:
+
+   -i, --in-short-files        Input short read files (FASTA/FASTQ possibly gzipped)
+                               List of input short read files in a TXT file (one file per line)
+   -w, --out-graph-file        Output graph file (default is no output graph)
+
+   > Optional with required argument:
+
+   -c, --cores                 Number of cores (default: 1)
 
    > Optional with no argument:
 
@@ -125,9 +145,9 @@ Usage: Ratatosk [PARAMETERS]
 ## ***de novo*** correction
 
 ```
-Ratatosk -v -c 16 -i short_reads.fastq -l long_reads.fastq -o out_long_reads
+Ratatosk correct -v -c 16 -i short_reads.fastq -l long_reads.fastq -o out_long_reads
 ```
-Ratatosk corrects the long read file (`-l long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-i short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads_corrected* (`-o out_long_reads`).
+Ratatosk corrects (`Ratatosk correct`) the long read file (`-l long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-i short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads_corrected* (`-o out_long_reads`).
 
 ## Reference-guided correction
 

@@ -81,7 +81,7 @@ then
 	fi
 
 	# Extract graph of unmapped reads
-	CMD="Bifrost build -v -t 24 -k 63 -s ${NAME_SR_UNMAPPED_IN_FILE}.fa -o ${NAME_SR_UNMAPPED_IN_FILE}_graph"
+	CMD="Ratatosk index -v -c 24 -i ${NAME_SR_UNMAPPED_IN_FILE}.fa -o ${NAME_SR_UNMAPPED_IN_FILE}_graph"
 
 	SLURM_OUT=$(sbatch -p ${PARTITION} -J Ratatosk_buildUnmapped --dependency=afterok:${JOB_ID} --mem=48G --cpus-per-task=24 -t 1-0:0 -o _buildUnmapped.slurm.log --wrap="${CMD}")
 
@@ -124,7 +124,7 @@ then
 				NAME_LR_OUT_FILE="${NAME_LR_IN_FILE}_corrected"
 	
 				CMD="if [ -f ${NAME_LR_IN_FILE}.fq ] && [ -s ${NAME_LR_IN_FILE}.fq ]; then if [ -f ${NAME_SR_IN_FILE}.fa ] && [ -s ${NAME_SR_IN_FILE}.fa ]; then" # Check input file exists as they should
-				CMD="${CMD} /usr/bin/time -v Ratatosk -v -c 8 -q 13 -i ${NAME_SR_IN_FILE}.fa -u ${NAME_SR_UNMAPPED_IN_FILE}.fa -m ${NAME_SR_UNMAPPED_IN_FILE}_graph.gfa -l ${NAME_LR_IN_FILE}.fq -o ${NAME_LR_OUT_FILE};"  # Ratatosk correction
+				CMD="${CMD} /usr/bin/time -v Ratatosk correct -v -c 8 -q 13 -i ${NAME_SR_IN_FILE}.fa -u ${NAME_SR_UNMAPPED_IN_FILE}.fa -m ${NAME_SR_UNMAPPED_IN_FILE}_graph.gfa -l ${NAME_LR_IN_FILE}.fq -o ${NAME_LR_OUT_FILE};"  # Ratatosk correction
 				CMD="${CMD} else cp ${NAME_LR_IN_FILE}.fq ${NAME_LR_OUT_FILE}.fastq; fi; fi;"
 	
 				echo "${CMD}" >> ${PREFIX_FILE_BIN}
@@ -144,7 +144,7 @@ then
 	fi
 
 	CMD="cat \$(ls -t ${PREFIX_PATH_SEG}/sample_lr_*_corrected.fastq) > ${PREFIX_PATH_SEG}/sample_lr_map.fastq;" # Concat corrected bins
-	CMD="${CMD} Ratatosk -v -c 48 -q 13 -i ${PREFIX_PATH_SEG}/sample_sr.fastq.gz -l ${PREFIX_PATH_SEG}/sample_lr_unknown.fq -p ${PREFIX_PATH_SEG}/sample_lr_map.fastq -o ${PREFIX_PATH_SEG}/sample_lr_unknown_corrected;" # Ratatosk
+	CMD="${CMD} Ratatosk correct -v -c 48 -q 13 -i ${PREFIX_PATH_SEG}/sample_sr.fastq.gz -l ${PREFIX_PATH_SEG}/sample_lr_unknown.fq -p ${PREFIX_PATH_SEG}/sample_lr_map.fastq -o ${PREFIX_PATH_SEG}/sample_lr_unknown_corrected;" # Ratatosk
 	CMD="${CMD} cat ${PREFIX_PATH_SEG}/sample_lr_map.fastq ${PREFIX_PATH_SEG}/sample_lr_unknown_corrected.fastq > ${PREFIX_PATH_CORRECTED}/sample_corrected.fastq" # Concat corrected bins
 
 	SLURM_OUT=$(sbatch -p ${PARTITION} -J Ratatosk_correctSegONT2 --dependency=afterok:${JOB_ID} --mem=350G --cpus-per-task=48 -t 7-0:0 -o correctSegONT2.slurm.log --wrap="${CMD}")

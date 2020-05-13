@@ -35,8 +35,12 @@ struct Correct_Opt : CDBG_Build_opt {
 
     double weak_region_len_factor;
 
+    bool correct;
+    bool index;
+
 	Correct_Opt() : out_qual(0), trim_qual(0), min_qv(6), large_k(95), nb_partitions(1000), max_time(20),
-					min_cov_vertices(2), min_cov_edges(2), max_cov_vertices(512), weak_region_len_factor(1.25) {
+					min_cov_vertices(2), min_cov_edges(2), max_cov_vertices(512), weak_region_len_factor(1.25),
+					correct(false), index(false) {
 
         k = 63;
 
