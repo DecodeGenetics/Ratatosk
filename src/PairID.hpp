@@ -1,8 +1,10 @@
 #ifndef RATATOSK_PAIR_HPP
 #define RATATOSK_PAIR_HPP
 
-#include "bifrost/roaring.hh"
-#include "bifrost/TinyBitmap.hpp"
+//#include "bifrost/roaring.hh"
+//#include "bifrost/TinyBitmap.hpp"
+#include "roaring.hh"
+#include "TinyBitmap.hpp"
 
 
 class PairID {

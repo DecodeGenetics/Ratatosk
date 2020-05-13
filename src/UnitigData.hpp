@@ -3,7 +3,8 @@
 
 #include <iostream>
 
-#include <bifrost/CompactedDBG.hpp>
+//#include <bifrost/CompactedDBG.hpp>
+#include "CompactedDBG.hpp"
 
 #include "PairID.hpp"
 #include "Common.hpp"

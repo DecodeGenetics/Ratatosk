@@ -4,7 +4,8 @@
 #include <iostream>
 #include <set>
 
-#include <bifrost/UnitigMap.hpp>
+//#include <bifrost/UnitigMap.hpp>
+#include "UnitigMap.hpp"
 
 #include "Common.hpp"
 

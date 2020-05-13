@@ -1,7 +1,8 @@
 #include <iostream>
 #include <sstream>
 
-#include <bifrost/CompactedDBG.hpp>
+//#include <bifrost/CompactedDBG.hpp>
+#include "CompactedDBG.hpp"
 
 #include "Common.hpp"
 #include "Correction.hpp"

@@ -3,7 +3,8 @@
 
 #include <iostream>
 
-#include <bifrost/libpopcnt.h>
+//#include <bifrost/libpopcnt.h>
+#include "libpopcnt.h"
 
 template<typename T>
 class TinyBloomFilter {

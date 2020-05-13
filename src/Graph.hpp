@@ -7,8 +7,10 @@
 #include <set>
 #include <stack>
 
-#include <bifrost/CompactedDBG.hpp>
-#include <bifrost/roaring.hh>
+//#include <bifrost/CompactedDBG.hpp>
+//#include <bifrost/roaring.hh>
+#include "CompactedDBG.hpp"
+#include "roaring.hh"
 
 #include "Correction.hpp"
 
