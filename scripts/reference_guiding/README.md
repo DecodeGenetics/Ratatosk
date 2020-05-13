@@ -17,7 +17,7 @@ While Ratatosk is a reference-free method, a reference-guided preprocessing of t
 * [Slurm](https://slurm.schedmd.com)
 * [python3](https://python.org)
 * [samtools](https://htslib.org)
-* [Ratatosk & Bifrost](https://github.com/GuillaumeHolley/Ratatosk)
+* [Ratatosk](https://github.com/GuillaumeHolley/Ratatosk)
 
 The following python3 modules are required:
 * [pysam](https://pysam.readthedocs.io)

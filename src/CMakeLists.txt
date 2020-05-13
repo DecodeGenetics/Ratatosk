@@ -1,27 +1,53 @@
 file(GLOB sources *.cpp)
 file(GLOB headers *.h *.hpp *.hh *.tcc)
 
-# Ratatosk
-add_definitions(-DMAX_KMER_SIZE=${MAX_KMER_SIZE})
-add_executable(Ratatosk ${sources})
+# Bifrost library
+include(ExternalProject)
 
-target_compile_options(Ratatosk PUBLIC "-DMAX_KMER_SIZE=${MAX_KMER_SIZE}")
+ExternalProject_Add(	
+  bifrost_lib
+  BUILD_IN_SOURCE 1
+  SOURCE_DIR ${CMAKE_SOURCE_DIR}/Bifrost
+  PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/Bifrost	
+  CMAKE_ARGS -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER} -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DMAX_KMER_SIZE=${MAX_KMER_SIZE}
+  UPDATE_COMMAND ""	
+  INSTALL_COMMAND "")	
 
-# Add Bifrost as a dependency
-target_link_libraries(Ratatosk bifrost)
+ExternalProject_Get_property(bifrost_lib INSTALL_DIR)
 
-# Add Pthread as a dependency
+add_library(bifrost STATIC IMPORTED)	
+
+set(BIFROST_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/Bifrost/src")
+set(BIFROST_LIBRARY_DIR "${CMAKE_SOURCE_DIR}/Bifrost/src")
+
+include_directories(SYSTEM ${BIFROST_INCLUDE_DIR})
+
+set_property(TARGET bifrost PROPERTY IMPORTED_LOCATION "${BIFROST_LIBRARY_DIR}/libbifrost.a")
+
+add_dependencies(bifrost bifrost_lib)
+
+# Pthread library
 find_package(Threads REQUIRED)
-target_link_libraries(Ratatosk ${CMAKE_THREAD_LIBS_INIT})
 
-# Add zlib as a dependency
+# Zlib library
 find_package(ZLIB REQUIRED)
-target_link_libraries(Ratatosk ${ZLIB_LIBRARIES})
 
 if (ZLIB_FOUND)
     include_directories(${ZLIB_INCLUDE_DIRS})
 else()
     message(FATAL_ERROR "Zlib not found. Required for to output files")
 endif(ZLIB_FOUND)
+
+# Ratatosk
+add_executable(Ratatosk ${sources})
+
+# Ratatosk compilation
+add_definitions(-DMAX_KMER_SIZE=${MAX_KMER_SIZE})
+target_compile_options(Ratatosk PUBLIC "-DMAX_KMER_SIZE=${MAX_KMER_SIZE}")
+
+# Ratatosk linking
+target_link_libraries(Ratatosk ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(Ratatosk ${ZLIB_LIBRARIES})
+target_link_libraries(Ratatosk bifrost)
 
 install(TARGETS Ratatosk DESTINATION bin)

@@ -45,7 +45,7 @@ brew install cmake zlib
 ```
 sudo apt-get install build-essential cmake zlib1g-dev
 ```
-5. Use the opened Ubuntu terminal for compiling, installing and running Bifrost (see next section). See [Troubleshooting](#troubleshooting) if you have any problem during the installation.
+5. Use the opened Ubuntu terminal for compiling, installing and running Ratatosk (see next section). See [Troubleshooting](#troubleshooting) if you have any problem during the installation.
 
 ## Installation
 
@@ -54,15 +54,7 @@ sudo apt-get install build-essential cmake zlib1g-dev
   git clone --recursive https://github.com/GuillaumeHolley/Ratatosk.git
   cd Ratatosk
   ```
-2. Install Bifrost (with MAX_KMER_SIZE=64)
-  ```
-  cd Bifrost && mkdir build && cd build
-  cmake -DMAX_KMER_SIZE=64 ..
-  make
-  make install
-  cd ..
-  ```
-3. Install Ratatosk
+2. Install Ratatosk
   ```
   mkdir build && cd build
   cmake ..
@@ -71,13 +63,10 @@ sudo apt-get install build-essential cmake zlib1g-dev
   ```
 
 By default, the installation creates:
-* a Ratatosk binary (*Ratatosk*)
-* a Bifrost binary (*Bifrost*)
-* a dynamic Bifrost library (*libbifrost.so* for Unix or *libbifrost.dylib* for MacOS)
-* a static Bifrost library (*libbifrost.a*)
+* a binary (*Ratatosk*)
 
 **Notes**
-`make install` might require `sudo` (`sudo make install`) to proceed. If you want to install Ratatosk and Bifrost in a non-default path, add the option `-DCMAKE_INSTALL_PREFIX=/some/path/ ..` to the `cmake` commands where `/some/path/` is where you want to see the Ratatosk and Bifrost files installed. Do not forget to add this path to your environment variables (see [Troubleshooting](#troubleshooting)). If you encounter any problem during the installation, see the [Troubleshooting](#troubleshooting) section.
+`make install` might require `sudo` (`sudo make install`) to proceed. If you want to install Ratatosk in a non-default path, add the option `-DCMAKE_INSTALL_PREFIX=/some/path/ ..` to the `cmake` command where `/some/path/` is where you want to see the Ratatosk files installed. Do not forget to add this path to your environment variables (see [Troubleshooting](#troubleshooting)). If you encounter any problem during the installation, see the [Troubleshooting](#troubleshooting) section.
 
 ## Usage:
 
