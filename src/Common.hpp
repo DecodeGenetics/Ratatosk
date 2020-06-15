@@ -3,7 +3,6 @@
 
 #include <iostream>
 
-//#include <bifrost/CompactedDBG.hpp>
 #include "CompactedDBG.hpp"
 
 #include "PairID.hpp"
@@ -13,18 +12,19 @@
 
 struct Correct_Opt : CDBG_Build_opt {
 
-	vector<string> filenames_unmapped_short_in;
 	vector<string> filenames_long_in;
 	vector<string> filenames_helper_long_in;
 
+	vector<string> filenames_short_all;
+
 	string filename_long_out;
-	string filename_unmapped_short_graph_in;
 
 	size_t min_qv;
 
 	int out_qual;
     int trim_qual;
 
+    size_t small_k;
     size_t large_k;
 
     size_t min_cov_vertices;
@@ -36,19 +36,15 @@ struct Correct_Opt : CDBG_Build_opt {
 
     double weak_region_len_factor;
 
-    bool correct;
-    bool index;
+	Correct_Opt() : out_qual(0), trim_qual(0), min_qv(6), small_k(31), large_k(95), nb_partitions(1000), max_time(20),
+					min_cov_vertices(2), min_cov_edges(2), max_cov_vertices(512), weak_region_len_factor(1.25) {
 
-	Correct_Opt() : out_qual(0), trim_qual(0), min_qv(6), large_k(95), nb_partitions(1000), max_time(20),
-					min_cov_vertices(2), min_cov_edges(2), max_cov_vertices(512), weak_region_len_factor(1.25),
-					correct(false), index(false) {
+						k = 63;
 
-        k = 63;
-
-        clipTips = true;
-        deleteIsolated = true;
-        useMercyKmers = false;
-    }
+						clipTips = false;
+						deleteIsolated = true;
+						useMercyKmers = false;
+					}
 };
 
 // returns maximal entropy score for random sequences which is log2|A| where A is the alphabet
@@ -62,6 +58,7 @@ bool hasEnoughSharedPairID(const PairID& a, const PairID& b, const size_t min_sh
 bool hasEnoughSharedPairID(const TinyBloomFilter<uint32_t>& tbf_a, const PairID& a, const PairID& b, const size_t min_shared_ids);
 
 size_t getNumberSharedPairID(const PairID& a, const PairID& b);
+size_t getNumberSharedPairID(const TinyBloomFilter<uint32_t>& tbf_a, const PairID& a, const PairID& b);
 
 // This order of nucleotide in this array is important
 static const char ambiguity_c[16] = {'.', 'A', 'C', 'M', 'G', 'R', 'S', 'V', 'T', 'W', 'Y', 'H', 'K', 'D', 'B', 'N'};
@@ -190,5 +187,7 @@ inline double getScore(const char c, const size_t qv_min = 0) {
 
 	return (qv_score / static_cast<double>(phred_scale_std - qv_min));
 }
+
+size_t approximate_log2(size_t v);
 
 #endif

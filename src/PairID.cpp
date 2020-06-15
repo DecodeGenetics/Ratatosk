@@ -162,10 +162,12 @@ PairID& PairID::operator|=(const PairID& rhs) {
             }
             else {
 
-                vector<uint32_t> new_ids;
-
                 const_iterator it = begin(), it_end = end();
                 const_iterator r_it = rhs.begin(), r_it_end = rhs.end();
+
+                vector<uint32_t> new_ids;
+
+                new_ids.reserve(cardinality() + rhs.cardinality());
 
                 while ((it != it_end) && (r_it != r_it_end)){
 
@@ -211,10 +213,12 @@ PairID& PairID::operator&=(const PairID& rhs) {
         if ((cardinality() == 0) || (rhs.cardinality() == 0)) clear();
         else {
 
-            vector<uint32_t> old_ids;
-
             const_iterator it = begin(), it_end = end();
             const_iterator r_it = rhs.begin(), r_it_end = rhs.end();
+
+            vector<uint32_t> old_ids;
+
+            old_ids.reserve(min(cardinality(), rhs.cardinality()));
 
             while (r_it != r_it_end){
 

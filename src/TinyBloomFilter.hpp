@@ -3,7 +3,6 @@
 
 #include <iostream>
 
-//#include <bifrost/libpopcnt.h>
 #include "libpopcnt.h"
 
 template<typename T>
@@ -238,6 +237,11 @@ class TinyBloomFilter {
 		inline size_t cardinality_bits() const {
 
 			return popcnt(table, (sz_table_bits / 64) * sizeof(uint64_t));
+		}
+
+		inline size_t getNumberHashFunctions() const {
+
+			return h;
 		}
 
 	private:

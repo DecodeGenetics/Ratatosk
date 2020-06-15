@@ -19,7 +19,7 @@ pair<int, int> selectBestAlignment(const vector<Path<UnitigData>>& candidates, c
 	best_end_loc = align.endLocations[0];
 	best_cand_id = 0;
 
-	for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
+	//for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
 
 	edlibFreeAlignResult(align);
 
@@ -42,9 +42,9 @@ pair<int, int> selectBestAlignment(const vector<Path<UnitigData>>& candidates, c
 				best_end_loc = align.endLocations[0];
 				best_cand_id = i;
 
-				for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
+				//for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
 			}
-			else if ((static_cast<double>(align.editDistance) / max_len_norm) == best_edit_dist) {
+			/*else if ((static_cast<double>(align.editDistance) / max_len_norm) == best_edit_dist) {
 
 				for (size_t j = 0; j < align.numLocations; ++j){
 
@@ -54,7 +54,7 @@ pair<int, int> selectBestAlignment(const vector<Path<UnitigData>>& candidates, c
 						best_end_loc = align.endLocations[j];
 					}
 				}
-			}
+			}*/
 		}
 
 		edlibFreeAlignResult(align);
@@ -86,7 +86,7 @@ pair<int, int> selectBestPrefixAlignment(const char* ref, const size_t ref_len, 
 	best_cand_id = 0;
 	best_end_loc = align.endLocations[0];
 
-	for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
+	//for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
 
 	edlibFreeAlignResult(align);
 
@@ -108,9 +108,9 @@ pair<int, int> selectBestPrefixAlignment(const char* ref, const size_t ref_len, 
 				best_cand_id = i;
 				best_end_loc = align.endLocations[0];
 
-				for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
+				//for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
 			}
-			else if ((static_cast<double>(align.editDistance) / max_len_norm) == best_edit_dist){
+			/*else if ((static_cast<double>(align.editDistance) / max_len_norm) == best_edit_dist){
 
 				for (size_t j = 0; j < align.numLocations; ++j){
 
@@ -120,7 +120,7 @@ pair<int, int> selectBestPrefixAlignment(const char* ref, const size_t ref_len, 
 						best_end_loc = align.endLocations[j];
 					}
 				}
-			}
+			}*/
 		}
 
 		edlibFreeAlignResult(align);
@@ -153,7 +153,7 @@ pair<int, int> selectBestPrefixAlignment(const char* ref, const size_t ref_len, 
 	best_cand_id = 0;
 	best_end_loc = align.endLocations[0];
 
-	for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
+	//for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
 
 	edlibFreeAlignResult(align);
 
@@ -175,9 +175,9 @@ pair<int, int> selectBestPrefixAlignment(const char* ref, const size_t ref_len, 
 				best_cand_id = i;
 				best_end_loc = align.endLocations[0];
 
-				for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
+				//for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
 			}
-			else if ((static_cast<double>(align.editDistance) / max_len_norm) == best_edit_dist){
+			/*else if ((static_cast<double>(align.editDistance) / max_len_norm) == best_edit_dist){
 
 				for (size_t j = 0; j < align.numLocations; ++j){
 
@@ -187,7 +187,7 @@ pair<int, int> selectBestPrefixAlignment(const char* ref, const size_t ref_len, 
 						best_end_loc = align.endLocations[j];
 					}
 				}
-			}
+			}*/
 		}
 
 		edlibFreeAlignResult(align);
@@ -222,7 +222,7 @@ pair<int, pair<int, int>> selectBestPrefixAlignment2(const char* ref, const size
 	best_cand_id = 0;
 	best_end_loc_target = align.endLocations[0];
 	
-	for (size_t j = 1; j < align.numLocations; ++j) best_end_loc_target = max(best_end_loc_target, align.endLocations[j]);
+	//for (size_t j = 1; j < align.numLocations; ++j) best_end_loc_target = max(best_end_loc_target, align.endLocations[j]);
 
 	edlibFreeAlignResult(align);
 
@@ -244,9 +244,9 @@ pair<int, pair<int, int>> selectBestPrefixAlignment2(const char* ref, const size
 				best_cand_id = i;
 				best_end_loc_target = align.endLocations[0];
 				
-				for (size_t j = 1; j < align.numLocations; ++j) best_end_loc_target = max(best_end_loc_target, align.endLocations[j]);
+				//for (size_t j = 1; j < align.numLocations; ++j) best_end_loc_target = max(best_end_loc_target, align.endLocations[j]);
 			}
-			else if ((static_cast<double>(align.editDistance) / max_len_norm) == best_edit_dist){
+			/*else if ((static_cast<double>(align.editDistance) / max_len_norm) == best_edit_dist){
 
 				for (size_t j = 0; j < align.numLocations; ++j){
 
@@ -256,7 +256,7 @@ pair<int, pair<int, int>> selectBestPrefixAlignment2(const char* ref, const size
 						best_end_loc_target = align.endLocations[j];
 					}
 				}
-			}
+			}*/
 		}
 
 		edlibFreeAlignResult(align);
@@ -769,7 +769,7 @@ pair<int, int> selectBestSubstringAlignment(const char* ref, const size_t ref_le
 	best_cand_id = 0;
 	best_end_loc = align.endLocations[0];
 
-	for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
+	//for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
 
 	edlibFreeAlignResult(align);
 
@@ -791,9 +791,9 @@ pair<int, int> selectBestSubstringAlignment(const char* ref, const size_t ref_le
 				best_cand_id = i;
 				best_end_loc = align.endLocations[0];
 
-				for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
+				//for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
 			}
-			else if ((static_cast<double>(align.editDistance) / max_len_norm) == best_edit_dist){
+			/*else if ((static_cast<double>(align.editDistance) / max_len_norm) == best_edit_dist){
 
 				for (size_t j = 0; j < align.numLocations; ++j){
 
@@ -803,7 +803,7 @@ pair<int, int> selectBestSubstringAlignment(const char* ref, const size_t ref_le
 						best_end_loc = align.endLocations[j];
 					}
 				}
-			}
+			}*/
 		}
 
 		edlibFreeAlignResult(align);

@@ -8,7 +8,6 @@
 #include <stack>
 #include <set>
 
-//#include <bifrost/CompactedDBG.hpp>
 #include "CompactedDBG.hpp"
 
 #include "Common.hpp"

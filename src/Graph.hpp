@@ -7,8 +7,6 @@
 #include <set>
 #include <stack>
 
-//#include <bifrost/CompactedDBG.hpp>
-//#include <bifrost/roaring.hh>
 #include "CompactedDBG.hpp"
 #include "roaring.hh"
 
@@ -33,11 +31,6 @@ size_t detectSTRs(CompactedDBG<UnitigData>& dbg, const size_t max_len_cycle, con
 
 Roaring* createPartitions(CompactedDBG<UnitigData>& dbg, const vector<Kmer>& centroids, const double mean_len_to_neighbor, const size_t nb_threads, const bool verbose);
 
-void mergeGraphUnmapped(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const string& filenameOut);
-
-//void mergeGrapLongReads(CompactedDBG<UnitigData>& dbg_sr, const Correct_Opt& opt, const Roaring* part_neighbors = nullptr);
-void mergeGrapLongReads(CompactedDBG<UnitigData>& dbg_sr, const Correct_Opt& opt, const vector<string>& v_ref_filenames);
-
 void writeGraphData(const string& output_filename, const CompactedDBG<UnitigData>& dbg, const bool verbose = false);
 bool readGraphData(const string& input_filename, CompactedDBG<UnitigData>& dbg, const bool verbose = false);
 
@@ -46,14 +39,12 @@ void packPairIDs(const CDBG_Build_opt& opt, CompactedDBG<UnitigData>& dbg, unord
 
 void expandConnectedComponent(CompactedDBG<UnitigData>& dbg, const size_t id_mapped, const size_t id_visited);
 
-//BlockedBloomFilter createBloomFilter(const CDBG_Build_opt& opt, const CompactedDBG<UnitigData>& dbg, const size_t nb_threads = 1);
-
 inline void resetUnitigData(CompactedDBG<UnitigData>& dbg, const bool clear_partitions){
 
 	for (auto& um : dbg) um.getData()->clear(clear_partitions);
 }
 
-
-pair<string, string> quickAndDirty(const CompactedDBG<UnitigData>& dbg, const string& s, const string& q);
+pair<BlockedBloomFilter, size_t> buildBFF(const vector<string>& v_filenames_in, const Correct_Opt& opt, const size_t k, const size_t g, const bool long_reads);
+string retrieveMissingReads(const Correct_Opt& opt);
 
 #endif

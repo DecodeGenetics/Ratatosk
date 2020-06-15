@@ -52,32 +52,18 @@ bool hasEnoughSharedPairID(const PairID& a, const PairID& b, const size_t min_sh
 
 	size_t nb_shared = 0;
 
-	PairID::const_iterator a_it_s = a.begin();
-	PairID::const_iterator b_it_s = b.begin();
-
-	PairID::const_iterator a_it_e = a.end();
-	PairID::const_iterator b_it_e = b.end();
-
 	const size_t a_card = a.cardinality();
 	const size_t b_card = b.cardinality();
 
-	if (a_card >= 10 * b_card){
+	const size_t log2_a = b_card * approximate_log2(a_card);
+	const size_t log2_b = a_card * approximate_log2(b_card);
 
-		while ((b_it_s != b_it_e) && (nb_shared < min_shared_ids)){
+	const size_t min_a_b = min(a_card + b_card, min(log2_a, log2_b));
 
-			nb_shared += static_cast<size_t>(a.contains(*b_it_s));
-			++b_it_s;
-		}
-	}
-	else if (b_card >= 10 * a_card){
+	if (min_a_b == (a_card + b_card)) {
 
-		while ((a_it_s != a_it_e) && (nb_shared < min_shared_ids)){
-
-			nb_shared += static_cast<size_t>(b.contains(*a_it_s));
-			++a_it_s;
-		}
-	}
-	else {
+		PairID::const_iterator a_it_s = a.begin(), a_it_e = a.end();
+		PairID::const_iterator b_it_s = b.begin(), b_it_e = b.end();
 
 		while ((a_it_s != a_it_e) && (b_it_s != b_it_e) && (nb_shared < min_shared_ids)){
 
@@ -92,6 +78,26 @@ bool hasEnoughSharedPairID(const PairID& a, const PairID& b, const size_t min_sh
 			}
 			else if (val_a < val_b) ++a_it_s;
 			else ++b_it_s;
+		}
+	}
+	else if (min_a_b == log2_a){
+
+		PairID::const_iterator b_it_s = b.begin(), b_it_e = b.end();
+
+		while ((b_it_s != b_it_e) && (nb_shared < min_shared_ids)){
+
+			nb_shared += static_cast<size_t>(a.contains(*b_it_s));
+			++b_it_s;
+		}
+	}
+	else {
+
+		PairID::const_iterator a_it_s = a.begin(), a_it_e = a.end();
+
+		while ((a_it_s != a_it_e) && (nb_shared < min_shared_ids)){
+
+			nb_shared += static_cast<size_t>(b.contains(*a_it_s));
+			++a_it_s;
 		}
 	}
 
@@ -102,16 +108,17 @@ bool hasEnoughSharedPairID(const TinyBloomFilter<uint32_t>& tbf_a, const PairID&
 
 	size_t nb_shared = 0;
 
-	PairID::const_iterator a_it_s = a.begin();
-	PairID::const_iterator b_it_s = b.begin();
-
-	PairID::const_iterator a_it_e = a.end();
-	PairID::const_iterator b_it_e = b.end();
-
 	const size_t a_card = a.cardinality();
 	const size_t b_card = b.cardinality();
 
-	if (a_card >= 10 * b_card){
+	const size_t log2_a = b_card * (approximate_log2(a_card) + tbf_a.getNumberHashFunctions());
+	const size_t log2_b = a_card * approximate_log2(b_card);
+
+	const size_t min_a_b = min(a_card + b_card, min(log2_a, log2_b));
+
+	if (min_a_b == log2_a) {
+
+		PairID::const_iterator b_it_s = b.begin(), b_it_e = b.end();
 
 		while ((b_it_s != b_it_e) && (nb_shared < min_shared_ids)){
 
@@ -121,17 +128,31 @@ bool hasEnoughSharedPairID(const TinyBloomFilter<uint32_t>& tbf_a, const PairID&
 			++b_it_s;
 		}
 	}
-	else if (b_card >= 10 * a_card){
+	else return hasEnoughSharedPairID(a, b, min_shared_ids);
 
-		while ((a_it_s != a_it_e) && (nb_shared < min_shared_ids)){
+	return (nb_shared == min_shared_ids);
+}
 
-			nb_shared += static_cast<size_t>(b.contains(*a_it_s));
-			++a_it_s;
-		}
-	}
-	else {
+size_t getNumberSharedPairID(const PairID& a, const PairID& b) {
 
-		while ((a_it_s != a_it_e) && (b_it_s != b_it_e) && (nb_shared < min_shared_ids)){
+	if (a.isEmpty() || b.isEmpty()) return 0;
+
+	size_t nb_shared = 0;
+
+	const size_t a_card = a.cardinality();
+	const size_t b_card = b.cardinality();
+
+	const size_t log2_a = b_card * approximate_log2(a_card);
+	const size_t log2_b = a_card * approximate_log2(b_card);
+
+	const size_t min_a_b = min(a_card + b_card, min(log2_a, log2_b));
+
+	if (min_a_b == (a_card + b_card)) {
+
+		PairID::const_iterator a_it_s = a.begin(), a_it_e = a.end();
+		PairID::const_iterator b_it_s = b.begin(), b_it_e = b.end();
+
+		while ((a_it_s != a_it_e) && (b_it_s != b_it_e)){
 
 			const uint32_t val_a = *a_it_s;
 			const uint32_t val_b = *b_it_s;
@@ -146,33 +167,80 @@ bool hasEnoughSharedPairID(const TinyBloomFilter<uint32_t>& tbf_a, const PairID&
 			else ++b_it_s;
 		}
 	}
+	else if (min_a_b == log2_a){
 
-	return (nb_shared == min_shared_ids);
+		PairID::const_iterator b_it_s = b.begin(), b_it_e = b.end();
+
+		while (b_it_s != b_it_e){
+
+			nb_shared += static_cast<size_t>(a.contains(*b_it_s));
+			++b_it_s;
+		}
+	}
+	else {
+
+		PairID::const_iterator a_it_s = a.begin(), a_it_e = a.end();
+
+		while (a_it_s != a_it_e){
+
+			nb_shared += static_cast<size_t>(b.contains(*a_it_s));
+			++a_it_s;
+		}
+	}
+
+	return nb_shared;
 }
 
-size_t getNumberSharedPairID(const PairID& a, const PairID& b) {
+size_t getNumberSharedPairID(const TinyBloomFilter<uint32_t>& tbf_a, const PairID& a, const PairID& b) {
 
 	if (a.isEmpty() || b.isEmpty()) return 0;
 
 	size_t nb_shared = 0;
 
-	PairID::const_iterator a_it_s = a.begin();
-	PairID::const_iterator b_it_s = b.begin();
+	const size_t a_card = a.cardinality();
+	const size_t b_card = b.cardinality();
 
-	PairID::const_iterator a_it_e = a.end();
-	PairID::const_iterator b_it_e = b.end();
+	const size_t log2_a = b_card * (approximate_log2(a_card) + tbf_a.getNumberHashFunctions());
+	const size_t log2_b = a_card * approximate_log2(b_card);
 
-	while ((a_it_s != a_it_e) && (b_it_s != b_it_e)){
+	const size_t min_a_b = min(a_card + b_card, min(log2_a, log2_b));
 
-		if (*a_it_s == *b_it_s){
+	if (min_a_b == log2_a) {
 
-			++nb_shared;
-			++a_it_s;
+		PairID::const_iterator b_it_s = b.begin(), b_it_e = b.end();
+
+		while (b_it_s != b_it_e){
+
+			const uint32_t val_b = *b_it_s;
+
+			nb_shared += static_cast<size_t>(tbf_a.query(val_b) && a.contains(val_b));
 			++b_it_s;
 		}
-		else if (*a_it_s < *b_it_s) ++a_it_s;
-		else ++b_it_s;
 	}
+	else return getNumberSharedPairID(a, b);
 
 	return nb_shared;
+}
+
+size_t approximate_log2(size_t v) {
+
+	static const uint8_t tab64[64] = {
+	    63,  0, 58,  1, 59, 47, 53,  2,
+	    60, 39, 48, 27, 54, 33, 42,  3,
+	    61, 51, 37, 40, 49, 18, 28, 20,
+	    55, 30, 34, 11, 43, 14, 22,  4,
+	    62, 57, 46, 52, 38, 26, 32, 41,
+	    50, 36, 17, 19, 29, 10, 13, 21,
+	    56, 45, 25, 31, 35, 16,  9, 12,
+	    44, 24, 15,  8, 23,  7,  6,  5
+	};
+
+    v |= v >> 1;
+    v |= v >> 2;
+    v |= v >> 4;
+    v |= v >> 8;
+    v |= v >> 16;
+    v |= v >> 32;
+
+    return tab64[(static_cast<size_t>((v - (v >> 1))*0x07EDD5E59A4E28C2)) >> 58];
 }

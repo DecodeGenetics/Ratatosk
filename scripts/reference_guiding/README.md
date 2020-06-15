@@ -45,7 +45,7 @@ The following python3 modules are required:
 	```
 	squeue -u <username>
 	```
-	After executing `Ratatosk.sh`, this command should show 4 jobs with prefix name `Ratatosk_`. After correction, folder `<output_prefix>/segments` contains temporary files that can be deleted.
+	After executing `Ratatosk.sh`, this command should show 3 jobs with prefix name `Ratatosk_`. After correction, folder `<output_prefix>/segments` contains temporary files that can be deleted.
 
 
 	**Important**

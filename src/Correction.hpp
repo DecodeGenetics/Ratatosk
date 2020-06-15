@@ -6,7 +6,6 @@
 #include <sstream>
 #include <unordered_map>
 
-//#include <bifrost/CompactedDBG.hpp>
 #include "CompactedDBG.hpp"
 
 #include "Alignment.hpp"
