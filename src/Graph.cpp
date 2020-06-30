@@ -1821,7 +1821,7 @@ pair<BlockedBloomFilter, size_t> buildBFF(const vector<string>& v_filenames_in, 
 	return pair<BlockedBloomFilter, size_t>(bf_non_uniq, nb_non_unique_kmers);
 }
 
-string retrieveMissingReads(const Correct_Opt& opt){
+/*string retrieveMissingReads(const Correct_Opt& opt){
 
     Correct_Opt opt_pass_lr(opt);
 
@@ -1879,8 +1879,8 @@ string retrieveMissingReads(const Correct_Opt& opt){
 
 	const string filename_out_extra_sr = opt.filename_long_out + "_extra_sr.fasta";
 
-    const size_t max_len_seq = 1024;
-    const size_t thread_seq_buf_sz = opt.read_chunksize * max_len_seq;
+    //const size_t max_len_seq = 1048576;
+    const size_t thread_seq_buf_sz = 1048576;
 
     ofstream outfile;
     ostream out(0);
@@ -1915,50 +1915,6 @@ string retrieveMissingReads(const Correct_Opt& opt){
 
             KmerHashIterator<RepHash> it_kmer_h(seq_buf, len, k), it_kmer_h_end;
         	minHashIterator<RepHash> it_min(seq_buf, len, k, g, RepHash(), true);
-
-        	/*BitContainer bc;
-
-            for (; it_kmer_h != it_kmer_h_end; ++it_kmer_h) {
-
-                const pair<uint64_t, int> p = *it_kmer_h; // <k-mer hash, k-mer position in sequence>
-
-                it_min += (p.second - it_min.getKmerPosition()); //If one or more k-mer were jumped because contained non-ACGT char.
-
-                const uint64_t min_hr = it_min.getHash();
-
-                if (!p_bf_sr.first.contains(p.first, min_hr)) {
-
-                	const Kmer km(seq_buf + p.second);
-
-                	if (!dbg_lr.find(km).isEmpty) bc.add(p.second);
-                }
-            }
-
-            if (bc.cardinality() >= 2) {
-
-            	BitContainer::const_iterator bc_it_s = bc.begin();
-            	BitContainer::const_iterator bc_it_e = bc.end();
-
-            	while (bc_it_s != bc_it_e){
-
-            		BitContainer::const_iterator bc_it_tmp = bc_it_s;
-
-            		const size_t nxt_valid_pos = *bc_it_tmp + k;
-
-            		while ((bc_it_tmp != bc_it_e) && (*bc_it_tmp < nxt_valid_pos)) ++bc_it_tmp;
-
-            		if ((bc_it_tmp != bc_it_e) && (*bc_it_tmp >= nxt_valid_pos)){
-
-		        		++nb_reads_added;
-
-		        		unique_lock<mutex> lock(mutex_file_out);
-
-		        		out << '>' << v_read_names[i] << '\n' << string(seq_buf) << '\n';
-            		}
-
-            		++bc_it_s;
-            	}
-            }*/
 
             size_t nb_km = 0;
 
@@ -2096,6 +2052,313 @@ string retrieveMissingReads(const Correct_Opt& opt){
     outfile.close();
 
     if (nb_reads_added == 0) remove(filename_out_extra_sr.c_str());
+
+    return filename_out_extra_sr;
+}*/
+
+string retrieveMissingReads(const Correct_Opt& opt){
+
+    Correct_Opt opt_pass_lr(opt);
+
+    opt_pass_lr.k = opt_pass_lr.small_k;
+
+    opt_pass_lr.filename_seq_in.clear();
+    opt_pass_lr.filename_seq_in.insert(opt_pass_lr.filename_seq_in.end(), opt_pass_lr.filenames_long_in.begin(), opt_pass_lr.filenames_long_in.end());
+    opt_pass_lr.filename_seq_in.insert(opt_pass_lr.filename_seq_in.end(), opt_pass_lr.filenames_helper_long_in.begin(), opt_pass_lr.filenames_helper_long_in.end());
+
+    CompactedDBG<UnitigData> dbg_lr(opt_pass_lr.k);
+
+	const size_t k = dbg_lr.getK();
+	const size_t g = dbg_lr.getG();
+
+	const string filename_out_extra_sr = opt.filename_long_out + "_extra_sr.fasta";
+
+	if (opt.verbose) cout << "Ratatosk::retrieveMissingReads(): Creating index of short reads" << endl;
+
+	const pair<BlockedBloomFilter, size_t> p_bf_sr = buildBFF(opt.filename_seq_in, opt, k, g, false);
+
+	if (opt.verbose) cout << "Ratatosk::retrieveMissingReads(): Creating index of long reads" << endl;
+
+    dbg_lr.build(opt_pass_lr);
+
+    if (opt.verbose) cout << "Ratatosk::retrieveMissingReads(): Adding coverage to long read graph" << endl;
+
+    addCoverage(dbg_lr, opt_pass_lr, true, false);
+
+    size_t min_cov_vertices = opt.min_cov_vertices;
+    size_t nb_km_lr = dbg_lr.nbKmers();
+
+    // Prune graph based mean k-mer coverage of unitigs in LR graph
+    while (nb_km_lr > p_bf_sr.second){
+
+        vector<Kmer> to_delete;
+
+        ++min_cov_vertices;
+
+        if (opt.verbose) cout << "Ratatosk::retrieveMissingReads(): Pruning long read graph based on k-mer coverage (min. " << min_cov_vertices << ")" << endl;
+
+        for (const auto& um : dbg_lr){
+
+            if (um.getData()->getKmerCoverage(um) < min_cov_vertices) to_delete.push_back(um.getUnitigHead());
+        }
+
+        for (const auto km : to_delete){
+
+            const UnitigMap<UnitigData> um = dbg_lr.find(km);
+
+            if (!um.isEmpty && (um.getData()->getKmerCoverage(um) < min_cov_vertices)) dbg_lr.remove(um);
+        }
+
+        nb_km_lr = dbg_lr.nbKmers();
+    }
+
+    if (nb_km_lr != 0){
+
+	    BlockedBloomFilter bf_lr(max(nb_km_lr, static_cast<size_t>(1)), opt.nb_bits_unique_kmers_bf);
+
+	    auto addKmersToBBF = [&](CompactedDBG<UnitigData>::iterator it_s, CompactedDBG<UnitigData>::iterator it_e, const bool multi_threaded) {
+
+	        while (it_s != it_e){
+
+	        	const string unitig = it_s->referenceUnitigToString();
+
+	            KmerHashIterator<RepHash> it_kmer_h(unitig.c_str(), unitig.length(), k), it_kmer_h_end;
+	        	minHashIterator<RepHash> it_min(unitig.c_str(), unitig.length(), k, g, RepHash(), true);
+
+	            for (; it_kmer_h != it_kmer_h_end; ++it_kmer_h) {
+
+	                const pair<uint64_t, int> p_ = *it_kmer_h; // <k-mer hash, k-mer position in sequence>
+
+	                it_min += (p_.second - it_min.getKmerPosition()); //If one or more k-mer were jumped because contained non-ACGT char.
+
+	                const uint64_t min_hr = it_min.getHash();
+
+	                bf_lr.insert(p_.first, min_hr, multi_threaded);
+	            }
+
+	            ++it_s;
+	        }
+	    };
+
+	    const size_t slice = 1024;
+
+	    CompactedDBG<UnitigData>::iterator it_s = dbg_lr.begin();
+	    CompactedDBG<UnitigData>::iterator it_e = dbg_lr.end();
+
+	    if ((opt.nb_threads == 1) || (dbg_lr.size() < slice)) addKmersToBBF(it_s, it_e, false);
+	    else {
+
+	        vector<thread> workers;
+
+	        mutex mutex_graph;
+
+	        for (size_t t = 0; t < opt.nb_threads; ++t){
+
+	            workers.emplace_back(
+
+	                [&]{
+
+	                	CompactedDBG<UnitigData>::iterator it_s_l;
+	                	CompactedDBG<UnitigData>::iterator it_e_l;
+
+	                	while (true){
+
+	                		{
+	                			unique_lock<mutex> lock(mutex_graph);
+
+	                			if (it_s == it_e) return;
+	                			else {
+
+	                				it_s_l = it_s;
+	                				it_e_l = it_s;
+
+	                				for (size_t i = 0; (i < slice) && (it_e_l != it_e); ++i) ++it_e_l;
+
+	                				it_s = it_e_l;
+	                			}
+	                		}
+
+	                		addKmersToBBF(it_s_l, it_e_l, true);
+	                	}
+	                }
+	            );
+	        }
+
+	        for (auto& t : workers) t.join();
+	    }
+	    //-----
+
+	    dbg_lr.clear();
+
+		if (opt.verbose) cout << "Ratatosk::retrieveMissingReads(): Querying full short read set for missing reads" << endl;
+
+	    const size_t thread_seq_buf_sz = 1048576;
+
+	    ofstream outfile;
+	    ostream out(0);
+
+	    string s;
+	    string n;
+
+	    std::atomic<size_t> nb_reads_added;
+
+	    mutex mutex_file_in, mutex_file_out;
+
+		FileParser fp(opt.filenames_short_all);
+
+	    outfile.open(filename_out_extra_sr.c_str());
+	    out.rdbuf(outfile.rdbuf());
+
+	    nb_reads_added = 0;
+
+	    // Main worker thread
+	    auto worker_function = [&](char* seq_buf, const size_t seq_buf_sz, const vector<string>& v_read_names) {
+
+	    	size_t i = 0;
+	    	size_t l_nb_reads_added = 0;
+
+	        const char* str_end = seq_buf + seq_buf_sz;
+
+	        while (seq_buf < str_end) { // for each input
+
+	            const int len = strlen(seq_buf);
+	            const int len_km = len - k + 1;
+
+	            size_t nb_km = 0;
+	            size_t remaining_len_km = len_km;
+
+	            for (char* s = seq_buf; s != seq_buf + len; ++s) *s &= 0xDF; // Put characters in upper case
+
+	            KmerHashIterator<RepHash> it_kmer_h(seq_buf, len, k), it_kmer_h_end;
+	        	minHashIterator<RepHash> it_min(seq_buf, len, k, g, RepHash(), true);
+
+	            for (; (it_kmer_h != it_kmer_h_end) && (nb_km < k) && (nb_km + remaining_len_km >= k); ++it_kmer_h) {
+
+	                const pair<uint64_t, int> p = *it_kmer_h; // <k-mer hash, k-mer position in sequence>
+
+	                it_min += (p.second - it_min.getKmerPosition()); //If one or more k-mer were jumped because contained non-ACGT char.
+
+	                const uint64_t min_hr = it_min.getHash();
+
+	                nb_km += static_cast<size_t>(!p_bf_sr.first.contains(p.first, min_hr) && bf_lr.contains(p.first, min_hr));
+	                remaining_len_km = len_km - p.second;
+	            }
+
+	            if (nb_km >= k) {
+
+	        		++l_nb_reads_added;
+
+	        		unique_lock<mutex> lock(mutex_file_out);
+
+	        		out << '>' << v_read_names[i] << '\n' << string(seq_buf) << '\n';
+	            }
+
+	            seq_buf += len + 1;
+	            ++i;
+	        }
+
+	        return l_nb_reads_added;
+	    };
+
+	    auto reading_function = [&](char* seq_buf, size_t& seq_buf_sz, vector<string>& v_read_names) {
+
+	        size_t file_id = 0;
+
+	        seq_buf_sz = 0;
+
+	        while (seq_buf_sz < thread_seq_buf_sz) {
+
+	        	const bool isNewRead = (s.length() == 0);
+
+	            if (!isNewRead || fp.read(s, file_id)) {
+
+	                const size_t len_s = s.length();
+
+	                if (len_s >= k){
+
+	                	if (isNewRead) n = fp.getNameString();
+
+	                    if ((thread_seq_buf_sz - seq_buf_sz) < (len_s + 1)) break;
+	                    else {
+
+	                    	v_read_names.push_back(move(n));
+
+	                        strcpy(seq_buf + seq_buf_sz, s.c_str());
+
+	                        seq_buf_sz += len_s + 1;
+
+	                        s.clear();
+	                    }
+	                }
+	                else s.clear();
+	            }
+	            else return true;
+	        }
+
+	        return false;
+	    };
+
+	    {
+	        bool stop = false;
+
+	        size_t nb_processed = 0;
+
+	        vector<thread> workers; // need to keep track of threads so we can join them
+
+	        for (size_t t = 0; t < opt.nb_threads; ++t){
+
+	            workers.emplace_back(
+
+	                [&]{
+
+	                    char* buffer_seq = new char[thread_seq_buf_sz]();
+
+	                    size_t buffer_seq_sz = 0;
+
+	                    vector<string> v_read_names;
+
+	                    while (true) {
+
+	                        {
+	                            unique_lock<mutex> lock(mutex_file_in);
+
+	                            if (stop) {
+
+	                                delete[] buffer_seq;
+	                                return;
+	                            }
+
+	                            const size_t nb_processed_before = nb_processed;
+
+	                            stop = reading_function(buffer_seq, buffer_seq_sz, v_read_names);
+	                            nb_processed += v_read_names.size();
+
+	                            if ((nb_processed / 1000000) != (nb_processed_before / 1000000)) {
+
+	                            	cout << "Ratatosk::retrieveMissingReads(): " << nb_processed << " short reads queried." << endl;
+	                            }
+	                        }
+
+	                        nb_reads_added += worker_function(buffer_seq, buffer_seq_sz, v_read_names);
+
+	                        v_read_names.clear();
+	                    }
+
+	                    delete[] buffer_seq;
+	                }
+	            );
+	        }
+
+	        for (auto& t : workers) t.join();
+	    }
+
+		if (opt.verbose) cout << "Ratatosk::retrieveMissingReads(): Added " << nb_reads_added << " short reads to dataset." << endl;
+
+	    fp.close();
+	    outfile.close();
+
+    	if (nb_reads_added == 0) remove(filename_out_extra_sr.c_str());
+	}
 
     return filename_out_extra_sr;
 }

@@ -77,9 +77,9 @@ Ratatosk
 
 displays the command line interface:
 ```
-Ratatosk 0.1
+Ratatosk x.y
 
-Hybrid error correction of long reads using colored de Bruijn graphs
+Error correction of long reads using colored de Bruijn graphs
 
 Usage: Ratatosk [PARAMETERS]
 
@@ -99,8 +99,8 @@ Usage: Ratatosk [PARAMETERS]
    -q, --quality                   Output Quality Scores: corrected bases get QS >= t (default: t=0, no output)
    -t, --trimming                  Trim bases with quality score < t (default: t=0, no trimming)
                                    Only sub-read with length >= 63 are output if t > 0
-   -d, --in-full-dataset-short     Input read file of the full short read dataset (FASTA/FASTQ possibly gzipped)
-                                   List of input read files of the full short read dataset (one file per line)
+   -u, --in-unmapped-short         Input read file of the unmapped short reads (FASTA/FASTQ possibly gzipped)
+                                   List of input read files of the full unmapped short reads (one file per line)
    -a, --in-accurate-long          Input high quality long read file (FASTA/FASTQ possibly gzipped)
                                    List of input high quality long read files (one file per line)
                                    (Those reads are NOT corrected but assist the correction of reads in input).
@@ -114,15 +114,15 @@ Usage: Ratatosk [PARAMETERS]
 
 - **Whole genome dataset**
 ```
-Ratatosk -v -c 16 -s all_short_reads.fastq -l all_long_reads.fastq -o out_long_reads
+Ratatosk -v -c 16 -s short_reads.fastq -l long_reads.fastq -o out_long_reads
 ```
-Ratatosk corrects the long read file (`-l all_long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-s all_short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads_corrected* (`-o out_long_reads`).
+Ratatosk corrects the long read file (`-l long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-s short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads* (`-o out_long_reads`).
 
 - **Subset of a whole genome dataset**
 ```
-Ratatosk -v -c 16 -s subset_short_reads.fastq -l subset_long_reads.fastq -d all_short_reads.fastq -o out_long_reads
+Ratatosk -v -c 16 -s subset_short_reads.fastq -l subset_long_reads.fastq -u unmapped_short_reads.fastq -o out_long_reads
 ```
-Ratatosk corrects the long read file (`-l subset_long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-s subset_short_reads.fastq`). Ratatosk might use for the correction reads from the full short read dataset (`-d all_short_reads.fastq`) which are not in the input subset (`-s`), most likely unmapped short reads. Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads_corrected* (`-o out_long_reads`).
+Ratatosk corrects the long read file (`-l subset_long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-s subset_short_reads.fastq`). Ratatosk might use for the correction reads from the unmapped short read dataset (`-u unmapped_short_reads.fastq`) which are most likely missing in the input subset (`-s`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads* (`-o out_long_reads`). Note that `-u` is optional.
 
 ## Reference-guided correction
 

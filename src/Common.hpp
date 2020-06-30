@@ -8,7 +8,7 @@
 #include "PairID.hpp"
 #include "TinyBloomFilter.hpp"
 
-#define RATATOSK_VERSION "0.1"
+#define RATATOSK_VERSION "0.2"
 
 struct Correct_Opt : CDBG_Build_opt {
 

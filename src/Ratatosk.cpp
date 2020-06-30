@@ -24,7 +24,7 @@ void PrintUsage() {
 
     cout << endl << "Ratatosk " << RATATOSK_VERSION << endl << endl;
 
-    cout << "Phased hybrid error correction of long reads using colored de Bruijn graphs" << endl << endl;
+    cout << "Hybrid error correction of long reads using colored de Bruijn graphs" << endl << endl;
 
     cout << "Usage: Ratatosk [PARAMETERS]" << endl << endl;
 
@@ -40,8 +40,8 @@ void PrintUsage() {
     "   -q, --quality                   Output Quality Scores: corrected bases get QS >= t (default: t=0, no output)" << endl <<
     "   -t, --trimming                  Trim bases with quality score < t (default: t=0, no trimming)" << endl <<
     "                                   Only sub-read with length >= 63 are output if t > 0" << endl <<
-    "   -d, --in-full-dataset-short     Input read file of the full short read dataset (FASTA/FASTQ possibly gzipped)" << endl <<
-    "                                   List of input read files of the full short read dataset (one file per line)" << endl <<
+    "   -u, --in-unmapped-short         Input read file of the unmapped short reads (FASTA/FASTQ possibly gzipped)" << endl <<
+    "                                   List of input read files of the unmapped short reads (one file per line)" << endl <<
     "   -a, --in-accurate-long          Input high quality long read file (FASTA/FASTQ possibly gzipped)" << endl <<
     "                                   List of input high quality long read files (one file per line)" << endl <<
     "                                   (Those reads are NOT corrected but assist the correction of reads in input)." << endl <<
@@ -53,7 +53,7 @@ int parse_ProgramOptions(int argc, char **argv, Correct_Opt& opt) {
 
     int option_index = 0, c;
 
-    const char* opt_string = "s:l:o:c:q:t:d:a:v";
+    const char* opt_string = "s:l:o:c:q:t:u:a:v";
 
     static struct option long_options[] = {
 
@@ -63,7 +63,7 @@ int parse_ProgramOptions(int argc, char **argv, Correct_Opt& opt) {
         {"cores",                   required_argument,  0, 'c'},
         {"quality",                 required_argument,  0, 'q'},
         {"trim",                    required_argument,  0, 't'},
-        {"in-full-dataset-short",   required_argument,  0, 'd'},
+        {"in-unmapped-short",       required_argument,  0, 'u'},
         {"in-accurate-long",        required_argument,  0, 'a'},
         {"verbose",                 no_argument,        0, 'v'},
         {0,                         0,                  0,  0 }
@@ -82,7 +82,7 @@ int parse_ProgramOptions(int argc, char **argv, Correct_Opt& opt) {
             case 'l':
                 opt.filenames_long_in.push_back(optarg);
                 break;
-            case 'd':
+            case 'u':
                 opt.filenames_short_all.push_back(optarg);
                 break;
             case 'a':
