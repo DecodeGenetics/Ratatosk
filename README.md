@@ -3,6 +3,7 @@
 ### Hybrid error correction of long reads using colored de Bruijn graphs
 
 Ratatosk is a hybrid error correction method for erroneous long reads based on a compacted and colored de Bruijn graph built from accurate short reads. Short and long reads color paths in the graph while vertices are annotated with candidate SNPs. Long reads are subsequently anchored on the graph using exact and inexact k-mer matches to find paths corresponding to corrected sequences.
+
 Ratatosk can reduce the raw error rate of ONT reads 6-fold on average with a median error rate as low as 0.28%. Ratatosk corrected data maintain nearly 99% accurate SNP calls and substantially increase indel calls accuracy by up to about 40% compared to the raw data. An assembly of HG002 created from Ratatosk corrected ONT reads yields a contig N50 of 43.22 Mbp and outperforms high quality assemblies using PacBio HiFi reads. In particular, the assembly of Ratatosk corrected reads contains about 2.5 times less errors than the assembly created from PacBio HiFi reads.
 
 ## Table of Contents
@@ -51,7 +52,7 @@ sudo apt-get install build-essential cmake zlib1g-dev
 
 1. Clone the Git repository
   ```
-  git clone --recursive https://github.com/GuillaumeHolley/Ratatosk.git
+  git clone --recursive https://github.com/DecodeGenetics/Ratatosk.git
   cd Ratatosk
   ```
 2. Install Ratatosk
@@ -125,7 +126,7 @@ Ratatosk corrects the long read file (`-l subset_long_reads.fastq`) with 16 thre
 
 ## Reference-guided correction
 
-See [reference-guided preprocessing](https://github.com/GuillaumeHolley/Ratatosk/tree/master/scripts/reference_guiding).
+See [reference-guided preprocessing](https://github.com/DecodeGenetics/Ratatosk/tree/master/scripts/reference_guiding).
 
 ## Advanced options
 
