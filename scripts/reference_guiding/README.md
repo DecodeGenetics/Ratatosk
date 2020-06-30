@@ -1,6 +1,6 @@
 # Reference-guided correction
 
-While Ratatosk is a reference-free method, a reference-guided preprocessing of the input data is proposed to:
+An optional reference-guided preprocessing of the input data is proposed to:
 - improve the correction
 - reduce the running time
 - distribute the workload over many nodes of an HPC
