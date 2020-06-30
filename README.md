@@ -122,7 +122,7 @@ Ratatosk corrects the long read file (`-l long_reads.fastq`) with 16 threads (`-
 ```
 Ratatosk -v -c 16 -s subset_short_reads.fastq -l subset_long_reads.fastq -u unmapped_short_reads.fastq -o out_long_reads
 ```
-Ratatosk corrects the long read file (`-l subset_long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-s subset_short_reads.fastq`). Ratatosk might use for the correction reads from the unmapped short read dataset (`-u unmapped_short_reads.fastq`) which are most likely missing in the input subset (`-s`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads* (`-o out_long_reads`). Note that `-u` is optional.
+Ratatosk corrects the long read file (`-l subset_long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-s subset_short_reads.fastq`). Ratatosk might use for the correction some unmapped short reads (`-u unmapped_short_reads.fastq`) which are missing in the input subset (`-s`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads* (`-o out_long_reads`). Note that `-u` is optional.
 
 ## Reference-guided correction
 
