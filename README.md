@@ -1,9 +1,9 @@
 # Ratatosk
 
-### Phased hybrid error correction of long reads using colored de Bruijn graphs
+### Hybrid error correction of long reads using colored de Bruijn graphs
 
-Ratatosk is a phased error correction tool for erroneous long reads based on compacted and colored de Bruijn graphs built from accurate short reads. Short and long reads color paths in the graph while vertices are annotated with candidate *de novo* Single Nucleotide Polymorphisms. Long reads are subsequently anchored on the graph using exact and inexact *k*-mer matches to find paths corresponding to corrected sequences.
-We demonstrate that Ratatosk can reduce the raw error rate of long reads down to X\,\% while preserving read phasing. Ratatosk corrected data allow for the same high quality SNP calls as for the raw data but indel calling precision and recall substantially increase by up to Y\,\% in the corrected data. Phased assemblies created from Ratatosk corrected data are also significantly more contiguous compared to the raw long reads.
+Ratatosk is a hybrid error correction method for erroneous long reads based on a compacted and colored de Bruijn graph built from accurate short reads. Short and long reads color paths in the graph while vertices are annotated with candidate SNPs. Long reads are subsequently anchored on the graph using exact and inexact k-mer matches to find paths corresponding to corrected sequences.
+Ratatosk can reduce the raw error rate of ONT reads 6-fold on average with a median error rate as low as 0.28%. Ratatosk corrected data maintain nearly 99% accurate SNP calls and substantially increase indel calls accuracy by up to about 40% compared to the raw data. An assembly of HG002 created from Ratatosk corrected ONT reads yields a contig N50 of 43.22 Mbp and outperforms high quality assemblies using PacBio HiFi reads. In particular, the assembly of Ratatosk corrected reads contains about 2.5 times less errors than the assembly created from PacBio HiFi reads.
 
 ## Table of Contents
 
@@ -78,7 +78,7 @@ displays the command line interface:
 ```
 Ratatosk 0.1
 
-Phased hybrid error correction of long reads using colored de Bruijn graphs
+Hybrid error correction of long reads using colored de Bruijn graphs
 
 Usage: Ratatosk [PARAMETERS]
 
