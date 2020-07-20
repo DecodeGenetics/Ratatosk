@@ -114,9 +114,9 @@ Usage: Ratatosk [PARAMETERS]
 
 - **Whole genome dataset**
 ```
-Ratatosk -v -c 16 -s short_reads.fastq -l long_reads.fastq -o out_long_reads
+Ratatosk -v -c 16 -s short_reads_R1.fastq -s short_reads_R2.fastq -l long_reads.fastq -o out_long_reads
 ```
-Ratatosk corrects the long read file (`-l long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-s short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads* (`-o out_long_reads`).
+Ratatosk corrects the long read file (`-l long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read files (`-s short_reads_R[1,2].fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads* (`-o out_long_reads`).
 
 - **Subset of a whole genome dataset**
 ```
