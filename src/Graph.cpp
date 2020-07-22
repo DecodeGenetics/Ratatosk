@@ -868,7 +868,7 @@ vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
                 	if (pos_read == 0){ // New read
 
 		            	const uint64_t h_name = XXH64(fp.getNameString(), strlen(fp.getNameString()), seed);
-			        	const pair<unordered_map<uint64_t, size_t, CustomHashUint64_t>::const_iterator, bool> p = name_hmap.insert({h_name, nextID});
+			        	const pair<unordered_map<uint64_t, uint64_t, CustomHashUint64_t>::const_iterator, bool> p = name_hmap.insert({h_name, nextID});
 
 			        	last_id = ((p.second ? nextID : p.first->second) | (static_cast<size_t>(p.second) << 63));
 
