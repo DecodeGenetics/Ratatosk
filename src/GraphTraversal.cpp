@@ -110,8 +110,6 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS(	const Correct_Opt& opt, co
 	    const_UnitigMap<UnitigData> um_start_tmp(um_s); // Create a non-const local copy of unitig given in parameter
 	    Path<UnitigData> p_tmp;
 
-	    //auto start_time = std::chrono::steady_clock::now();
-
 		if (um_start_tmp.strand){
 
 			um_start_tmp.dist += um_start_tmp.len - 1;
@@ -275,8 +273,6 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS(	const Correct_Opt& opt, co
 				resizeQueue(q_long);
 
 				q = move(q_long);
-
-            	//if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() >= opt.max_time) break;
 			}
 			else break;
 		}
@@ -376,8 +372,6 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS2(	const Correct_Opt& opt, c
 	    
 	    const_UnitigMap<UnitigData> um_start_tmp(um_s); // Create a non-const local copy of unitig given in parameter
 	    Path<UnitigData> p_start_tmp;
-
-	    //auto start_time = std::chrono::steady_clock::now();
 
 	    for (const auto& p : v_um_e){
 
@@ -624,8 +618,6 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS2(	const Correct_Opt& opt, c
 				resizeQueue(q_long);
 
 				q = move(q_long);
-
-				//if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() >= opt.max_time) break;
 			}
 			else break;
 		}
@@ -723,10 +715,6 @@ void exploreSubGraph(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>& bf
 				else {
 
 					const PairID r_curr = i_t.r | r_succ;
-					//----------------------------------------------------
-					//PairID r_curr(i_t.r);
-					//for (const uint32_t id : r_succ) r_curr.add(id);
-					//----------------------------------------------------
 
 					const double score = getScorePath(path, r_curr);
 
@@ -751,11 +739,6 @@ void exploreSubGraph(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>& bf
 				path.extend(succ);
 
 				const PairID r_curr = i_t.r | r_succ;
-
-				//----------------------------------------------------
-				//PairID r_curr(i_t.r);
-				//for (const uint32_t id : r_succ) r_curr.add(id);
-				//----------------------------------------------------
 				
 				if (i_t.l != 0) stck.push(info_traversal(path, r_curr, i_t.l - 1));
 				else {
@@ -875,10 +858,6 @@ void exploreSubGraph(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>& bf
 					else {
 
 						const PairID r_curr = i_t.r | r_succ;
-						//----------------------------------------------------
-						//PairID r_curr(i_t.r);
-						//for (const uint32_t id : r_succ) r_curr.add(id);
-						//----------------------------------------------------
 
 						const double score = getScorePath(path, r_curr);
 
@@ -904,10 +883,6 @@ void exploreSubGraph(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>& bf
 				path.extend(succ);
 
 				const PairID r_curr = i_t.r | r_succ;
-				//----------------------------------------------------
-				//PairID r_curr(i_t.r);
-				//for (const uint32_t id : r_succ) r_curr.add(id);
-				//----------------------------------------------------
 				
 				if (i_t.l != 0) stck.push(info_traversal(path, r_curr, i_t.l - 1));
 				else {
@@ -964,10 +939,6 @@ void exploreSubGraphLong(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>
 	};
 
 	const bool out_qual = static_cast<bool>(opt.out_qual) || static_cast<bool>(opt.trim_qual);
-
-	//const auto start_time = std::chrono::steady_clock::now();
-
-	//size_t i = 0;
 
 	stack<info_traversal> stck;
 
@@ -1065,15 +1036,6 @@ void exploreSubGraphLong(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>
 		}
 
 		if (short_cycle && (l_best_score >= 0) && (best_p.length() < opt.large_k)) stck.push(info_traversal(best_p, best_r, true));
-
-		// Overtime
-		/*if ((++i % 65536 == 0) && (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() >= opt.max_time)){
-
-			best_successors.clear();
-			semi_weak_successors.clear();
-
-			return;
-		}*/
 	}
 }
 
@@ -1108,10 +1070,6 @@ void exploreSubGraphLong(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>
 	};
 
 	const bool out_qual = static_cast<bool>(opt.out_qual) || static_cast<bool>(opt.trim_qual);
-
-	//const auto start_time = std::chrono::steady_clock::now();
-
-	//size_t i = 0;
 
 	stack<info_traversal> stck;
 
@@ -1216,14 +1174,5 @@ void exploreSubGraphLong(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>
 		}
 
 		if (short_cycle && (l_best_score >= 0) && (best_p.length() < opt.large_k)) stck.push(info_traversal(best_p, best_r, true));
-
-		// Overtime
-		/*if ((++i % 65536 == 0) && (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - start_time).count() >= opt.max_time)){
-
-			best_successors.clear();
-			semi_weak_successors.clear();
-
-			return;
-		}*/
 	}
 }

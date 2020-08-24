@@ -674,7 +674,7 @@ vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
     size_t len_read;
     size_t pos_read;
 
-    const size_t thread_seq_buf_sz = 64 * 1024;
+    const size_t thread_seq_buf_sz = opt.buffer_sz;
     const size_t thread_name_buf_sz = (thread_seq_buf_sz / (k + 1)) + 1;
 
     auto cmpKmer = [](const Kmer a, const Kmer b) {
@@ -1668,7 +1668,7 @@ pair<BlockedBloomFilter, size_t> buildBFF(const vector<string>& v_filenames_in, 
 	    kms_opt.g = g;
 	    kms_opt.q = 0;
 
-	    if (long_reads) kms_opt.e /= 10;
+	    //if (long_reads) kms_opt.e /= 10;
 
 	    KmerStream kms(kms_opt);
 
@@ -1688,9 +1688,6 @@ pair<BlockedBloomFilter, size_t> buildBFF(const vector<string>& v_filenames_in, 
     size_t len_read = 0;
     size_t pos_read = 0;
 
-    const size_t max_len_seq = 1024;
-    const size_t thread_seq_buf_sz = opt.read_chunksize * max_len_seq;
-
     const bool multi_threaded = (opt.nb_threads != 1);
 
     // Main worker thread
@@ -1698,7 +1695,7 @@ pair<BlockedBloomFilter, size_t> buildBFF(const vector<string>& v_filenames_in, 
 
         char* str = seq_buf;
 
-        const char* str_end = &seq_buf[seq_buf_sz];
+        const char* str_end = seq_buf + seq_buf_sz;
 
         while (str < str_end) { // for each input
 
@@ -1728,7 +1725,7 @@ pair<BlockedBloomFilter, size_t> buildBFF(const vector<string>& v_filenames_in, 
 
         size_t file_id = 0;
 
-        const size_t sz_buf = thread_seq_buf_sz - k;
+        const size_t sz_buf = opt.buffer_sz - k;
 
         const char* s_str = s.c_str();
 
@@ -1747,20 +1744,20 @@ pair<BlockedBloomFilter, size_t> buildBFF(const vector<string>& v_filenames_in, 
 
                 if (len_read >= k){
 
-                    if ((thread_seq_buf_sz - seq_buf_sz - 1) < (len_read - pos_read)){
+                    if ((opt.buffer_sz - seq_buf_sz - 1) < (len_read - pos_read)){
 
-                        strncpy(&seq_buf[seq_buf_sz], &s_str[pos_read], thread_seq_buf_sz - seq_buf_sz - 1);
+                        strncpy(seq_buf + seq_buf_sz, s_str + pos_read, opt.buffer_sz - seq_buf_sz - 1);
 
-                        seq_buf[thread_seq_buf_sz - 1] = '\0';
+                        seq_buf[opt.buffer_sz - 1] = '\0';
 
                         pos_read += sz_buf - seq_buf_sz;
-                        seq_buf_sz = thread_seq_buf_sz;
+                        seq_buf_sz = opt.buffer_sz;
 
                         break;
                     }
                     else {
 
-                        strcpy(&seq_buf[seq_buf_sz], &s_str[pos_read]);
+                        strcpy(seq_buf + seq_buf_sz, s_str + pos_read);
 
                         seq_buf_sz += (len_read - pos_read) + 1;
                         pos_read = len_read;
@@ -1787,7 +1784,7 @@ pair<BlockedBloomFilter, size_t> buildBFF(const vector<string>& v_filenames_in, 
 
                 [&]{
 
-                    char* buffer_seq = new char[thread_seq_buf_sz]();
+                    char* buffer_seq = new char[opt.buffer_sz]();
 
                     size_t buffer_seq_sz = 0;
 
@@ -1796,11 +1793,7 @@ pair<BlockedBloomFilter, size_t> buildBFF(const vector<string>& v_filenames_in, 
                         {
                             unique_lock<mutex> lock(mutex_file);
 
-                            if (stop) {
-
-                                delete[] buffer_seq;
-                                return;
-                            }
+                            if (stop) break;
 
                             stop = reading_function(buffer_seq, buffer_seq_sz);
                         }
@@ -1820,241 +1813,6 @@ pair<BlockedBloomFilter, size_t> buildBFF(const vector<string>& v_filenames_in, 
 
 	return pair<BlockedBloomFilter, size_t>(bf_non_uniq, nb_non_unique_kmers);
 }
-
-/*string retrieveMissingReads(const Correct_Opt& opt){
-
-    Correct_Opt opt_pass_lr(opt);
-
-    opt_pass_lr.k = opt_pass_lr.small_k;
-
-    opt_pass_lr.filename_seq_in.clear();
-    opt_pass_lr.filename_seq_in.insert(opt_pass_lr.filename_seq_in.end(), opt_pass_lr.filenames_long_in.begin(), opt_pass_lr.filenames_long_in.end());
-    opt_pass_lr.filename_seq_in.insert(opt_pass_lr.filename_seq_in.end(), opt_pass_lr.filenames_helper_long_in.begin(), opt_pass_lr.filenames_helper_long_in.end());
-
-    CompactedDBG<UnitigData> dbg_lr(opt_pass_lr.k);
-
-	const size_t k = dbg_lr.getK();
-	const size_t g = dbg_lr.getG();
-
-	if (opt.verbose) cout << "Ratatosk::retrieveMissingReads(): Creating index of short reads" << endl;
-
-	const pair<BlockedBloomFilter, size_t> p_bf_sr = buildBFF(opt.filename_seq_in, opt, k, g, false);
-
-	if (opt.verbose) cout << "Ratatosk::retrieveMissingReads(): Creating index of long reads" << endl;
-
-    dbg_lr.build(opt_pass_lr);
-
-    if (opt.verbose) cout << "Ratatosk::retrieveMissingReads(): Adding coverage to long read graph" << endl;
-
-    addCoverage(dbg_lr, opt_pass_lr, true, false);
-
-    size_t min_cov_vertices = opt.min_cov_vertices;
-    size_t nb_km_lr = dbg_lr.nbKmers();
-
-    // Prune graph based mean k-mer coverage of unitigs in LR graph
-    while (nb_km_lr > p_bf_sr.second){
-
-        vector<Kmer> to_delete;
-
-        ++min_cov_vertices;
-
-        if (opt.verbose) cout << "Ratatosk::retrieveMissingReads(): Pruning long read graph based on k-mer coverage (min. " << min_cov_vertices << ")" << endl;
-
-        for (const auto& um : dbg_lr){
-
-            if (um.getData()->getKmerCoverage(um) < min_cov_vertices) to_delete.push_back(um.getUnitigHead());
-        }
-
-        for (const auto km : to_delete){
-
-            const UnitigMap<UnitigData> um = dbg_lr.find(km);
-
-            if (!um.isEmpty && (um.getData()->getKmerCoverage(um) < min_cov_vertices)) dbg_lr.remove(um);
-        }
-
-        nb_km_lr = dbg_lr.nbKmers();
-    }
-
-	if (opt.verbose) cout << "Ratatosk::retrieveMissingReads(): Querying full short read set for missing reads" << endl;
-
-	const string filename_out_extra_sr = opt.filename_long_out + "_extra_sr.fasta";
-
-    //const size_t max_len_seq = 1048576;
-    const size_t thread_seq_buf_sz = 1048576;
-
-    ofstream outfile;
-    ostream out(0);
-
-    string s;
-    string n;
-
-    std::atomic<size_t> nb_reads_added;
-
-    mutex mutex_file_in, mutex_file_out;
-
-	FileParser fp(opt.filenames_short_all);
-
-    outfile.open(filename_out_extra_sr.c_str());
-    out.rdbuf(outfile.rdbuf());
-
-    nb_reads_added = 0;
-
-    // Main worker thread
-    auto worker_function = [&](char* seq_buf, const size_t seq_buf_sz, const vector<string>& v_read_names) {
-
-    	size_t i = 0;
-    	size_t nb_reads_added = 0;
-
-        const char* str_end = seq_buf + seq_buf_sz;
-
-        while (seq_buf < str_end) { // for each input
-
-            const int len = strlen(seq_buf);
-
-            for (char* s = seq_buf; s != seq_buf + len; ++s) *s &= 0xDF; // Put characters in upper case
-
-            KmerHashIterator<RepHash> it_kmer_h(seq_buf, len, k), it_kmer_h_end;
-        	minHashIterator<RepHash> it_min(seq_buf, len, k, g, RepHash(), true);
-
-            size_t nb_km = 0;
-
-            const int len_km = len - k + 1;
-
-            for (; it_kmer_h != it_kmer_h_end; ++it_kmer_h) {
-
-                const pair<uint64_t, int> p = *it_kmer_h; // <k-mer hash, k-mer position in sequence>
-
-                it_min += (p.second - it_min.getKmerPosition()); //If one or more k-mer were jumped because contained non-ACGT char.
-
-                const uint64_t min_hr = it_min.getHash();
-
-                if (!p_bf_sr.first.contains(p.first, min_hr)) {
-
-                	const Kmer km(seq_buf + p.second);
-
-                	if (!dbg_lr.find(km).isEmpty) ++nb_km;
-                }
-
-                if ((nb_km >= k) || (nb_km + len_km - p.second < k)) break;
-            }
-
-            if (nb_km >= k) {
-
-        		++nb_reads_added;
-
-        		unique_lock<mutex> lock(mutex_file_out);
-
-        		out << '>' << v_read_names[i] << '\n' << string(seq_buf) << '\n';
-            }
-
-            seq_buf += len + 1;
-            ++i;
-        }
-
-        return nb_reads_added;
-    };
-
-    auto reading_function = [&](char* seq_buf, size_t& seq_buf_sz, vector<string>& v_read_names) {
-
-        size_t file_id = 0;
-
-        seq_buf_sz = 0;
-
-        while (seq_buf_sz < thread_seq_buf_sz) {
-
-        	const bool isNewRead = (s.length() == 0);
-
-            if (!isNewRead || fp.read(s, file_id)) {
-
-                const size_t len_s = s.length();
-
-                if (len_s >= k){
-
-                	if (isNewRead) n = fp.getNameString();
-
-                    if ((thread_seq_buf_sz - seq_buf_sz) < (len_s + 1)) break;
-                    else {
-
-                    	v_read_names.push_back(move(n));
-
-                        strcpy(seq_buf + seq_buf_sz, s.c_str());
-
-                        seq_buf_sz += len_s + 1;
-
-                        s.clear();
-                    }
-                }
-                else s.clear();
-            }
-            else return true;
-        }
-
-        return false;
-    };
-
-    {
-        bool stop = false;
-
-        size_t nb_processed = 0;
-
-        vector<thread> workers; // need to keep track of threads so we can join them
-
-        for (size_t t = 0; t < opt.nb_threads; ++t){
-
-            workers.emplace_back(
-
-                [&]{
-
-                    char* buffer_seq = new char[thread_seq_buf_sz]();
-
-                    size_t buffer_seq_sz = 0;
-
-                    vector<string> v_read_names;
-
-                    while (true) {
-
-                        {
-                            unique_lock<mutex> lock(mutex_file_in);
-
-                            if (stop) {
-
-                                delete[] buffer_seq;
-                                return;
-                            }
-
-                            const size_t nb_processed_before = nb_processed;
-
-                            stop = reading_function(buffer_seq, buffer_seq_sz, v_read_names);
-                            nb_processed += v_read_names.size();
-
-                            if ((nb_processed / 1000000) != (nb_processed_before / 1000000)) {
-
-                            	cout << "Ratatosk::retrieveMissingReads(): " << nb_processed << " short reads queried." << endl;
-                            }
-                        }
-
-                        nb_reads_added += worker_function(buffer_seq, buffer_seq_sz, v_read_names);
-
-                        v_read_names.clear();
-                    }
-
-                    delete[] buffer_seq;
-                }
-            );
-        }
-
-        for (auto& t : workers) t.join();
-    }
-
-	if (opt.verbose) cout << "Ratatosk::retrieveMissingReads(): Added " << nb_reads_added << " short reads to dataset." << endl;
-
-    fp.close();
-    outfile.close();
-
-    if (nb_reads_added == 0) remove(filename_out_extra_sr.c_str());
-
-    return filename_out_extra_sr;
-}*/
 
 string retrieveMissingReads(const Correct_Opt& opt){
 
@@ -2186,13 +1944,10 @@ string retrieveMissingReads(const Correct_Opt& opt){
 
 	        for (auto& t : workers) t.join();
 	    }
-	    //-----
 
 	    dbg_lr.clear();
 
 		if (opt.verbose) cout << "Ratatosk::retrieveMissingReads(): Querying full short read set for missing reads" << endl;
-
-	    const size_t thread_seq_buf_sz = 1048576;
 
 	    ofstream outfile;
 	    ostream out(0);
@@ -2266,7 +2021,7 @@ string retrieveMissingReads(const Correct_Opt& opt){
 
 	        seq_buf_sz = 0;
 
-	        while (seq_buf_sz < thread_seq_buf_sz) {
+	        while (seq_buf_sz < opt.buffer_sz) {
 
 	        	const bool isNewRead = (s.length() == 0);
 
@@ -2278,7 +2033,7 @@ string retrieveMissingReads(const Correct_Opt& opt){
 
 	                	if (isNewRead) n = fp.getNameString();
 
-	                    if ((thread_seq_buf_sz - seq_buf_sz) < (len_s + 1)) break;
+	                    if ((opt.buffer_sz - seq_buf_sz) < (len_s + 1)) break;
 	                    else {
 
 	                    	v_read_names.push_back(move(n));
@@ -2311,7 +2066,7 @@ string retrieveMissingReads(const Correct_Opt& opt){
 
 	                [&]{
 
-	                    char* buffer_seq = new char[thread_seq_buf_sz]();
+	                    char* buffer_seq = new char[opt.buffer_sz]();
 
 	                    size_t buffer_seq_sz = 0;
 
@@ -2322,11 +2077,7 @@ string retrieveMissingReads(const Correct_Opt& opt){
 	                        {
 	                            unique_lock<mutex> lock(mutex_file_in);
 
-	                            if (stop) {
-
-	                                delete[] buffer_seq;
-	                                return;
-	                            }
+	                            if (stop) break;
 
 	                            const size_t nb_processed_before = nb_processed;
 
@@ -2340,7 +2091,6 @@ string retrieveMissingReads(const Correct_Opt& opt){
 	                        }
 
 	                        nb_reads_added += worker_function(buffer_seq, buffer_seq_sz, v_read_names);
-
 	                        v_read_names.clear();
 	                    }
 

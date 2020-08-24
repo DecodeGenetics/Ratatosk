@@ -3,13 +3,8 @@
 REF_GENOME=$1
 SHORT_READS_BAM=$2
 LONG_READS_BAM=$3
-OUT_PREFIX=$4
+OUT_PREFIX=$(mkdir -p $4; cd $4; pwd)
 PARTITION=$5
-
-BIN_SZ="5000000" # Length of segments in bp
-MIN_MAPQ_SR="0" # Minimum MAPQ of short reads (0 to have secondary alignments)
-MIN_MAPQ_LR="30" # Minimum MAQ of long reads
-MIN_QS_SR="0" # Minimum quality score for a base in the short reads. Replaced by a 'N' in bin if below that threshold
 
 PREP_FILES=0
 
@@ -66,10 +61,7 @@ then
 	mapfile -t CHR_LENGTHS < <(samtools view -H "${SHORT_READS_BAM}" | grep "@SQ" | awk '{print substr($3,4,length($3))}')
 
 	# Extract bins
-	CMD="python3 segmentBAM.py -s ${SHORT_READS_BAM} -l ${LONG_READS_BAM} -t 24 -o ${PREFIX_PATH_SEG}/sample -b ${BIN_SZ} -m ${MIN_MAPQ_SR} -n ${MIN_MAPQ_LR} -q ${MIN_QS_SR};"
-	CMD="${CMD} samtools bam2fq -@ 24 -n ${SHORT_READS_BAM} | gzip >${PREFIX_PATH_SEG}/sample_sr.fastq.gz;"
-	CMD="${CMD} samtools view -@ 24 -b -f 4 ${SHORT_READS_BAM} > ${PREFIX_PATH_SEG}/sample_sr_unmap.bam;"
-	CMD="${CMD} samtools bam2fq -@ 24 -n ${PREFIX_PATH_SEG}/sample_sr_unmap.bam | gzip >${PREFIX_PATH_SEG}/sample_sr_unmap.fastq.gz; rm -rf ${PREFIX_PATH_SEG}/sample_sr_unmap.bam;"
+	CMD="python3 segmentBAM.py -t 24 -s ${SHORT_READS_BAM} -l ${LONG_READS_BAM} -o ${PREFIX_PATH_SEG}/sample > ${PREFIX_PATH_SEG}/sample.bin;"
 	
 	SLURM_OUT=$(sbatch -p ${PARTITION} -J Ratatosk_extractBins --mem=24G --cpus-per-task=24 -t 2-0:0 -o extractBins.slurm.log --wrap="${CMD}")
 
@@ -95,7 +87,7 @@ then
 	echo "set -e" >> ${PREFIX_FILE_BIN}
 	echo "set -o pipefail" >> ${PREFIX_FILE_BIN}
 
-	# For all ONT reads with mapq good enough, correct chromsome by chromosome, then bin by bin
+	# For all ONT reads with a good enough MAPQ, correct bin by bin
 	for j in $(seq 0 $((${#CHR_NAMES[@]})))
 	do
 		chr_name="${CHR_NAMES[$j]}"
@@ -113,7 +105,7 @@ then
 				NAME_LR_OUT_FILE="${NAME_LR_IN_FILE}_corrected"
 	
 				CMD="if [ -f ${NAME_LR_IN_FILE}.fq ] && [ -s ${NAME_LR_IN_FILE}.fq ]; then if [ -f ${NAME_SR_IN_FILE}.fa ] && [ -s ${NAME_SR_IN_FILE}.fa ]; then" # Check input file exists as they should
-				CMD="${CMD} /usr/bin/time -v Ratatosk -v -c 8 -q 13 -s ${NAME_SR_IN_FILE}.fa -l ${NAME_LR_IN_FILE}.fq -u ${PREFIX_PATH_SEG}/sample_sr_unmap.fastq.gz -o ${NAME_LR_OUT_FILE};"  # Ratatosk correction
+				CMD="${CMD} /usr/bin/time -v Ratatosk -v -c 8 -q 13 -s ${NAME_SR_IN_FILE}.fa -l ${NAME_LR_IN_FILE}.fq -u ${NAME_SR_UNMAPPED_IN_FILE} -o ${NAME_LR_OUT_FILE};"  # Ratatosk correction
 				CMD="${CMD} else cp ${NAME_LR_IN_FILE}.fq ${NAME_LR_OUT_FILE}.fastq; fi; fi;"
 	
 				echo "${CMD}" >> ${PREFIX_FILE_BIN}
@@ -133,8 +125,10 @@ then
 	fi
 
 	CMD="cat \$(ls -t ${PREFIX_PATH_SEG}/sample_lr_*_corrected.fastq) > ${PREFIX_PATH_SEG}/sample_lr_map.fastq;" # Concat corrected bins
+	CMD="${CMD} samtools bam2fq -@ 48 -n ${SHORT_READS_BAM} | gzip >${PREFIX_PATH_SEG}/sample_sr.fastq.gz;" # Extract all short reads
 	CMD="${CMD} Ratatosk -v -c 48 -q 13 -s ${PREFIX_PATH_SEG}/sample_sr.fastq.gz -l ${PREFIX_PATH_SEG}/sample_lr_unknown.fq -a ${PREFIX_PATH_SEG}/sample_lr_map.fastq -o ${PREFIX_PATH_SEG}/sample_lr_unknown_corrected;" # Ratatosk
-	CMD="${CMD} cat ${PREFIX_PATH_SEG}/sample_lr_map.fastq ${PREFIX_PATH_SEG}/sample_lr_unknown_corrected.fastq > ${PREFIX_PATH_CORRECTED}/sample_corrected.fastq" # Concat corrected bins
+	CMD="${CMD} cat ${PREFIX_PATH_SEG}/sample_lr_map.fastq ${PREFIX_PATH_SEG}/sample_lr_unknown_corrected.fastq > ${PREFIX_PATH_CORRECTED}/sample_corrected.fastq;" # Concat corrected bins
+	CMD="${CMD} rm -rf ${PREFIX_PATH_SEG};"
 
 	SLURM_OUT=$(sbatch -p ${PARTITION} -J Ratatosk_correctSegONT2 --dependency=afterok:${JOB_ID} --mem=350G --cpus-per-task=48 -t 7-0:0 -o correctSegONT2.slurm.log --wrap="${CMD}")
 

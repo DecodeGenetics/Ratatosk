@@ -20,7 +20,10 @@ pair<int, pair<int, int>> selectBestPrefixAlignment2(const char* ref, const size
 
 pair<string, string> generateConsensus(const ResultCorrection* fw_s, const ResultCorrection* bw_s, const string& ref_seq, const double max_norm_edit_distance = -1.0);
 
-void fixAmbiguity(const CompactedDBG<UnitigData>& dbg, string& query, string& quality, const vector<pair<size_t, char>>& v_ambiguity, const char* ref_seq, const char* ref_qual, const size_t ref_len, const size_t min_qual, const bool force_fix = false);
+void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg,
+					string& query, string& quality, const char* ref_seq, const char* ref_qual, const size_t ref_len,
+					const vector<pair<size_t, char>>& v_ambiguity,
+					const size_t min_qual, const bool force_fix = false);
 
 pair<int, int> selectBestSubstringAlignment(const char* ref, const size_t ref_len, const vector<Path<UnitigData>>& candidates, const double cut_threshold_norm_edit = -1.0);
 

@@ -7,13 +7,13 @@ class ResultCorrection {
 
 	public: 
 
-		ResultCorrection(const size_t seq_len) : old_seq_len(seq_len), min_cov_vertex(0) {}
+		ResultCorrection(const size_t seq_len) : old_seq_len(seq_len), min_cov_vertex(0), is_corrected(false) {}
 
 		ResultCorrection(const ResultCorrection& o) : 	pos_corrected_old_seq(o.pos_corrected_old_seq), seq(o.seq), qual(o.qual), old_seq_len(o.old_seq_len),
-														min_cov_vertex(o.min_cov_vertex), r_s(o.r_s), r_w(o.r_w), r_t(o.r_t) {}
+														min_cov_vertex(o.min_cov_vertex), r_s(o.r_s), r_w(o.r_w), r_t(o.r_t), is_corrected(o.is_corrected) {}
 
 		ResultCorrection(ResultCorrection&& o) :	pos_corrected_old_seq(move(o.pos_corrected_old_seq)), seq(move(o.seq)), qual(move(o.qual)), old_seq_len(o.old_seq_len),
-													min_cov_vertex(o.min_cov_vertex), r_s(move(o.r_s)), r_w(move(o.r_w)), r_t(move(o.r_t)) { o.clear(); }
+													min_cov_vertex(o.min_cov_vertex), r_s(move(o.r_s)), r_w(move(o.r_w)), r_t(move(o.r_t)), is_corrected(o.is_corrected) { o.clear(); }
 
 		ResultCorrection operator=(const ResultCorrection& o){
 
@@ -22,6 +22,8 @@ class ResultCorrection {
 				pos_corrected_old_seq = o.pos_corrected_old_seq;
 				old_seq_len = o.old_seq_len;
 				min_cov_vertex = o.min_cov_vertex;
+
+				is_corrected = o.is_corrected;
 
 				seq = o.seq;
 				qual = o.qual;
@@ -41,6 +43,8 @@ class ResultCorrection {
 				pos_corrected_old_seq = move(o.pos_corrected_old_seq);
 				old_seq_len = o.old_seq_len;
 				min_cov_vertex = o.min_cov_vertex;
+
+				is_corrected = o.is_corrected;
 
 				seq = move(o.seq);
 				qual = move(o.qual);
@@ -73,6 +77,8 @@ class ResultCorrection {
 
 			old_seq_len = 0;
 			min_cov_vertex = 0;
+
+			is_corrected = false;
 		}
 
 		inline ResultCorrection reverseComplement() {
@@ -112,7 +118,9 @@ class ResultCorrection {
 
 		inline size_t getNbCorrectedPosOldSeq() const { return pos_corrected_old_seq.cardinality(); }
 
-		inline bool isCorrected() const { return (pos_corrected_old_seq.cardinality() == old_seq_len); }
+		inline bool isCorrected() const { return /*(pos_corrected_old_seq.cardinality() == old_seq_len)*/ is_corrected; }
+
+		inline void setCorrected() { is_corrected = true; }
 
 		inline size_t getLastCorrectedPosOldSeq() const { return pos_corrected_old_seq.maximum(); }
 
@@ -171,6 +179,8 @@ class ResultCorrection {
 
 		size_t old_seq_len;
 		size_t min_cov_vertex;
+
+		bool is_corrected;
 };
 
 #endif

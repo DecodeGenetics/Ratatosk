@@ -22,7 +22,6 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
     const size_t pos_um_solid2 = (no_end ? s.length() - opt.k : um_solid_end.first);
     const size_t len_weak_region = (pos_um_solid2 - um_solid_start.first) + opt.k;
 
-    //const size_t max_len_weak_region = long_read_correct ? 0xffffffffULL : 500;
     const size_t max_len_weak_region = long_read_correct ? 10000 : 1000;
 	const size_t max_paths = 512;
 
@@ -63,23 +62,12 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
     			const pair<Path<UnitigData>, size_t>& p = paths1[i];
     			const size_t l_len_weak_region = (pos_um_solid2 - p.second) + opt.k;
 
+    			//cout << "l_len_weak_region 1 = " << l_len_weak_region << endl;
+
             	if ((i == 0) || (paths1[i].first.back() != paths1[i-1].first.back())){
 
             		g_prev_path = {vector<Path<UnitigData>>(), false};
             		g_prev_path_ext = {vector<Path<UnitigData>>(), false};
-
-	        		/*if (no_end){
-
-	        			g_prev_path = explorePathsBFS(	opt, s.c_str() + p.second, min(l_len_weak_region, max_len_weak_region), bf, r, (begin ? um_solid_start.second : p.first.back()),
-		        										min_cov_vertex, long_read_correct);
-	        		}
-	        		else if (l_len_weak_region <= max_len_weak_region * 2){
-
-	        			const vector<pair<size_t, const_UnitigMap<UnitigData>>> v_end(1, um_solid_end);
-
-	        			g_prev_path = explorePathsBFS2(	opt, s.c_str() + p.second, l_len_weak_region, bf, r, (begin ? um_solid_start.second : p.first.back()), v_end,
-		        										min_cov_vertex, long_read_correct);
-	        		}*/
 
             		if (l_len_weak_region <= max_len_weak_region){
 
@@ -113,12 +101,6 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
             	}
             	else if (!no_end){
 
-            		/*if (!g_prev_path_ext.second && g_prev_path_ext.first.empty()){
-
-            			g_prev_path_ext = explorePathsBFS(	opt, s.c_str() + p.second, min(l_len_weak_region, max_len_weak_region * 2), bf, r, (begin ? um_solid_start.second : p.first.back()),
-            												min_cov_vertex, long_read_correct);
-            		}*/
-
 					if (!g_prev_path_ext.second && g_prev_path_ext.first.empty() && (l_len_weak_region <= max_len_weak_region)){
 
             			g_prev_path_ext = explorePathsBFS(	opt, s.c_str() + p.second, l_len_weak_region, bf, r, (begin ? um_solid_start.second : p.first.back()),
@@ -147,6 +129,8 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
     			const pair<Path<UnitigData>, size_t>& p = paths1[i];
 	            const size_t l_len_weak_region = (v_um_weak[i_weak].first - p.second) + opt.k;
 
+	            //cout << "l_len_weak_region 2 = " << l_len_weak_region << endl;
+
 	            if ((i == 0) || (paths1[i].first.back() != paths1[i-1].first.back())){
 
 		        	size_t i_weak_end = i_weak;
@@ -158,7 +142,6 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
 
 	        		const vector<pair<size_t, const_UnitigMap<UnitigData>>> v_um_weak_tmp(v_um_weak.begin() + i_weak, v_um_weak.begin() + i_weak_end);
 
-	        		//if (l_len_weak_region <= max_len_weak_region * 2){
 	        		if (l_len_weak_region <= max_len_weak_region){
 
 	        			g_prev_path = explorePathsBFS2(	opt, s.c_str() + p.second, l_len_weak_region, bf, r, (begin ? um_solid_start.second : p.first.back()), v_um_weak_tmp,
@@ -181,11 +164,6 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
             	}
             	else {
 
-            		/*if (!g_prev_path_ext.second && g_prev_path_ext.first.empty()){
-
-            			g_prev_path_ext = explorePathsBFS(	opt, s.c_str() + p.second, min(l_len_weak_region, max_len_weak_region * 2), bf, r, (begin ? um_solid_start.second : p.first.back()),
-            												min_cov_vertex, long_read_correct);
-            		}*/
             		if (!g_prev_path_ext.second && g_prev_path_ext.first.empty() && (l_len_weak_region <= max_len_weak_region)){
 
             			g_prev_path_ext = explorePathsBFS(	opt, s.c_str() + p.second, l_len_weak_region, bf, r, (begin ? um_solid_start.second : p.first.back()),
@@ -679,7 +657,7 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 				res_corrected.setMinCovVertex(min_cov_vertex);
 			}
 
-			const size_t cov_vertex = (long_read_correct || (min_cov_vertex == 0xffffffffffffffffULL)) ? (opt.min_cov_vertices + 1) : max(static_cast<size_t>((min_cov_vertex + 1) * 0.1), opt.min_cov_vertices + 1);
+			const size_t cov_vertex = (long_read_correct || (min_cov_vertex == 0xffffffffffffffffULL)) ? opt.min_cov_vertices : max(static_cast<size_t>((min_cov_vertex + 1) * 0.1), opt.min_cov_vertices);
 
 			PairID r;
 
@@ -853,7 +831,39 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 	    	}
     	}
 
-    	fixAmbiguity(dbg, s_corrected, q_corrected, v_ambiguity, s_start, q_start, res_corrected.getLengthOldSequence(), opt.min_qv, true);
+    	fixAmbiguity(dbg, s_corrected, q_corrected, s_start, q_start, res_corrected.getLengthOldSequence(), v_ambiguity, opt.min_qv, true);
+
+    	if (res_corrected.getNbCorrectedPosOldSeq() == res_corrected.getLengthOldSequence()){
+
+	    	const Kmer end_s(s.c_str() + s.length() - opt.k);
+	    	const Kmer end_s_corr(s_corrected.c_str() + s_corrected.length() - opt.k);
+
+	    	// Region has all its bases corrected, first and last k-mers are solid -> region is corrected
+	    	if (end_s == end_s_corr) res_corrected.setCorrected();
+	    }
+	    
+	    if (!res_corrected.isCorrected()) {
+
+    		// Corrected region might span the weak region too far
+			EdlibAlignConfig config(edlibNewAlignConfig(-1, EDLIB_MODE_SHW, EDLIB_TASK_DISTANCE, NULL, 0));
+			EdlibAlignResult align = edlibAlign(s_start, um_solid2.first - v_s[i_s].first + opt.k, s_corrected.c_str(), s_corrected.length(), config);
+
+			if (align.editDistance >= 0){
+
+				size_t end_location = align.endLocations[0];
+
+				for (size_t j = 1; j < align.numLocations; ++j){
+
+					if (align.endLocations[j] > end_location) end_location = align.endLocations[j];
+				}
+
+				s_corrected = s_corrected.substr(0, end_location + 1);
+
+				if (!q_corrected.empty()) q_corrected = q_corrected.substr(0, end_location + 1);
+			}
+
+			edlibFreeAlignResult(align);
+    	}
 
     	res_corrected.setSequence(move(s_corrected));
     	res_corrected.setQuality(move(q_corrected));
@@ -861,16 +871,7 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 		return res_corrected;
 	};
 
-    //-------------------------------------------------
-    //auto start_time = std::chrono::steady_clock::now();
-    //auto end_time = std::chrono::steady_clock::now();
-    //------------------------------------------------- 
-
     if (v_um_solid[0].first != 0){ // Read starts with a weak region (no left solid region)
-
-	    //-------------------------------------------------
-	    //start_time = std::chrono::steady_clock::now();
-	    //-------------------------------------------------
 
     	const size_t i_solid_rev = v_um_solid_rev.size() - 1;
 
@@ -880,36 +881,50 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 
     	const ResultCorrection bw_corrected = correct(s_bw, q_fw, v_um_solid_rev, v_um_weak_rev, i_solid_rev, i_weak_rev, nullptr).reverseComplement();
 
-    	//-------------------------------------------------
-    	//end_time = std::chrono::steady_clock::now();
-    	//-------------------------------------------------
-
     	corrected_s << bw_corrected.getSequence().substr(0, bw_corrected.getSequence().length() - opt.k);
 
     	if (out_qual) corrected_q << bw_corrected.getQuality().substr(0, bw_corrected.getQuality().length() - opt.k); // For now everything corrected is score 0
-
-        //-------------------------------------------------
-        //cout << "Correcting left extremity, length = " << v_um_solid[0].first << ", " << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << "s" << endl;
-        //-------------------------------------------------
     }
 
 	while (i_solid < v_um_solid.size() - 1){
 
-        if (v_um_solid[i_solid].first != (v_um_solid[i_solid + 1].first - 1)){ // Start of a weak region of the read
+	    if (v_um_solid[i_solid].first != (v_um_solid[i_solid + 1].first - 1)){ // Start of a weak region of the read
 
-        	if (v_um_solid[i_solid + 1].first >= (v_um_solid[i_solid].first + opt.k)){
+	    	bool sameUnitig = false;
 
-			    //-------------------------------------------------
-			    //start_time = std::chrono::steady_clock::now();
-			    //-------------------------------------------------
+	        const const_UnitigMap<UnitigData>& start_um = v_um_solid[i_solid].second;
+	        const const_UnitigMap<UnitigData>& end_um = v_um_solid[i_solid + 1].second;
+
+	    	if (long_read_correct || (v_um_solid[i_solid + 1].first < (v_um_solid[i_solid].first + opt.k))){
+
+				// Check same unitig and same strand
+	        	sameUnitig = (start_um.getUnitigHead() == end_um.getUnitigHead()) && (start_um.strand == end_um.strand);
+	        	// Start and end positions are compatible
+	        	sameUnitig = sameUnitig && ((start_um.strand && (start_um.dist < end_um.dist)) || (!start_um.strand && (start_um.dist > end_um.dist)));
+        	}
+
+        	if (sameUnitig) {
+        		
+        		const_UnitigMap<UnitigData> um_sub = v_um_solid[i_solid].second;
+
+        		um_sub.dist = min(start_um.dist, end_um.dist);
+        		um_sub.len = (start_um.strand ? (end_um.dist - start_um.dist) : (start_um.dist - end_um.dist)) + 1;
+
+        		const string s_um_sub = um_sub.mappedSequenceToString();
+
+        		corrected_s << s_fw.substr(prev_pos, v_um_solid[i_solid].first - prev_pos) + s_um_sub.substr(0, s_um_sub.length() - opt.k);
+
+        		if (out_qual){
+
+        			corrected_q << (long_read_correct ? q_fw.substr(prev_pos, v_um_solid[i_solid].first - prev_pos) : string(v_um_solid[i_solid].first - prev_pos, getQual(1.0))) +
+        							string(s_um_sub.length() - opt.k, getQual(1.0));
+        		}
+	        }
+			else if (v_um_solid[i_solid + 1].first >= (v_um_solid[i_solid].first + opt.k)){
 
 	        	const ResultCorrection fw_corrected = correct(s_fw, q_fw, v_um_solid, v_um_weak, i_solid, i_weak, nullptr);
 
 	        	if (fw_corrected.isCorrected()) {
-
-			    	//-------------------------------------------------
-			    	//end_time = std::chrono::steady_clock::now();
-			    	//-------------------------------------------------
 
 	        		const size_t l_solid = v_um_solid[i_solid].first - prev_pos;
 	        		const string corrected_subseq_fw = s_fw.substr(prev_pos, l_solid) + fw_corrected.getSequence();
@@ -931,10 +946,6 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 		    		while ((i_weak_bw > 0) && (v_um_weak_rev[i_weak_bw - 1].first > v_um_solid_rev[i_solid_bw].first)) --i_weak_bw;
 
 		        	const ResultCorrection bw_corrected = correct(s_bw, q_bw, v_um_solid_rev, v_um_weak_rev, i_solid_bw, i_weak_bw, &fw_corrected).reverseComplement();
-
-			    	//-------------------------------------------------
-			    	//end_time = std::chrono::steady_clock::now();
-			    	//-------------------------------------------------
 
 		        	if (bw_corrected.isCorrected()){
 
@@ -980,12 +991,8 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 		        		}
 			        }
 	        	}
-
-		        //-------------------------------------------------
-		        //cout << "Correcting middle region, length = " << (v_um_solid[i_solid + 1].first - v_um_solid[i_solid].first) << ", " << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << "s" << endl;
-		        //-------------------------------------------------
 	        }
-	        else {
+			else { // No correction
 
 	        	corrected_s << s_fw.substr(prev_pos, v_um_solid[i_solid + 1].first - prev_pos);
 
@@ -994,7 +1001,7 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 	        		if (long_read_correct) corrected_q << q_fw.substr(prev_pos, v_um_solid[i_solid + 1].first - prev_pos);
 	        		else corrected_q << string(v_um_solid[i_solid + 1].first - prev_pos, getQual(1.0));
 	        	}
-	        }
+        	}
 
         	prev_pos = v_um_solid[i_solid + 1].first;
         }
@@ -1004,24 +1011,12 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 
     if (v_um_solid[v_um_solid.size() - 1].first < s_fw.length() - opt.k){ // There is a weak region at the end which has no
 
-	    //-------------------------------------------------
-	    //start_time = std::chrono::steady_clock::now();
-	    //-------------------------------------------------
-
    		const ResultCorrection fw_corrected = correct(s_fw, q_fw, v_um_solid, v_um_weak, i_solid, i_weak, nullptr);
    		const size_t l_solid = v_um_solid[i_solid].first - prev_pos;
-
-    	//-------------------------------------------------
-    	//end_time = std::chrono::steady_clock::now();
-    	//-------------------------------------------------
 
         corrected_s << s_fw.substr(prev_pos, l_solid) << fw_corrected.getSequence(); // Push right solid region
 
         if (out_qual) corrected_q << (long_read_correct ? q_fw.substr(prev_pos, l_solid) : string(l_solid, getQual(1.0))) << fw_corrected.getQuality();
-
-        //-------------------------------------------------
-        //cout << "Correcting right extremity, length = " << (s_fw.length() - v_um_solid[v_um_solid.size() - 1].first)  << ", " << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << "s" << endl;
-        //-------------------------------------------------
     }
 	else {
 

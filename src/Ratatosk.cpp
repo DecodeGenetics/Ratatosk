@@ -301,7 +301,7 @@ void writeCorrectedOutput(ostream& out, const string& name_str, const string& se
     }
 }
 
-void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const bool long_read_correct, const Roaring* all_partitions) {
+/*void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const bool long_read_correct, const Roaring* all_partitions) {
 
 	const size_t k = dbg.getK();
 
@@ -386,7 +386,7 @@ void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const b
 
                                 if (!long_read_correct && !in_qual.empty()) getStdQual(in_qual); // Set all quality score from 0 to 40
 
-						        const pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> p = getSeeds(opt, dbg, in_read, long_read_correct/*, max_id_sr*/);
+						        const pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> p = getSeeds(opt, dbg, in_read, long_read_correct);
 						        const pair<string, string> correction = correctSequence(dbg, opt, in_read, in_qual, p.first, p.second, long_read_correct, all_partitions);
 
 	                            mutex_file_out.acquire();
@@ -412,6 +412,144 @@ void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const b
 
         for (auto& t : workers) t.join();
 	}
+
+    outfile.close();
+    fp.close();
+}*/
+
+void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const bool long_read_correct, const Roaring* all_partitions) {
+
+    const size_t k = dbg.getK();
+
+    ofstream outfile;
+    ostream out(0);
+
+    FileParser fp(opt.filenames_long_in);
+
+    size_t file_id;
+
+    outfile.open(opt.filename_long_out.c_str());
+    out.rdbuf(outfile.rdbuf());
+
+    if (opt.nb_threads == 1){
+
+        string in_read;
+
+        while (fp.read(in_read, file_id)){ // For every read (a query)
+
+            const string in_name = string(fp.getNameString());
+
+            string in_qual = (fp.getQualityScoreString() != nullptr) ? string(fp.getQualityScoreString()) : string();
+
+            if (!long_read_correct && !in_qual.empty()) getStdQual(in_qual); // Set all quality score from 0 to 40
+
+            const pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> p = getSeeds(opt, dbg, in_read, long_read_correct);
+            const pair<string, string> correction = correctSequence(dbg, opt, in_read, in_qual, p.first, p.second, long_read_correct, all_partitions);
+
+            if (long_read_correct) writeCorrectedOutput(out, in_name, correction.first, correction.second, k, static_cast<bool>(opt.out_qual), opt.trim_qual);
+            else writeCorrectedOutput(out, in_name, correction.first, correction.second, k, static_cast<bool>(opt.out_qual) || static_cast<bool>(opt.trim_qual), 0);
+
+            if (opt.verbose){
+
+                cout << fp.getNameString() << endl;
+                cout << "Length before: " << in_read.length() << endl;
+                cout << "Length after: " << correction.first.length() << endl;
+            }
+        }
+    }
+    else {
+
+        bool stop = false;
+
+        size_t nb_reads_proc = 0;
+
+        vector<thread> workers; // need to keep track of threads so we can join them
+
+        SpinLock mutex_file_in;
+        SpinLock mutex_file_out;
+
+        for (size_t t = 0; t < opt.nb_threads; ++t){
+
+            workers.emplace_back(
+
+                [&, t]{
+
+                    vector<string> v_in_read, v_in_qual, v_in_name;
+
+                    string in_read;
+
+                    size_t in_read_len = 0;
+
+                    while (true) {
+
+                        mutex_file_in.acquire();
+
+                        if (stop){
+
+                            mutex_file_in.release();
+                            return;
+                        }
+                        else {
+
+                            while (in_read_len < opt.buffer_sz) {
+
+                                stop = !fp.read(in_read, file_id);
+
+                                if (!stop){
+
+                                    in_read_len += in_read.length();
+
+                                    v_in_read.push_back(move(in_read));
+                                    v_in_name.push_back(string(fp.getNameString()));
+                                    v_in_qual.push_back((fp.getQualityScoreString() != nullptr) ? string(fp.getQualityScoreString()) : string());
+
+                                    if (opt.verbose && (++nb_reads_proc % 1000 == 0)) cout << "Ratatosk::correct(): Processed " << nb_reads_proc << " reads " << endl;
+                                }
+                                else break;
+                            }
+
+                            mutex_file_in.release();
+
+                            if (!v_in_read.empty()){
+
+                                for (size_t i = 0; i < v_in_read.size(); ++i){
+
+                                    if (!long_read_correct && !v_in_qual[i].empty()) getStdQual(v_in_qual[i]); // Set all quality score from 0 to 40
+
+                                    const pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> p = getSeeds(opt, dbg, v_in_read[i], long_read_correct);
+
+                                    pair<string, string> correction = correctSequence(dbg, opt, v_in_read[i], v_in_qual[i], p.first, p.second, long_read_correct, all_partitions);
+
+                                    v_in_read[i] = move(correction.first);
+                                    v_in_qual[i] = move(correction.second);
+                                }
+
+                                mutex_file_out.acquire();
+
+                                for (size_t i = 0; i < v_in_read.size(); ++i){
+
+                                    if (long_read_correct) writeCorrectedOutput(out, v_in_name[i], v_in_read[i], v_in_qual[i], k, static_cast<bool>(opt.out_qual), opt.trim_qual);
+                                    else writeCorrectedOutput(out, v_in_name[i], v_in_read[i], v_in_qual[i], k, static_cast<bool>(opt.out_qual) || static_cast<bool>(opt.trim_qual), 0);
+                                }
+
+                                mutex_file_out.release();
+                            }
+
+                            in_read_len = 0;
+
+                            v_in_read.clear();
+                            v_in_qual.clear();
+                            v_in_name.clear();
+
+                            in_read.clear();
+                        }
+                    }
+                }
+            );
+        }
+
+        for (auto& t : workers) t.join();
+    }
 
     outfile.close();
     fp.close();
@@ -509,13 +647,7 @@ int main(int argc, char *argv[]) {
                 else if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Graph is empty, no correction can be done. Output uncorrected reads." << endl;
             }
 
-            //const int sr_graph_format = FileParser::getFileFormat(sr_graph.c_str());
-
             Correct_Opt opt_pass2(opt);
-
-            //opt_pass2.filename_ref_in.clear();
-
-            //if (sr_graph_format != -1) opt_pass2.filename_ref_in.push_back(sr_graph);
 
             opt_pass2.filename_seq_in.clear();
             opt_pass2.filename_seq_in.insert(opt_pass2.filename_seq_in.end(), opt_pass2.filenames_helper_long_in.begin(), opt_pass2.filenames_helper_long_in.end());
@@ -537,8 +669,6 @@ int main(int argc, char *argv[]) {
 
                 CompactedDBG<UnitigData> dbg(opt_pass2.k);
 
-                //if (opt_pass2.filenames_helper_long_in.empty()) dbg.read(sr_graph, opt_pass2.nb_threads, opt_pass2.verbose);
-                //else dbg.build(opt_pass2);
                 dbg.read(sr_graph, opt_pass2.nb_threads, opt_pass2.verbose);
 
                 if (dbg.length() != 0) {

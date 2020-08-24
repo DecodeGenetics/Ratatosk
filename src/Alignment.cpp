@@ -480,102 +480,11 @@ pair<string, string> generateConsensus(const ResultCorrection* fw_s, const Resul
 	return {ss.str(), sq.str()};
 }
 
-/*void fixAmbiguity(string& query, string& quality, const vector<pair<size_t, char>>& v_ambiguity, const char* ref_seq, const char* ref_qual, const size_t ref_len, const size_t min_qual, const bool force_fix){
-
-	if (!v_ambiguity.empty()) {
-
-		const size_t quality_len = quality.length();
-		const size_t query_len = query.length();
-
-		const bool q_hasQual = (quality_len != 0);
-		const bool r_hasQual = (ref_qual != nullptr);
-
-		const size_t min_qs_char = 33 + min_qual;
-
-		string query_tmp = query;
-
-		for (const auto p : v_ambiguity) query_tmp[p.first] = p.second;
-
-		const EdlibAlignConfig config_ambiguous = edlibNewAlignConfig(-1, EDLIB_MODE_NW, EDLIB_TASK_PATH, NULL, 0);
-		EdlibAlignResult align = edlibAlign(query.c_str(), query_len, ref_seq, ref_len, config_ambiguous);
-
-		char* cigar = edlibAlignmentToCigar(align.alignment, align.alignmentLength, EDLIB_CIGAR_STANDARD);
-
-		const size_t cigar_len = strlen(cigar);
-
-		size_t cigar_pos = 0;
-		size_t prev_cigar_pos = 0;
-		size_t target_pos = align.startLocations[0];
-		size_t query_pos = 0;
-
-		while (cigar_pos != cigar_len){
-
-			if ((cigar[cigar_pos] < 0x30) || (cigar[cigar_pos] > 0x39)){ // If current char. is not a number
-
-				if (cigar[cigar_pos] == 'M') { //match
-
-					const size_t cigar_l = atoi(&cigar[prev_cigar_pos]);
-
-					for (size_t query_pos_tmp = query_pos, target_pos_tmp = target_pos; query_pos_tmp < query_pos + cigar_l; ++query_pos_tmp, ++target_pos_tmp){
-
-						if (!isDNA(query_tmp[query_pos_tmp])){
-
-							if (isDNA(ref_seq[target_pos_tmp]) && (!r_hasQual || (ref_qual[target_pos_tmp] >= min_qs_char))){
-
-								bool is_a_q = false, is_c_q = false, is_g_q = false, is_t_q = false;
-								bool is_a_t = false, is_c_t = false, is_g_t = false, is_t_t = false;
-
-								getAmbiguityRev(ref_seq[target_pos_tmp], is_a_t, is_c_t, is_g_t, is_t_t);
-								getAmbiguityRev(query_tmp[query_pos_tmp], is_a_q, is_c_q, is_g_q, is_t_q);
-
-								if ((is_a_q && is_a_t) || (is_c_q && is_c_t) || (is_g_q && is_g_t) || (is_t_q && is_t_t)) query_tmp[query_pos_tmp] = ref_seq[target_pos_tmp];
-								//else if (q_hasQual) quality[query_pos_tmp] = getQual(0.0);
-							}
-
-							if (force_fix && !isDNA(query_tmp[query_pos_tmp])){
-
-								query_tmp[query_pos_tmp] = query[query_pos_tmp];
-
-								//if (q_hasQual) quality[query_pos_tmp] = getQual(0.0);
-							}
-						}
-					}
-
-					query_pos += cigar_l;
-					target_pos += cigar_l;
-				}
-				else if ((cigar[cigar_pos] == 'I') || (cigar[cigar_pos] == 'S')) query_pos += atoi(&cigar[prev_cigar_pos]); //insertion or soft-clipping
-				else if (cigar[cigar_pos] == 'D') target_pos += atoi(&cigar[prev_cigar_pos]);  //deletion
-
-				prev_cigar_pos = cigar_pos + 1;
-			}
-
-			++cigar_pos;
-		}
-
-		free(cigar);
-
-		edlibFreeAlignResult(align);
-
-		if (force_fix){
-
-			for (size_t i = 0; i < query_len; ++i){
-
-				if (!isDNA(query_tmp[i])){
-
-					query_tmp[i] = query[i];
-
-					//if (q_hasQual) quality[i] = getQual(0.0);
-				}
-			}
-		}
-
-		query = move(query_tmp);
-	}
-}*/
-
-void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg, string& query, string& quality, const vector<pair<size_t, char>>& v_ambiguity, 
-					const char* ref_seq, const char* ref_qual, const size_t ref_len, const size_t min_qual, const bool force_fix){
+void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg,
+					string& query, string& quality, 
+					const char* ref_seq, const char* ref_qual, const size_t ref_len,
+					const vector<pair<size_t, char>>& v_ambiguity,
+					const size_t min_qual, const bool force_fix){
 
 	if (!v_ambiguity.empty()) {
 
@@ -597,7 +506,7 @@ void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg, string& query, string& q
 			query_tmp[p.first] = p.second;
 		}
 
-		const EdlibAlignConfig config_ambiguous = edlibNewAlignConfig(-1, EDLIB_MODE_NW, EDLIB_TASK_PATH, NULL, 0);
+		const EdlibAlignConfig config_ambiguous = edlibNewAlignConfig(-1, EDLIB_MODE_SHW, EDLIB_TASK_PATH, NULL, 0);
 		EdlibAlignResult align = edlibAlign(query.c_str(), query_len, ref_seq, ref_len, config_ambiguous);
 
 		char* cigar = edlibAlignmentToCigar(align.alignment, align.alignmentLength, EDLIB_CIGAR_STANDARD);
@@ -606,8 +515,8 @@ void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg, string& query, string& q
 
 		size_t cigar_pos = 0;
 		size_t prev_cigar_pos = 0;
-		size_t target_pos = align.startLocations[0];
 		size_t query_pos = 0;
+		size_t target_pos = align.startLocations[0];
 
 		while (cigar_pos != cigar_len){
 
@@ -667,15 +576,15 @@ void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg, string& query, string& q
 
 			if (isDNA(p.second)){
 
-				const size_t start_pos = (p.first < k) ? 0 : (p.first - k);
-				const size_t len_pos = (query_len - start_pos < 2 * k - 1) ? (query_len - start_pos) : (2 * k - 1);
-				const size_t amb_pos_q_sub = p.first - start_pos;
+				const size_t pos_buff = (p.first < k) ? 0 : (p.first - k);
+				const size_t len_buff = min(p.first + k, query_len) - pos_buff;
+				const size_t pos_snp_buff = p.first - pos_buff;
 
 				const bool confident_snp = (p.second == query[p.first]);
 
-				string q_sub = query.substr(start_pos, len_pos);
+				string q_sub = query.substr(pos_buff, len_buff);
 
-				q_sub[amb_pos_q_sub] = p.second;
+				q_sub[pos_snp_buff] = p.second;
 
 				for (KmerIterator it_km(q_sub.c_str()), it_km_end; it_km != it_km_end; ++it_km) {
 
@@ -692,16 +601,16 @@ void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg, string& query, string& q
 						const string unitig_seq = um_tmp.mappedSequenceToString();
 						const vector<pair<size_t, char>> v_amb = um_tmp.getData()->get_ambiguity_char(um_tmp);
 
-						size_t amb_pos_unitig = (amb_pos_q_sub - p_km.second) + um.dist;
+						size_t pos_snp_unitig = (pos_snp_buff - p_km.second) + um.dist;
 
-						if (!um.strand) amb_pos_unitig = um.size - amb_pos_unitig - 1;
+						if (!um.strand) pos_snp_unitig = um.size - pos_snp_unitig - 1;
 
 						for (const auto p_amb : v_amb){
 
 							int64_t pos = static_cast<int64_t>(p_amb.first);
 
-							if (pos <= amb_pos_unitig) pos = static_cast<int64_t>(p.first) - static_cast<int64_t>(amb_pos_unitig - pos);
-							else pos = static_cast<int64_t>(p.first) + static_cast<int64_t>(pos - amb_pos_unitig);
+							if (pos <= pos_snp_unitig) pos = static_cast<int64_t>(p.first) - static_cast<int64_t>(pos_snp_unitig - pos);
+							else pos = static_cast<int64_t>(p.first) + static_cast<int64_t>(pos - pos_snp_unitig);
 
 							if ((pos >= 0) && (pos < query_len) && (pos != p.first)) {
 
@@ -717,7 +626,7 @@ void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg, string& query, string& q
 			}
 		}
 
-		vector<pair<size_t, char>> v(s_ambiguity.begin(), s_ambiguity.end());
+		const vector<pair<size_t, char>> v(s_ambiguity.begin(), s_ambiguity.end());
 
 		for (int64_t i = 0; i < v.size(); ++i){
 
@@ -727,17 +636,13 @@ void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg, string& query, string& q
 
 				if (it != m_ambiguity.end()){
 
-					//if (isDNA(it->second)) it->second = v[i].second;
-					//else {
+					bool is_a_q = false, is_c_q = false, is_g_q = false, is_t_q = false;
+					bool is_a_t = false, is_c_t = false, is_g_t = false, is_t_t = false;
 
-						bool is_a_q = false, is_c_q = false, is_g_q = false, is_t_q = false;
-						bool is_a_t = false, is_c_t = false, is_g_t = false, is_t_t = false;
+					getAmbiguityRev(it->second, is_a_t, is_c_t, is_g_t, is_t_t);
+					getAmbiguityRev(v[i].second, is_a_q, is_c_q, is_g_q, is_t_q);
 
-						getAmbiguityRev(it->second, is_a_t, is_c_t, is_g_t, is_t_t);
-						getAmbiguityRev(v[i].second, is_a_q, is_c_q, is_g_q, is_t_q);
-
-						if ((is_a_q && is_a_t) || (is_c_q && is_c_t) || (is_g_q && is_g_t) || (is_t_q && is_t_t)) it->second = v[i].second;
-					//}
+					if ((is_a_q && is_a_t) || (is_c_q && is_c_t) || (is_g_q && is_g_t) || (is_t_q && is_t_t)) it->second = v[i].second;
 				}
 			}
 		}
@@ -747,6 +652,194 @@ void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg, string& query, string& q
 		query = move(query_tmp);
 	}
 }
+
+/*void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg,
+					string& query, string& quality, 
+					const char* ref_seq, const char* ref_qual, const size_t ref_len,
+					const vector<pair<size_t, char>>& v_ambiguity, const Roaring& partitions,
+					const size_t min_qual, const bool force_fix){
+
+	if (!v_ambiguity.empty()) {
+
+		const size_t quality_len = quality.length();
+		const size_t query_len = query.length();
+
+		const bool q_hasQual = (quality_len != 0);
+		const bool r_hasQual = (ref_qual != nullptr);
+
+		const bool hasPart = (partitions.cardinality() != 0);
+
+		const size_t min_qs_char = 33 + min_qual;
+
+		string query_tmp = query;
+
+		unordered_map<size_t, char> m_ambiguity, m_ambiguity_tmp;
+
+		for (const auto p : v_ambiguity){
+
+			m_ambiguity.insert(p);
+			query_tmp[p.first] = p.second;
+		}
+
+		m_ambiguity_tmp = m_ambiguity;
+
+		const EdlibAlignConfig config_ambiguous = edlibNewAlignConfig(-1, EDLIB_MODE_SHW, EDLIB_TASK_PATH, NULL, 0);
+		EdlibAlignResult align = edlibAlign(query.c_str(), query_len, ref_seq, ref_len, config_ambiguous);
+
+		char* cigar = edlibAlignmentToCigar(align.alignment, align.alignmentLength, EDLIB_CIGAR_STANDARD);
+
+		const size_t cigar_len = strlen(cigar);
+
+		size_t cigar_pos = 0;
+		size_t prev_cigar_pos = 0;
+		size_t query_pos = 0;
+		size_t target_pos = align.startLocations[0];
+
+		while (cigar_pos != cigar_len){
+
+			if ((cigar[cigar_pos] < 0x30) || (cigar[cigar_pos] > 0x39)){ // If current char. is not a number
+
+				if (cigar[cigar_pos] == 'M') { //match
+
+					const size_t cigar_l = atoi(&cigar[prev_cigar_pos]);
+
+					for (size_t query_pos_tmp = query_pos, target_pos_tmp = target_pos; query_pos_tmp < query_pos + cigar_l; ++query_pos_tmp, ++target_pos_tmp){
+
+						if (!isDNA(query_tmp[query_pos_tmp]) && isDNA(ref_seq[target_pos_tmp]) && (!r_hasQual || (ref_qual[target_pos_tmp] >= min_qs_char))){
+
+							bool is_a_q = false, is_c_q = false, is_g_q = false, is_t_q = false;
+							bool is_a_t = false, is_c_t = false, is_g_t = false, is_t_t = false;
+
+							getAmbiguityRev(ref_seq[target_pos_tmp], is_a_t, is_c_t, is_g_t, is_t_t);
+							getAmbiguityRev(query_tmp[query_pos_tmp], is_a_q, is_c_q, is_g_q, is_t_q);
+
+							if ((is_a_q && is_a_t) || (is_c_q && is_c_t) || (is_g_q && is_g_t) || (is_t_q && is_t_t)){
+
+								unordered_map<size_t, char>::iterator it = m_ambiguity.find(query_pos_tmp);
+
+								if (it != m_ambiguity.end()) it->second = ref_seq[target_pos_tmp];
+							}
+						}
+					}
+
+					query_pos += cigar_l;
+					target_pos += cigar_l;
+				}
+				else if ((cigar[cigar_pos] == 'I') || (cigar[cigar_pos] == 'S')) query_pos += atoi(&cigar[prev_cigar_pos]); //insertion or soft-clipping
+				else if (cigar[cigar_pos] == 'D') target_pos += atoi(&cigar[prev_cigar_pos]);  //deletion
+
+				prev_cigar_pos = cigar_pos + 1;
+			}
+
+			++cigar_pos;
+		}
+
+		free(cigar);
+		edlibFreeAlignResult(align);
+
+		const size_t k = dbg.getK();
+
+		struct compare_ambiguity {
+
+			bool operator()(const pair<size_t, char>& a, const pair<size_t, char>& b) const {
+
+				return ((a.first < b.first) || ((a.first == b.first) && (a.second < b.second)));
+			}
+		};
+
+		set<pair<size_t, char>, compare_ambiguity> s_ambiguity;
+
+		for (auto& p : m_ambiguity){
+
+			if (isDNA(p.second)){
+
+				const size_t pos_buff = (p.first < k) ? 0 : (p.first - k);
+				const size_t len_buff = min(p.first + k, query_len) - pos_buff;
+				const size_t pos_snp_buff = p.first - pos_buff;
+
+				const bool confident_snp = (p.second == query[p.first]);
+
+				bool isValidSNP = false;
+
+				string q_sub = query.substr(pos_buff, len_buff);
+
+				q_sub[pos_snp_buff] = p.second;
+
+				for (KmerIterator it_km(q_sub.c_str()), it_km_end; it_km != it_km_end; ++it_km) {
+
+					const pair<Kmer, int>& p_km = *it_km;
+					const const_UnitigMap<UnitigData> um = dbg.findUnitig(q_sub.c_str(), p_km.second, q_sub.length());
+
+					if (!um.isEmpty && (!hasPart || partitions.contains(um.getData()->getConnectedComp()))) {
+
+						const_UnitigMap<UnitigData> um_tmp = um;
+
+						um_tmp.dist = 0;
+						um_tmp.len = um_tmp.size - k + 1;
+
+						const string unitig_seq = um_tmp.mappedSequenceToString();
+						const vector<pair<size_t, char>> v_amb = um_tmp.getData()->get_ambiguity_char(um_tmp);
+
+						size_t pos_snp_unitig = (pos_snp_buff - p_km.second) + um.dist;
+
+						isValidSNP = true;
+
+						if (!um.strand) pos_snp_unitig = um.size - pos_snp_unitig - 1;
+
+						for (const auto p_amb : v_amb){
+
+							int64_t pos = static_cast<int64_t>(p_amb.first);
+
+							if (pos <= pos_snp_unitig) pos = static_cast<int64_t>(p.first) - static_cast<int64_t>(pos_snp_unitig - pos);
+							else pos = static_cast<int64_t>(p.first) + static_cast<int64_t>(pos - pos_snp_unitig);
+
+							if ((pos >= 0) && (pos < query_len) && (pos != p.first)) {
+
+								const unordered_map<size_t, char>::const_iterator it = m_ambiguity.find(pos);
+
+								if ((it != m_ambiguity.end()) && (!isDNA(it->second) || confident_snp)) s_ambiguity.insert(pair<size_t, char>(pos, unitig_seq[p_amb.first]));
+							}
+						}
+
+	                    it_km += um.len - 1;
+					}
+				}
+
+				if (!isValidSNP){
+
+					const unordered_map<size_t, char>::const_iterator it = m_ambiguity_tmp.find(p.first);
+
+					p.second = it->second;
+				}
+			}
+		}
+
+		const vector<pair<size_t, char>> v(s_ambiguity.begin(), s_ambiguity.end());
+
+		for (int64_t i = 0; i < v.size(); ++i){
+
+			if (((i == 0) || (v[i].first != v[i-1].first)) && ((i == v.size()-1) || (v[i].first != v[i+1].first))){
+
+				unordered_map<size_t, char>::iterator it = m_ambiguity.find(v[i].first);
+
+				if (it != m_ambiguity.end()){
+
+					bool is_a_q = false, is_c_q = false, is_g_q = false, is_t_q = false;
+					bool is_a_t = false, is_c_t = false, is_g_t = false, is_t_t = false;
+
+					getAmbiguityRev(it->second, is_a_t, is_c_t, is_g_t, is_t_t);
+					getAmbiguityRev(v[i].second, is_a_q, is_c_q, is_g_q, is_t_q);
+
+					if ((is_a_q && is_a_t) || (is_c_q && is_c_t) || (is_g_q && is_g_t) || (is_t_q && is_t_t)) it->second = v[i].second;
+				}
+			}
+		}
+
+		for (const auto& p : m_ambiguity) query_tmp[p.first] = (force_fix && !isDNA(p.second)) ? query[p.first] : p.second;
+
+		query = move(query_tmp);
+	}
+}*/
 
 pair<int, int> selectBestSubstringAlignment(const char* ref, const size_t ref_len, const vector<Path<UnitigData>>& candidates, const double cut_threshold_norm_edit){
 

@@ -195,7 +195,7 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
 
         inline double getKmerCoverage(const const_UnitigMap<UnitigData>& um) const {
 
-            return (static_cast<double>(cycle_kmer_cov & 0x7fffffffffffffffULL) / static_cast<double>(um.size - um.getGraph()->getK() + 1));
+            return round(static_cast<double>(cycle_kmer_cov & 0x7fffffffffffffffULL) / static_cast<double>(um.size - um.getGraph()->getK() + 1));
         }
 
         inline void setCycle(){
