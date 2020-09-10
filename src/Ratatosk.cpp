@@ -22,6 +22,8 @@ void PrintCite() {
 
 void PrintUsage() {
 
+    Correct_Opt opt;
+
     cout << endl << "Ratatosk " << RATATOSK_VERSION << endl << endl;
 
     cout << "Hybrid error correction of long reads using colored de Bruijn graphs" << endl << endl;
@@ -36,24 +38,32 @@ void PrintUsage() {
     "                                   List of input long read files to correct (one file per line)" << endl <<
     "   -o, --out-long                  Output corrected long read file" << endl <<
     endl << "   > Optional with required argument:" << endl << endl <<
-    "   -c, --cores                     Number of cores (default: 1)" << endl <<
-    "   -q, --quality                   Output Quality Scores: corrected bases get QS >= t (default: t=0, no output)" << endl <<
-    "   -t, --trimming                  Trim bases with quality score < t (default: t=0, no trimming)" << endl <<
-    "                                   Only sub-read with length >= 63 are output if t > 0" << endl <<
+    "   -c, --cores                     Number of cores (default: " << opt.nb_threads << ")" << endl <<
+    "   -q, --quality                   Output Quality Scores: corrected bases get QS >= t (default: no QS)" << endl <<
+    "   -t, --trim-split                Trim and split bases with quality score < t (default: no trim/split)" << endl <<
+    "                                   Only sub-read with length >= " << opt.k << " are output if used" << endl <<
     "   -u, --in-unmapped-short         Input read file of the unmapped short reads (FASTA/FASTQ possibly gzipped)" << endl <<
     "                                   List of input read files of the unmapped short reads (one file per line)" << endl <<
     "   -a, --in-accurate-long          Input high quality long read file (FASTA/FASTQ possibly gzipped)" << endl <<
     "                                   List of input high quality long read files (one file per line)" << endl <<
     "                                   (Those reads are NOT corrected but assist the correction of reads in input)." << endl <<
     endl << "   > Optional with no argument:" << endl << endl <<
-    "   -v, --verbose                   Print information messages during execution" << endl << endl;
+    "   -v, --verbose                   Print information during execution" << endl << endl;
+
+    cout << "[ADVANCED PARAMETERS]:" << endl << endl;
+    cout << "   > Optional with required argument:" << endl << endl <<
+    "   -i, --insert_sz                 Insert size of the input paired-end short reads (default: " << opt.insert_sz << ")" << endl <<
+    "   -k, --k1                        Length of short k-mers for 1st pass correction (default: " << opt.small_k << ")" << endl <<
+    "   -K, --k2                        Length of long k-mers for 2nd pass correction (default: " << opt.k << ")" << endl <<
+    "   -w, --max_len_weak1             Do not correct weak regions >= w bases during 1st pass correction (default: " << opt.max_len_weak_region1 << ")" << endl <<
+    "   -W, --max_len_weak2             Do not correct weak regions >= w bases during 2nd pass correction (default: " << opt.max_len_weak_region2 << ")" << endl << endl;
 }
 
 int parse_ProgramOptions(int argc, char **argv, Correct_Opt& opt) {
 
     int option_index = 0, c;
 
-    const char* opt_string = "s:l:o:c:q:t:u:a:v";
+    const char* opt_string = "s:l:o:c:q:t:u:a:i:k:K:w:W:v";
 
     static struct option long_options[] = {
 
@@ -62,9 +72,14 @@ int parse_ProgramOptions(int argc, char **argv, Correct_Opt& opt) {
         {"out-long",                required_argument,  0, 'o'},
         {"cores",                   required_argument,  0, 'c'},
         {"quality",                 required_argument,  0, 'q'},
-        {"trim",                    required_argument,  0, 't'},
+        {"trim-split",              required_argument,  0, 't'},
         {"in-unmapped-short",       required_argument,  0, 'u'},
         {"in-accurate-long",        required_argument,  0, 'a'},
+        {"insert_sz",               required_argument,  0, 'i'},
+        {"k1",                      required_argument,  0, 'k'},
+        {"k2",                      required_argument,  0, 'K'},
+        {"max_len_weak1",           required_argument,  0, 'w'},
+        {"max_len_weak2",           required_argument,  0, 'W'},
         {"verbose",                 no_argument,        0, 'v'},
         {0,                         0,                  0,  0 }
     };
@@ -99,6 +114,21 @@ int parse_ProgramOptions(int argc, char **argv, Correct_Opt& opt) {
                 break;
             case 'q':
                 opt.out_qual = atoi(optarg);
+                break;
+            case 'i':
+                opt.insert_sz = atoi(optarg);
+                break;
+            case 'k':
+                opt.small_k = atoi(optarg);
+                break;
+            case 'K':
+                opt.k = atoi(optarg);
+                break;
+            case 'w':
+                opt.max_len_weak_region1 = atoi(optarg);
+                break;
+            case 'W':
+                opt.max_len_weak_region2 = atoi(optarg);
                 break;
             case 'v':
                 opt.verbose = true;
@@ -205,6 +235,24 @@ bool check_ProgramOptions(Correct_Opt& opt) {
         ret = false;  
     }
 
+    if (opt.k <= opt.small_k){
+
+        cerr << "Ratatosk::Ratatosk(): Length of long k-mers for 2nd pass correction cannot be less than or equal to length of short k-mers for 1st pass correction (" << opt.k << " and " << opt.small_k << " given)." << endl;
+        ret = false;  
+    }
+
+    if (opt.insert_sz == 0){
+
+        cerr << "Ratatosk::Ratatosk(): Insert size of short reads cannot be less than or equal to 0" << endl;
+        ret = false;  
+    }
+
+    if ((opt.max_len_weak_region1 == 0) || (opt.max_len_weak_region2 == 0)){
+
+        cerr << "Ratatosk::Ratatosk(): Maximum length of a weak region to correct cannot be less than or equal to 0" << endl;
+        ret = false;  
+    }
+
     if (opt.filename_seq_in.empty()) {
 
         cerr << "Ratatosk::Ratatosk(): Missing input short read files." << endl;
@@ -300,122 +348,6 @@ void writeCorrectedOutput(ostream& out, const string& name_str, const string& se
         }
     }
 }
-
-/*void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const bool long_read_correct, const Roaring* all_partitions) {
-
-	const size_t k = dbg.getK();
-
-    ofstream outfile;
-    ostream out(0);
-
-    FileParser fp(opt.filenames_long_in);
-
-    size_t file_id;
-
-    outfile.open(opt.filename_long_out.c_str());
-    out.rdbuf(outfile.rdbuf());
-
-    if (opt.nb_threads == 1){
-
-    	string in_read;
-
-	    while (fp.read(in_read, file_id)){ // For every read (a query)
-
-            const string in_name = string(fp.getNameString());
-
-            string in_qual = (fp.getQualityScoreString() != nullptr) ? string(fp.getQualityScoreString()) : string();
-
-            if (!long_read_correct && !in_qual.empty()) getStdQual(in_qual); // Set all quality score from 0 to 40
-
-	        const pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> p = getSeeds(opt, dbg, in_read, long_read_correct);
-	        const pair<string, string> correction = correctSequence(dbg, opt, in_read, in_qual, p.first, p.second, long_read_correct, all_partitions);
-
-            if (long_read_correct) writeCorrectedOutput(out, in_name, correction.first, correction.second, k, static_cast<bool>(opt.out_qual), opt.trim_qual);
-            else writeCorrectedOutput(out, in_name, correction.first, correction.second, k, static_cast<bool>(opt.out_qual) || static_cast<bool>(opt.trim_qual), 0);
-
-	        if (opt.verbose){
-
-		    	cout << fp.getNameString() << endl;
-		    	cout << "Length before: " << in_read.length() << endl;
-	        	cout << "Length after: " << correction.first.length() << endl;
-	    	}
-	    }
-	}
-	else {
-
-        bool stop = false;
-
-        size_t nb_reads_proc = 0;
-
-        vector<thread> workers; // need to keep track of threads so we can join them
-
-        SpinLock mutex_file_in;
-        SpinLock mutex_file_out;
-
-        for (size_t t = 0; t < opt.nb_threads; ++t){
-
-            workers.emplace_back(
-
-                [&, t]{
-
-                	string in_read;
-                    string in_qual;
-                	string in_name;
-
-                    while (true) {
-
-                    	mutex_file_in.acquire();
-
-                        if (stop){
-
-                            mutex_file_in.release();
-                        	return;
-                        }
-                        else {
-
-                        	stop = !fp.read(in_read, file_id);
-
-	                        if (!stop){
-
-	                        	in_name = string(fp.getNameString());
-                                in_qual = (fp.getQualityScoreString() != nullptr) ? string(fp.getQualityScoreString()) : string();
-
-	                        	if (opt.verbose && (++nb_reads_proc % 1000 == 0)) cout << "Processed " << nb_reads_proc << " reads " << endl;
-
-	                        	mutex_file_in.release();
-
-                                if (!long_read_correct && !in_qual.empty()) getStdQual(in_qual); // Set all quality score from 0 to 40
-
-						        const pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> p = getSeeds(opt, dbg, in_read, long_read_correct);
-						        const pair<string, string> correction = correctSequence(dbg, opt, in_read, in_qual, p.first, p.second, long_read_correct, all_partitions);
-
-	                            mutex_file_out.acquire();
-
-                                if (long_read_correct) writeCorrectedOutput(out, in_name, correction.first, correction.second, k, static_cast<bool>(opt.out_qual), opt.trim_qual);
-                                else writeCorrectedOutput(out, in_name, correction.first, correction.second, k, static_cast<bool>(opt.out_qual) || static_cast<bool>(opt.trim_qual), 0);
-
-	                            mutex_file_out.release();
-
-		                        in_read.clear();
-		                        in_name.clear();
-	                        }
-							else {
-
-								mutex_file_in.release();
-								return;
-							}
-                    	}
-                    }
-                }
-            );
-        }
-
-        for (auto& t : workers) t.join();
-	}
-
-    outfile.close();
-    fp.close();
-}*/
 
 void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const bool long_read_correct, const Roaring* all_partitions) {
 

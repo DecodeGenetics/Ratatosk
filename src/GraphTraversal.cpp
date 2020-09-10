@@ -96,6 +96,8 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS(	const Correct_Opt& opt, co
 		const size_t max_len_path = max((ref_len - opt.k) * opt.weak_region_len_factor, 1.0) + opt.k;
 		const size_t min_len_path = max((ref_len - opt.k) / opt.weak_region_len_factor, 1.0) + opt.k;
 
+		const size_t max_len_subpath = opt.k * opt.large_k_factor;
+
 		const size_t max_paths = getMaxPaths(seq_entropy, max_len_path, opt.k);
 
 		size_t max_branches = 2 * getMaxBranch(seq_entropy, max_len_path, opt.k);
@@ -208,7 +210,7 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS(	const Correct_Opt& opt, co
 				        		}
 			        		}
 
-			        		if ((!long_read_correct && (path.size() == level)) || (long_read_correct && (path.length() >= opt.large_k))){
+			        		if ((!long_read_correct && (path.size() == level)) || (long_read_correct && (path.length() >= max_len_subpath))){
 
 				        		q.push(move(p_tmp));
 				        		extended = true;
@@ -359,6 +361,8 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS2(	const Correct_Opt& opt, c
 		const size_t max_len_path = max((ref_len - opt.k) * opt.weak_region_len_factor, 1.0) + opt.k;
 		const size_t min_len_path = max((ref_len - opt.k) / opt.weak_region_len_factor, 1.0) + opt.k;
 
+		const size_t max_len_subpath = opt.k * opt.large_k_factor;
+
 		const size_t max_paths = getMaxPaths(seq_entropy, max_len_path, opt.k);
 
 		size_t max_branches = 2 * getMaxBranch(seq_entropy, max_len_path, opt.k);
@@ -474,7 +478,7 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS2(	const Correct_Opt& opt, c
 
 			        	for (const auto& path : exploreFW.second){
 
-			        		if ((!long_read_correct && (path.size() == level)) || (long_read_correct && (path.length() >= opt.large_k))){
+			        		if ((!long_read_correct && (path.size() == level)) || (long_read_correct && (path.length() >= max_len_subpath))){
 
 				        		Path<UnitigData> p_tmp(p);
 
@@ -940,6 +944,8 @@ void exploreSubGraphLong(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>
 
 	const bool out_qual = static_cast<bool>(opt.out_qual) || static_cast<bool>(opt.trim_qual);
 
+	const size_t max_len_subpath = opt.k * opt.large_k_factor;
+
 	stack<info_traversal> stck;
 
 	stck.push(info_traversal(p, r, false));
@@ -1000,12 +1006,12 @@ void exploreSubGraphLong(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>
 
 				path.extend(succ);
 				
-				if (!short_cycle && (path.length() < opt.large_k)) stck.push(info_traversal(path, r_curr, false));
+				if (!short_cycle && (path.length() < max_len_subpath)) stck.push(info_traversal(path, r_curr, false));
 				else {
 
 					const double score = getScorePath(path, r_curr);
 
-					if (path.length() >= opt.large_k){
+					if (path.length() >= max_len_subpath){
 
 						if (score > best_score){
 
@@ -1035,7 +1041,7 @@ void exploreSubGraphLong(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>
 			}
 		}
 
-		if (short_cycle && (l_best_score >= 0) && (best_p.length() < opt.large_k)) stck.push(info_traversal(best_p, best_r, true));
+		if (short_cycle && (l_best_score >= 0) && (best_p.length() < max_len_subpath)) stck.push(info_traversal(best_p, best_r, true));
 	}
 }
 
@@ -1070,6 +1076,8 @@ void exploreSubGraphLong(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>
 	};
 
 	const bool out_qual = static_cast<bool>(opt.out_qual) || static_cast<bool>(opt.trim_qual);
+
+	const size_t max_len_subpath = opt.k * opt.large_k_factor;
 
 	stack<info_traversal> stck;
 
@@ -1138,12 +1146,12 @@ void exploreSubGraphLong(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>
 
 				path.extend(succ);
 				
-				if (!short_cycle && (path.length() < opt.large_k)) stck.push(info_traversal(path, r_curr, false));
+				if (!short_cycle && (path.length() < max_len_subpath)) stck.push(info_traversal(path, r_curr, false));
 				else {
 
 					const double score = getScorePath(path, r_curr);
 
-					if (path.length() >= opt.large_k){
+					if (path.length() >= max_len_subpath){
 
 						if (score > best_score){
 
@@ -1173,6 +1181,6 @@ void exploreSubGraphLong(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>
 			}
 		}
 
-		if (short_cycle && (l_best_score >= 0) && (best_p.length() < opt.large_k)) stck.push(info_traversal(best_p, best_r, true));
+		if (short_cycle && (l_best_score >= 0) && (best_p.length() < max_len_subpath)) stck.push(info_traversal(best_p, best_r, true));
 	}
 }

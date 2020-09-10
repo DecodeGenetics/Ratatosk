@@ -8,7 +8,7 @@
 #include "PairID.hpp"
 #include "TinyBloomFilter.hpp"
 
-#define RATATOSK_VERSION "0.2.2"
+#define RATATOSK_VERSION "0.2.3"
 
 struct Correct_Opt : CDBG_Build_opt {
 
@@ -25,20 +25,29 @@ struct Correct_Opt : CDBG_Build_opt {
     int trim_qual;
 
     size_t small_k;
-    size_t large_k;
+
+    size_t insert_sz;
 
     size_t min_cov_vertices;
     size_t min_cov_edges;
     size_t max_cov_vertices;
+    size_t min_nb_km_unmapped;
 
     size_t nb_partitions;
 
-    double weak_region_len_factor;
+    size_t max_len_weak_region1;
+    size_t max_len_weak_region2;
 
     size_t buffer_sz;
 
-	Correct_Opt() : out_qual(0), trim_qual(0), min_qv(6), small_k(31), large_k(95), nb_partitions(1000), buffer_sz(1048576),
-					min_cov_vertices(2), min_cov_edges(2), max_cov_vertices(512), weak_region_len_factor(1.25) {
+    double weak_region_len_factor;
+    double large_k_factor;
+
+	Correct_Opt() : out_qual(0), trim_qual(0), min_qv(6), small_k(31), insert_sz(500),
+					nb_partitions(1000), buffer_sz(1048576), min_cov_vertices(2),
+					min_nb_km_unmapped(31), min_cov_edges(2), max_cov_vertices(512),
+					weak_region_len_factor(1.25), large_k_factor(1.5),
+					max_len_weak_region1(1000), max_len_weak_region2(10000) {
 
 						k = 63;
 

@@ -47,4 +47,6 @@ inline void resetUnitigData(CompactedDBG<UnitigData>& dbg, const bool clear_part
 pair<BlockedBloomFilter, size_t> buildBFF(const vector<string>& v_filenames_in, const Correct_Opt& opt, const size_t k, const size_t g, const bool long_reads);
 string retrieveMissingReads(const Correct_Opt& opt);
 
+//vector<pair<size_t, const_UnitigMap<UnitigData>>> searchSeeds(const CompactedDBG<UnitigData>& dbg, const string& seq);
+
 #endif

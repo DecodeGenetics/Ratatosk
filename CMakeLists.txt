@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 2.8.12)
 
 project(Ratatosk)
 
-set(MAX_KMER_SIZE "64")
+# To enable a larger default k-mer size, replace MAX_KMER_SIZE with a larger multiple of 32: actual maximum k-mer size will be MAX_KMER_SIZE-1.
+SET(MAX_KMER_SIZE "64" CACHE STRING "MAX_KMER_SIZE")
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c11")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")

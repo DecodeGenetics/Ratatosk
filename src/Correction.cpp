@@ -22,7 +22,7 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
     const size_t pos_um_solid2 = (no_end ? s.length() - opt.k : um_solid_end.first);
     const size_t len_weak_region = (pos_um_solid2 - um_solid_start.first) + opt.k;
 
-    const size_t max_len_weak_region = long_read_correct ? 10000 : 1000;
+    const size_t max_len_weak_region = long_read_correct ? opt.max_len_weak_region2 : opt.max_len_weak_region1;
 	const size_t max_paths = 512;
 
 	size_t next_weak_pos;
@@ -61,8 +61,6 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
 
     			const pair<Path<UnitigData>, size_t>& p = paths1[i];
     			const size_t l_len_weak_region = (pos_um_solid2 - p.second) + opt.k;
-
-    			//cout << "l_len_weak_region 1 = " << l_len_weak_region << endl;
 
             	if ((i == 0) || (paths1[i].first.back() != paths1[i-1].first.back())){
 
@@ -128,8 +126,6 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
 
     			const pair<Path<UnitigData>, size_t>& p = paths1[i];
 	            const size_t l_len_weak_region = (v_um_weak[i_weak].first - p.second) + opt.k;
-
-	            //cout << "l_len_weak_region 2 = " << l_len_weak_region << endl;
 
 	            if ((i == 0) || (paths1[i].first.back() != paths1[i-1].first.back())){
 
@@ -284,9 +280,7 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 
 	const string s_bw(reverse_complement(s_fw));
 
-	const size_t sz_flanking_short = 500;
-	const size_t sz_flanking_long = opt.large_k;
-	const size_t max_len_weak_anchors = long_read_correct ? 10000 : 1000;
+	const size_t max_len_weak_anchors = long_read_correct ? opt.max_len_weak_region2 : opt.max_len_weak_region1;
 
 	const double max_norm_edit_distance = (opt.weak_region_len_factor - 1.0);
 
@@ -403,8 +397,8 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
         size_t len_weak_region = um_solid2.first - um_solid1.first + opt.k;
         size_t min_cov_vertex = 0xffffffffffffffffULL;
 
-        const int64_t min_start = um_solid1.first - sz_flanking_short;
-		const int64_t min_end = um_solid2.first + sz_flanking_short;
+        const int64_t min_start = um_solid1.first - opt.insert_sz;
+		const int64_t min_end = um_solid2.first + opt.insert_sz;
 
 		const char* s_start = s.c_str() + um_solid1.first;
 		const char* q_start = q.empty() ? nullptr : q.c_str() + um_solid1.first;
@@ -446,7 +440,7 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 			min_cov_vertex = rc->getMinCovVertex();
 		}
 
-		//if (!q.empty() && (len_weak_region > 500)){ // Read has quality scores and region to correct is more than 500 bp long
+		//if (!q.empty() && (len_weak_region > opt.insert_sz)){ // Read has quality scores and region to correct is more than 500 bp long
 		//
 		//	pass_min_qual_score = false;
 		//
@@ -551,8 +545,8 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 
 			if (!v_w.empty()) {
 				
-				const size_t start_bound = um_solid1.first + 500;
-				const size_t end_bound = (um_solid2.first <= 500) ? 0 : (um_solid2.first - 500);
+				const size_t start_bound = um_solid1.first + opt.insert_sz;
+				const size_t end_bound = (um_solid2.first <= opt.insert_sz) ? 0 : (um_solid2.first - opt.insert_sz);
 
 				size_t i_w_s = 0;
 				size_t i_w_e = i_w - static_cast<size_t>(i_w >= v_w.size());

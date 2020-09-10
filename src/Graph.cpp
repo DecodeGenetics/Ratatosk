@@ -1,5 +1,102 @@
 #include "Graph.hpp"
 
+/*vector<pair<size_t, const_UnitigMap<UnitigData>>> searchSeeds(const CompactedDBG<UnitigData>& dbg, const string& seq) {
+
+	const size_t k = dbg.getK();
+
+	vector<pair<size_t, const_UnitigMap<UnitigData>>> v_um = dbg.searchSequence(seq, true, true, true, true, true);
+
+	Roaring positions;
+
+	for (const auto& p : v_um) positions.add(p.first);
+
+	if (positions.cardinality() != seq.length()){
+
+	    { // Subsitution
+
+	        for (size_t i = 0; i != k; ++i){
+
+	        	string seq_sub = seq;
+
+	        	for (size_t a = 0; a < 4; ++a){
+
+		            for (size_t j = i; j < seq.length(); j += k) seq_sub[j] = alpha[a];
+
+		        	vector<pair<size_t, const_UnitigMap<UnitigData>>> v_um_sub = dbg.searchSequence(seq_sub, false, true, true, true, false);
+
+		        	for (auto& p : v_um_sub){
+
+		        		if (!positions.contains(p.first)) v_um.push_back(move(p));
+		        	}
+				}
+	        }
+	    }
+
+	    { // Insertion
+
+	        for (size_t i = 0; i != k; ++i){
+
+	            std::stringstream ss;
+
+	            string seq_sub;
+
+	            for (size_t j = 0; j < i; ++j) ss << seq[j];
+
+	            for (size_t j = i, cpt = 0; j < seq.length(); ++j, ++cpt) {
+
+	                if (cpt % (k - 1) == 0) ss << alpha[0];
+
+	                ss << seq[j];
+	            }
+
+	            seq_sub = ss.str();
+
+	            for (size_t a = 0; a < 4; ++a){
+
+	            	for (size_t j = i; j < seq_sub.length(); j += k) seq_sub[j] = alpha[a];
+
+		        	vector<pair<size_t, const_UnitigMap<UnitigData>>> v_um_ins = dbg.searchSequence(seq_sub, false, true, true, true, false);
+
+		            for (auto& p : v_um_ins){
+
+		            	p.first -= (p.first / k) + (p.first % k > i);
+
+		        		if (!positions.contains(p.first)) v_um.push_back(move(p));
+		        	}
+	            }
+	        }
+	    }
+
+	    if (seq.length() >= (k + 1)){ // Deletion
+
+	        for (size_t i = 0; i != (k + 1); ++i){
+
+	            std::stringstream ss;
+
+	            for (size_t j = 0; j < i; ++j) ss << seq[j];
+
+	            for (size_t j = i, cpt = 0; j < seq.length(); ++j, ++cpt) {
+
+	                if (cpt % (k + 1) != 0) ss << seq[j];
+	            }
+
+	            const string seq_sub = ss.str();
+
+		        vector<pair<size_t, const_UnitigMap<UnitigData>>> v_um_del = dbg.searchSequence(seq_sub, false, true, true, true, false);
+
+	            for (auto& p : v_um_del){
+
+	            	p.first += (p.first / k) + (p.first % k > i);
+
+	        		if (!positions.contains(p.first)) v_um.push_back(move(p));
+	        	}
+	        }
+	    }
+	}
+
+	return v_um;
+}*/
+
 pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> getSeeds(const Correct_Opt& opt, const CompactedDBG<UnitigData>& dbg,
 																													const string& s, const bool long_read_correct,
 																													const bool filter_non_unique_inexact_kmers) {
@@ -94,7 +191,7 @@ pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, cons
 
     	vector<pair<size_t, const_UnitigMap<UnitigData>>> v_um_solid_tmp;
 
-    	const size_t min_len_run = opt.large_k - opt.k + 1;
+    	const size_t min_len_run = (opt.k * opt.large_k_factor) - opt.k + 1;
 
     	size_t len_run = 1;
     	size_t pos_start_run = 0;
@@ -1846,19 +1943,30 @@ string retrieveMissingReads(const Correct_Opt& opt){
     size_t min_cov_vertices = opt.min_cov_vertices;
     size_t nb_km_lr = dbg_lr.nbKmers();
 
+    const size_t nb_km_sr = p_bf_sr.second * 1.05;
+
     // Prune graph based mean k-mer coverage of unitigs in LR graph
-    while (nb_km_lr > p_bf_sr.second){
+    while (nb_km_lr > nb_km_sr){
 
         vector<Kmer> to_delete;
 
         ++min_cov_vertices;
 
+        size_t nb_km_deleted = 0;
+
         if (opt.verbose) cout << "Ratatosk::retrieveMissingReads(): Pruning long read graph based on k-mer coverage (min. " << min_cov_vertices << ")" << endl;
 
         for (const auto& um : dbg_lr){
 
-            if (um.getData()->getKmerCoverage(um) < min_cov_vertices) to_delete.push_back(um.getUnitigHead());
+            if (um.getData()->getKmerCoverage(um) < min_cov_vertices){
+
+            	to_delete.push_back(um.getUnitigHead());
+
+            	nb_km_deleted += um.size - k + 1;
+            }
         }
+
+        if (nb_km_lr - nb_km_deleted < nb_km_sr) break;
 
         for (const auto km : to_delete){
 
@@ -1987,7 +2095,7 @@ string retrieveMissingReads(const Correct_Opt& opt){
 	            KmerHashIterator<RepHash> it_kmer_h(seq_buf, len, k), it_kmer_h_end;
 	        	minHashIterator<RepHash> it_min(seq_buf, len, k, g, RepHash(), true);
 
-	            for (; (it_kmer_h != it_kmer_h_end) && (nb_km < k) && (nb_km + remaining_len_km >= k); ++it_kmer_h) {
+	            for (; (it_kmer_h != it_kmer_h_end) && (nb_km < opt.min_nb_km_unmapped) && (nb_km + remaining_len_km >= opt.min_nb_km_unmapped); ++it_kmer_h) {
 
 	                const pair<uint64_t, int> p = *it_kmer_h; // <k-mer hash, k-mer position in sequence>
 
@@ -1999,7 +2107,7 @@ string retrieveMissingReads(const Correct_Opt& opt){
 	                remaining_len_km = len_km - p.second;
 	            }
 
-	            if (nb_km >= k) {
+	            if (nb_km >= opt.min_nb_km_unmapped) {
 
 	        		++l_nb_reads_added;
 
