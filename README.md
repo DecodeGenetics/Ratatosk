@@ -122,9 +122,9 @@ Usage: Ratatosk [PARAMETERS]
 ## ***de novo*** correction
 
 ```
-Ratatosk correct -v -c 16 -i short_reads.fastq -l long_reads.fastq -o out_long_reads
+Ratatosk -v -c 16 -i short_reads.fastq -l long_reads.fastq -o out_long_reads
 ```
-Ratatosk corrects (`Ratatosk correct`) the long read file (`-l long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-i short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads_corrected* (`-o out_long_reads`).
+Ratatosk corrects (`Ratatosk`) the long read file (`-l long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-i short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads_corrected* (`-o out_long_reads`).
 
 ## Reference-guided correction
 
