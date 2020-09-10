@@ -146,11 +146,11 @@ See [reference-guided preprocessing](https://lsource2.decode.is/stat/ratatosk/tr
 
 ## Advanced usage
 
-The default *k1*/*k2*-mer lengths (1st/2nd correction passes) are 31/63. To work with larger *k*-mers (using `-k/-K`), you must compile Ratatosk with a larger MAX_KMER_SIZE parameter where `MAX_KMER_SIZE=round(k2 + 1, 32)`, i.e. k2 + 1 rounded to the larger multiple of 32. Specifying MAX_KMER_SIZE at compilation is done as follows when entering the `cmake` command:
+The default *k1*/*k2*-mer lengths (1st/2nd correction passes) are 31/63. To work with larger *k*-mers (using `-k/-K`), you must compile Ratatosk with a larger `MAX_KMER_SIZE` parameter where `MAX_KMER_SIZE=round(k2 + 1, 32)`, i.e. (*k2* + 1) rounded to the larger multiple of 32. Specifying `MAX_KMER_SIZE` at compilation is done as follows when entering the `cmake` command:
 ```
 cmake -DMAX_KMER_SIZE=96 ..
 ```
-In this example, the maximum k1/k2-mer length allowed is 95.
+In this example, the maximum *k1*/*k2*-mer length allowed is 95.
 
 ## Notes
 
