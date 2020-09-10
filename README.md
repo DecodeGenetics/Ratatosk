@@ -130,6 +130,12 @@ Ratatosk corrects (`Ratatosk`) the long read file (`-l long_reads.fastq`) with 1
 
 See [reference-guided preprocessing](https://lsource2.decode.is/stat/ratatosk/tree/master/scripts/reference_guiding).
 
+## Notes
+
+- Ratatosk works best with paired-end short reads in input (`-i`): **reads from the same pair must have the same FASTA/FASTQ name** (if the reads are extracted from a BAM file, use `samtools bam2fq -n`).
+
+- Several temporary files are written to disk. These files have the same prefix name as the output file (`-o`) but are deleted at the end of Ratatosk execution. Given an input long read file (`-l`) of size *X* GB, ensure that the output folder has at least about *2.5X* GB of free space.
+
 ## Options
 
 - **Insert size** (`-i`)
@@ -151,12 +157,6 @@ The default *k1*/*k2*-mer lengths (1st/2nd correction passes) are 31/63. To work
 cmake -DMAX_KMER_SIZE=96 ..
 ```
 In this example, the maximum *k1*/*k2*-mer length allowed is 95.
-
-## Notes
-
-- Ratatosk works best with paired-end short reads in input (`-i`): reads from the same pair **must** have the same FASTA/FASTQ name (if the reads are extracted from a BAM file, use `samtools bam2fq -n`).
-
-- Several temporary files are written to disk. These files have the same prefix name as the output file (`-o`) but are deleted at the end of Ratatosk execution. Given an input long read file (`-l`) of size *X* GB, ensure that the output folder has at least about *2.5X* GB of free space.
 
 ## FAQ
 
