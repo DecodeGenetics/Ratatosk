@@ -37,7 +37,7 @@ def outputUnmappedLowQualLR(out_prefix_filename, mapq, ref_unbin, multithreaded)
 				nb_base_lr += record.query_length
 				
 				# If has qualities, just output those
-				if (len(record.query_qualities) != 0):
+				if (record.query_qualities != None):
 				
 					qual = [chr(x+33) for x in record.query_qualities]
 				
@@ -67,7 +67,7 @@ def outputUnmappedLowQualSR(out_prefix_filename, mapq, qs_read, qs_base, multith
 
 				nb_base_sr += record.query_length
 
-				if (len(record.query_qualities) == 0): out_f.write('>' + record.query_name + '\n' + record.query_sequence + '\n')
+				if (record.query_qualities == None): out_f.write('>' + record.query_name + '\n' + record.query_sequence + '\n')
 				elif (mean(record.query_qualities) < qs_read):
 
 					out_junk_f.write('>' + record.query_name + '\n' + record.query_sequence + '\n')
@@ -133,7 +133,7 @@ def segmentBAM(out_prefix_filename, chr_name, lr_start_pos_ref, lr_end_pos_ref, 
 					out_lr_f.write('>' + record.query_name + '\n' + record.query_sequence + '\n')
 
 					# If has qualities, just output those
-					if (len(record.query_qualities) != 0):
+					if (record.query_qualities != None):
 
 						qual = [chr(x+33) for x in record.query_qualities]
 
@@ -159,7 +159,7 @@ def segmentBAM(out_prefix_filename, chr_name, lr_start_pos_ref, lr_end_pos_ref, 
 					# Discard 0-length reads, unmapped reads, secondary and supplementary alignments.
 					if (record.query_length != 0) and (record.is_unmapped == False) and (record.is_secondary == False) and (record.is_supplementary == False):
 
-						if (qs_sr != 0) and (len(record.query_qualities) != 0):
+						if (qs_sr != 0) and (record.query_qualities != None):
 
 							pos_low_qual = [ i for i in range(len(record.query_qualities)) if (record.query_qualities[i] < qs_sr) ]
 							query_sequence = list(record.query_sequence)
