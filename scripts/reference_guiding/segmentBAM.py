@@ -29,7 +29,7 @@ def outputUnmappedLowQualLR(out_prefix_filename, mapq, ref_unbin, multithreaded)
 		for record in it_bamf:
 
 			# Discard 0-length reads, unmapped reads, secondary and supplementary alignments.
-			if ((record.reference_name in ref_unbin) or (record.is_unmapped == True) or ((record.mapping_quality < mapq)) and (record.query_length != 0) and (record.is_secondary == False) and (record.is_supplementary == False)):
+			if (record.query_length != 0) and ((record.is_unmapped == True) or ((record.is_secondary == False) and (record.is_supplementary == False) and ((record.mapping_quality < mapq) or (record.reference_name in ref_unbin)))):
 
 				# Output LR
 				out_f.write('>' + record.query_name + '\n' + record.query_sequence + '\n')
@@ -63,7 +63,7 @@ def outputUnmappedLowQualSR(out_prefix_filename, mapq, qs_read, qs_base, multith
 		for record in it_bamf:
 
 			# Discard 0-length reads, unmapped reads, secondary and supplementary alignments.
-			if ((record.is_unmapped == True) or ((record.mapping_quality < mapq)) and (record.query_length != 0) and (record.is_secondary == False) and (record.is_supplementary == False)):
+			if (record.query_length != 0) and ((record.is_unmapped == True) or ((record.is_secondary == False) and (record.is_supplementary == False) and (record.mapping_quality < mapq))):
 
 				nb_base_sr += record.query_length
 
