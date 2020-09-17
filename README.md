@@ -68,13 +68,14 @@ By default, the installation creates:
 **Notes**
 `make install` might require `sudo` (`sudo make install`) to proceed. If you want to install Ratatosk in a non-default path, add the option `-DCMAKE_INSTALL_PREFIX=/some/path/ ..` to the `cmake` command where `/some/path/` is where you want to see the Ratatosk files installed. Do not forget to add this path to your environment variables (see [Troubleshooting](#troubleshooting)). If you encounter any problem during the installation, see the [Troubleshooting](#troubleshooting) section.
 
-## Usage:
+## Usage
 
 **Before starting**
 - Ratatosk works best with paired-end short reads in input (`-s`): **reads from the same pair must have the same FASTA/FASTQ name** (if the reads are extracted from a BAM file, use `samtools bam2fq -n`).
 - Several temporary files are written to disk. These files have the same prefix name as the output file (`-o`) but are deleted at the end of Ratatosk execution. Given an input long read file (`-l`) of size *X* GB, ensure that the output folder has at least about *2.5X* GB of free space.
 
 
+### Command line
 ```
 Ratatosk --help
 ```
