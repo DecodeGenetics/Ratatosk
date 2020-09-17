@@ -162,7 +162,7 @@ In this example, the maximum *k1*/*k2*-mer length allowed is 95.
 
 **Can I provide multiple read files in input?**
 
-Yes, use mutiple times parameters `-i`/`-l`/`-u`/`-p`, once for each input file.
+Yes, use mutiple times parameters `-s`/`-l`/`-u`/`-a`, once for each input file.
 
 **Can I provide a file which is a list of read files in input?**
 
