@@ -134,7 +134,7 @@ Ratatosk corrects (`Ratatosk`) the long read file (`-l long_reads.fastq`) with 1
 
 ### Reference-guided correction
 
-See [reference-guided preprocessing](https://lsource2.decode.is/stat/ratatosk/tree/master/scripts/reference_guiding).
+See [reference-guided preprocessing](https://github.com/DecodeGenetics/Ratatosk/tree/master/scripts/reference_guiding).
 
 ## Options
 
