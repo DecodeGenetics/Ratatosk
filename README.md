@@ -70,6 +70,11 @@ By default, the installation creates:
 
 ## Usage:
 
+**Before starting**
+- Ratatosk works best with paired-end short reads in input (`-s`): **reads from the same pair must have the same FASTA/FASTQ name** (if the reads are extracted from a BAM file, use `samtools bam2fq -n`).
+- Several temporary files are written to disk. These files have the same prefix name as the output file (`-o`) but are deleted at the end of Ratatosk execution. Given an input long read file (`-l`) of size *X* GB, ensure that the output folder has at least about *2.5X* GB of free space.
+
+
 ```
 Ratatosk --help
 ```
@@ -119,22 +124,16 @@ Usage: Ratatosk [PARAMETERS]
    -W, --max_len_weak2             Do not correct weak regions >= w bases during 2nd pass correction (default: 10000)
 ```
 
-## ***de novo*** correction
+### ***de novo*** correction
 
 ```
-Ratatosk -v -c 16 -i short_reads.fastq -l long_reads.fastq -o out_long_reads
+Ratatosk -v -c 16 -s short_reads.fastq -l long_reads.fastq -o out_long_reads
 ```
-Ratatosk corrects (`Ratatosk`) the long read file (`-l long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-i short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads_corrected* (`-o out_long_reads`).
+Ratatosk corrects (`Ratatosk`) the long read file (`-l long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-s short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads_corrected* (`-o out_long_reads`).
 
-## Reference-guided correction
+### Reference-guided correction
 
 See [reference-guided preprocessing](https://lsource2.decode.is/stat/ratatosk/tree/master/scripts/reference_guiding).
-
-## Notes
-
-- Ratatosk works best with paired-end short reads in input (`-i`): **reads from the same pair must have the same FASTA/FASTQ name** (if the reads are extracted from a BAM file, use `samtools bam2fq -n`).
-
-- Several temporary files are written to disk. These files have the same prefix name as the output file (`-o`) but are deleted at the end of Ratatosk execution. Given an input long read file (`-l`) of size *X* GB, ensure that the output folder has at least about *2.5X* GB of free space.
 
 ## Options
 
