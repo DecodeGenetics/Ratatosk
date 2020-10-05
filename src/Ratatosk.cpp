@@ -52,18 +52,25 @@ void PrintUsage() {
 
     cout << "[ADVANCED PARAMETERS]:" << endl << endl;
     cout << "   > Optional with required argument:" << endl << endl <<
-    "   -i, --insert_sz                 Insert size of the input paired-end short reads (default: " << opt.insert_sz << ")" << endl <<
-    "   -k, --k1                        Length of short k-mers for 1st pass correction (default: " << opt.small_k << ")" << endl <<
-    "   -K, --k2                        Length of long k-mers for 2nd pass correction (default: " << opt.k << ")" << endl <<
-    "   -w, --max_len_weak1             Do not correct weak regions >= w bases during 1st pass correction (default: " << opt.max_len_weak_region1 << ")" << endl <<
-    "   -W, --max_len_weak2             Do not correct weak regions >= w bases during 2nd pass correction (default: " << opt.max_len_weak_region2 << ")" << endl << endl;
+    "   -i, --insert-sz                 Insert size of the input paired-end short reads (default: " << opt.insert_sz << ")" << endl <<
+    "   -k, --k1                        Length of short k-mers for 1st pass (default: " << opt.small_k << ")" << endl <<
+    "   -K, --k2                        Length of long k-mers for 2nd pass (default: " << opt.k << ")" << endl <<
+    "   -w, --max-len-weak1             Do not correct weak regions >= w bases during 1st pass (default: " << opt.max_len_weak_region1 << ")" << endl <<
+    "   -W, --max-len-weak2             Do not correct weak regions >= w bases during 2nd pass (default: " << opt.max_len_weak_region2 << ")" << endl << endl;
+
+    cout << "[EXPERIMENTAL PARAMETERS]:" << endl << endl;
+    cout << "   > Optional with required argument:" << endl << endl <<
+    "   -p, --in-short-phase            Input short read phasing file (diploid only)" << endl <<
+    "                                   List of input short read phasing files (one file per line)" << endl <<
+    "   -P, --in-long-phase             Input long read phasing file (diploid only)" << endl <<
+    "                                   List of input long read phasing files (one file per line)" << endl << endl;
 }
 
 int parse_ProgramOptions(int argc, char **argv, Correct_Opt& opt) {
 
     int option_index = 0, c;
 
-    const char* opt_string = "s:l:o:c:q:t:u:a:i:k:K:w:W:v";
+    const char* opt_string = "s:l:o:c:q:t:u:a:p:P:i:k:K:w:W:v";
 
     static struct option long_options[] = {
 
@@ -75,11 +82,13 @@ int parse_ProgramOptions(int argc, char **argv, Correct_Opt& opt) {
         {"trim-split",              required_argument,  0, 't'},
         {"in-unmapped-short",       required_argument,  0, 'u'},
         {"in-accurate-long",        required_argument,  0, 'a'},
-        {"insert_sz",               required_argument,  0, 'i'},
+        {"in-short-phase",          required_argument,  0, 'p'},
+        {"in-long-phase",           required_argument,  0, 'P'},
+        {"insert-sz",               required_argument,  0, 'i'},
         {"k1",                      required_argument,  0, 'k'},
         {"k2",                      required_argument,  0, 'K'},
-        {"max_len_weak1",           required_argument,  0, 'w'},
-        {"max_len_weak2",           required_argument,  0, 'W'},
+        {"max-len-weak1",           required_argument,  0, 'w'},
+        {"max-len-weak2",           required_argument,  0, 'W'},
         {"verbose",                 no_argument,        0, 'v'},
         {0,                         0,                  0,  0 }
     };
@@ -102,6 +111,12 @@ int parse_ProgramOptions(int argc, char **argv, Correct_Opt& opt) {
                 break;
             case 'a':
                 opt.filenames_helper_long_in.push_back(optarg);
+                break;
+            case 'p':
+                opt.filenames_short_phase.push_back(optarg);
+                break;
+            case 'P':
+                opt.filenames_long_phase.push_back(optarg);
                 break;
             case 'o':
                 opt.filename_long_out = optarg;
@@ -163,41 +178,22 @@ bool check_ProgramOptions(Correct_Opt& opt) {
             }
             else {
 
-                const string s_ext = file.substr(file.find_last_of(".") + 1);
+                const int format = FileParser::getFileFormat(file.c_str());
 
-                if ((s_ext == "txt")){
+                if (format == 0){
 
                     FILE* fp = fopen(file.c_str(), "r");
 
-                    if (fp != NULL){
-
-                        fclose(fp);
-
-                        ifstream ifs_file_txt(file);
-                        istream i_file_txt(ifs_file_txt.rdbuf());
-
-                        while (i_file_txt.getline(buffer, 4096)){
-
-                            fp = fopen(buffer, "r");
-
-                            if (fp == NULL) {
-
-                                cerr << "Ratatosk::Ratatosk(): Could not open file " << buffer << " for reading." << endl;
-                                ret = false;
-                            }
-                            else {
-
-                                fclose(fp);
-                                files_tmp.push_back(string(buffer));
-                            }
-                        }
-
-                        ifs_file_txt.close();
-                    }
-                    else {
+                    if (fp == NULL){
 
                         cerr << "Ratatosk::Ratatosk(): Could not open file " << file << " for reading." << endl;
                         ret = false;
+                    }
+                    else {
+
+                        fclose(fp);
+
+                        files_tmp.push_back(file);
                     }
                 }
                 else files_tmp.push_back(file);
@@ -269,6 +265,8 @@ bool check_ProgramOptions(Correct_Opt& opt) {
 
     if (!opt.filenames_helper_long_in.empty()) ret = ret && check_files(opt.filenames_helper_long_in);
     if (!opt.filenames_short_all.empty()) ret = ret && check_files(opt.filenames_short_all);
+    if (!opt.filenames_short_phase.empty()) ret = ret && check_files(opt.filenames_short_phase);
+    if (!opt.filenames_long_phase.empty()) ret = ret && check_files(opt.filenames_long_phase);
 
     if (opt.filename_long_out.length() == 0){
 
@@ -349,7 +347,7 @@ void writeCorrectedOutput(ostream& out, const string& name_str, const string& se
     }
 }
 
-void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const bool long_read_correct, const Roaring* all_partitions) {
+void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const bool long_read_correct, const Roaring* partitions, const unordered_map<uint64_t, uint64_t, CustomHashUint64_t>& read2hap) {
 
     const size_t k = dbg.getK();
 
@@ -371,12 +369,24 @@ void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const b
 
             const string in_name = string(fp.getNameString());
 
+            uint64_t hap_id = 0xffffffffffffffffULL;
+
+            std::transform(in_read.begin(), in_read.end(), in_read.begin(), ::toupper); // Read sequence in upper case characters
+
             string in_qual = (fp.getQualityScoreString() != nullptr) ? string(fp.getQualityScoreString()) : string();
 
             if (!long_read_correct && !in_qual.empty()) getStdQual(in_qual); // Set all quality score from 0 to 40
 
-            const pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> p = getSeeds(opt, dbg, in_read, long_read_correct);
-            const pair<string, string> correction = correctSequence(dbg, opt, in_read, in_qual, p.first, p.second, long_read_correct, all_partitions);
+            if (!read2hap.empty()){
+
+                const uint64_t in_name_h = XXH64(in_name.c_str(), in_name.length(), opt.h_seed);
+                const unordered_map<uint64_t, uint64_t, CustomHashUint64_t>::const_iterator it_read2hap = read2hap.find(in_name_h);
+
+                if (it_read2hap != read2hap.end()) hap_id = it_read2hap->second;
+            }
+
+            const pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> p = getSeeds(opt, dbg, in_read, long_read_correct, hap_id);
+            const pair<string, string> correction = correctSequence(dbg, opt, in_read, in_qual, p.first, p.second, long_read_correct, partitions, hap_id);
 
             if (long_read_correct) writeCorrectedOutput(out, in_name, correction.first, correction.second, k, static_cast<bool>(opt.out_qual), opt.trim_qual);
             else writeCorrectedOutput(out, in_name, correction.first, correction.second, k, static_cast<bool>(opt.out_qual) || static_cast<bool>(opt.trim_qual), 0);
@@ -446,11 +456,23 @@ void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const b
 
                                 for (size_t i = 0; i < v_in_read.size(); ++i){
 
+                                    uint64_t hap_id = 0xffffffffffffffffULL;
+
+                                    std::transform(v_in_read[i].begin(), v_in_read[i].end(), v_in_read[i].begin(), ::toupper); // Read sequence in upper case characters
+
                                     if (!long_read_correct && !v_in_qual[i].empty()) getStdQual(v_in_qual[i]); // Set all quality score from 0 to 40
 
-                                    const pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> p = getSeeds(opt, dbg, v_in_read[i], long_read_correct);
+                                    if (!read2hap.empty()){ // Fetch the haploblock ID of that read, if it exists or the read has one
 
-                                    pair<string, string> correction = correctSequence(dbg, opt, v_in_read[i], v_in_qual[i], p.first, p.second, long_read_correct, all_partitions);
+                                        const uint64_t in_name_h = XXH64(v_in_name[i].c_str(), v_in_name[i].length(), opt.h_seed);
+                                        const unordered_map<uint64_t, uint64_t, CustomHashUint64_t>::const_iterator it_read2hap = read2hap.find(in_name_h);
+
+                                        if (it_read2hap != read2hap.end()) hap_id = it_read2hap->second;
+                                    }
+
+                                    const pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> p = getSeeds(opt, dbg, v_in_read[i], long_read_correct, hap_id);
+
+                                    pair<string, string> correction = correctSequence(dbg, opt, v_in_read[i], v_in_qual[i], p.first, p.second, long_read_correct, partitions, hap_id);
 
                                     v_in_read[i] = move(correction.first);
                                     v_in_qual[i] = move(correction.second);
@@ -502,16 +524,18 @@ int main(int argc, char *argv[]) {
 
             if (!check_ProgramOptions(opt)) return 0;
 
+            Correct_Opt opt_pass1(opt);
+
             bool extra_sr = false;
             bool dbg_empty = false;
 
             string filename_out_extra_sr;
-            string sr_graph = opt.filename_long_out + "_sr";
+            string sr_graph = opt_pass1.filename_long_out + "_sr";
 
             // Establish if some reads are missing
-            if (!opt.filenames_short_all.empty()){
+            if (!opt_pass1.filenames_short_all.empty()){
 
-                filename_out_extra_sr = retrieveMissingReads(opt);
+                filename_out_extra_sr = retrieveMissingReads(opt_pass1);
 
                 FILE* f = fopen(filename_out_extra_sr.c_str(), "r");
 
@@ -521,26 +545,25 @@ int main(int argc, char *argv[]) {
 
                     extra_sr = true;
 
-                    opt.filename_seq_in.push_back(filename_out_extra_sr);
+                    opt_pass1.filename_seq_in.push_back(filename_out_extra_sr);
                 }
             }
 
-            Correct_Opt opt_pass1(opt);
-
             // Pass 1
             {
-                CompactedDBG<UnitigData> dbg(opt.k);
+                CompactedDBG<UnitigData> dbg(opt_pass1.k);
 
                 if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Building graph from short reads (1/2)." << endl;
 
                 dbg.build(opt_pass1);
-                //dbg.simplify(opt_pass1.deleteIsolated, opt_pass1.clipTips, opt_pass1.verbose);
                 dbg.write(sr_graph, opt_pass1.nb_threads, false, opt_pass1.verbose);
 
                 dbg_empty = (dbg.length() == 0);
                 sr_graph += ".fasta";
 
                 if (!dbg_empty){
+
+                    HapReads hap_r;
 
                     Roaring* partitions = nullptr;
 
@@ -556,15 +579,26 @@ int main(int argc, char *argv[]) {
                     opt_pass1.filename_ref_in = vector<string>();
                     opt_pass1.filename_seq_in = opt.filename_seq_in;
 
+                    if (extra_sr && (filename_out_extra_sr.length() != 0)) opt_pass1.filename_seq_in.push_back(filename_out_extra_sr);
+
                     opt_pass1.filename_long_out += string((opt_pass1.out_qual != 0) ? "2.fastq" : "2.fasta");
 
-                    if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Adding coverage to vertices and edges (1/2)." << endl;
+                    if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Adding coverage and phasing to vertices and edges (1/2)." << endl;
+
+                    if (!opt.filenames_long_phase.empty()) addPhasing(dbg, hap_r, opt, opt.filenames_short_phase, opt.filename_seq_in, false, false);
 
                     {
-                        const vector<Kmer> v_km_centroids = addCoverage(dbg, opt_pass1, false, true);
+                        const vector<Kmer> v_km_centroids = addCoverage(dbg, opt_pass1, hap_r.read2hap, false, true);
 
-                        partitions = createPartitions(dbg, v_km_centroids, dbg.nbKmers() / opt_pass1.nb_partitions, opt_pass1.nb_threads, opt_pass1.verbose);
+                        hap_r.read2hap.clear();
+                    
+                        partitions = createPartitions(dbg, v_km_centroids, max(dbg.nbKmers() / opt_pass1.nb_partitions, opt_pass1.min_bases_partition), opt_pass1.nb_threads, opt_pass1.verbose);
                     }
+
+                    if (!opt.filenames_long_phase.empty()) addPhasing(dbg, hap_r, opt, opt.filenames_long_phase, opt.filenames_long_in, true, opt.filenames_short_phase.empty());
+
+                    hap_r.block2id.clear();
+                    hap_r.type2id.clear();
 
                     if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Detecting SNPs candidates (1/2)." << endl;
 
@@ -572,7 +606,7 @@ int main(int argc, char *argv[]) {
 
                     if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Correcting long reads (1/2)." << endl;
 
-                    search(dbg, opt_pass1, false, partitions);
+                    search(dbg, opt_pass1, false, partitions, hap_r.read2hap);
 
                     if (partitions != nullptr) delete[] partitions;
                 }
@@ -599,6 +633,8 @@ int main(int argc, char *argv[]) {
 
                 if (opt_pass2.verbose) cout << "Ratatosk::Ratatosk(): Building graph from short reads (2/2)." << endl;
 
+                HapReads hap_r;
+
                 CompactedDBG<UnitigData> dbg(opt_pass2.k);
 
                 dbg.read(sr_graph, opt_pass2.nb_threads, opt_pass2.verbose);
@@ -607,9 +643,18 @@ int main(int argc, char *argv[]) {
 
                     opt_pass2.filename_seq_in.push_back(opt_pass1.filename_long_out);
 
-                    if (opt_pass2.verbose) cout << "Ratatosk::Ratatosk(): Adding coverage to vertices and edges (2/2)." << endl;
+                    if (opt_pass2.verbose) cout << "Ratatosk::Ratatosk(): Adding coverage and phasing to vertices and edges (2/2)." << endl;
 
-                    addCoverage(dbg, opt_pass2, true, true);
+                    if (!opt.filenames_long_phase.empty()) addPhasing(dbg, hap_r, opt, opt.filenames_short_phase, opt.filename_seq_in, false, true);
+
+                    addCoverage(dbg, opt_pass2, hap_r.read2hap, true, true);
+
+                    hap_r.read2hap.clear();
+
+                    if (!opt.filenames_long_phase.empty()) addPhasing(dbg, hap_r, opt, opt.filenames_long_phase, opt.filenames_long_in, true, true);
+
+                    hap_r.block2id.clear();
+                    hap_r.type2id.clear();
 
                     if (opt_pass2.verbose) cout << "Ratatosk::Ratatosk(): Detecting SNPs candidates (2/2)." << endl;
 
@@ -617,7 +662,7 @@ int main(int argc, char *argv[]) {
 
                     if (opt_pass2.verbose) cout << "Ratatosk::Ratatosk(): Correcting long reads (2/2)." << endl;
 
-                    search(dbg, opt_pass2, true, nullptr);
+                    search(dbg, opt_pass2, true, nullptr, hap_r.read2hap);
                 }
                 else {
 
@@ -631,6 +676,7 @@ int main(int argc, char *argv[]) {
             // Clean up data on disk
             if (remove(sr_graph.c_str()) != 0) cerr << "Ratatosk::Ratatosk(): Couldn't remove temporary file" << endl;
             if (!dbg_empty && remove(opt_pass1.filename_long_out.c_str()) != 0) cerr << "Ratatosk::Ratatosk(): Couldn't remove temporary file" << endl;
+
         }
     }
 }

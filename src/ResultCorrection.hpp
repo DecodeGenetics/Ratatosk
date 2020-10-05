@@ -155,13 +155,13 @@ class ResultCorrection {
 		inline void setSourcePairID(const PairID& p_id) { r_s = p_id; }
 		inline void setTargetPairID(const PairID& p_id) { r_t = p_id; }
 		inline void setWeakPairID(const PairID& p_id) { r_w = p_id; }
-		inline void setMinCovVertex(const size_t v){ min_cov_vertex = v; }
+		inline void setCovVertex(const size_t v){ min_cov_vertex = v; }
 		inline void setPartitions(const Roaring& r_part){ partitions = r_part; }
 
 		inline const PairID& getSourcePairID() const { return r_s; }
 		inline const PairID& getTargetPairID() const { return r_t; }
 		inline const PairID& getWeakPairID() const { return r_w; }
-		inline size_t getMinCovVertex() const { return min_cov_vertex; }
+		inline size_t getCovVertex() const { return min_cov_vertex; }
 		inline const Roaring& getPartitions() const { return partitions; }
 
 	//private:

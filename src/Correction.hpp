@@ -21,11 +21,11 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
 																				const pair<size_t, const_UnitigMap<UnitigData>>& um_solid_start,
 																				const pair<size_t, const_UnitigMap<UnitigData>>& um_solid_end, 
 																				const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_um_weak, size_t i_weak,
-																				const size_t min_cov_vertex, const bool long_read_correct);
+																				const size_t min_cov_vertex, const bool long_read_correct, const uint64_t hap_id);
 
 pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const string& seq, const string& qual,
 										const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_um_solid, const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_um_weak,
-										const bool long_read_correct, const Roaring* all_partitions);
+										const bool long_read_correct, const Roaring* all_partitions, const uint64_t hap_id);
 
 inline bool hasUniquePosition(const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v, const size_t pos){
 

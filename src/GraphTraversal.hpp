@@ -19,32 +19,32 @@
 pair<vector<Path<UnitigData>>, bool> explorePathsBFS(	const Correct_Opt& opt, const char* ref, const size_t ref_len,
 														const TinyBloomFilter<uint32_t>& bf, const PairID& r,
 														const const_UnitigMap<UnitigData>& um_s,
-														const size_t min_cov_vertex, const bool long_read_correct);
+														const size_t min_cov_vertex, const bool long_read_correct, const uint64_t hap_id);
 
 pair<vector<Path<UnitigData>>, bool> explorePathsBFS2(	const Correct_Opt& opt, const char* ref, const size_t ref_len,
 														const TinyBloomFilter<uint32_t>& bf, const PairID& r,
 														const const_UnitigMap<UnitigData>& um_s, const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_um_e,
-														const size_t min_cov_vertex, const bool long_read_correct);
+														const size_t min_cov_vertex, const bool long_read_correct, const uint64_t hap_id);
 
 void exploreSubGraph(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>& bf_read, const PairID& p_read, const char* ref, const size_t ref_len,
 					const const_UnitigMap<UnitigData>& um, const const_UnitigMap<UnitigData>& um_e,
 					const Path<UnitigData>& p, const PairID& r, const size_t level, const size_t min_cov_vertex,
-					double& best_score, vector<Path<UnitigData>>& best_successors, vector<Path<UnitigData>>& over_represented);
+					double& best_score, vector<Path<UnitigData>>& best_successors, vector<Path<UnitigData>>& over_represented, const uint64_t hap_id);
 
 void exploreSubGraph(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>& bf_read, const PairID& p_read, const char* ref, const size_t ref_len,
 					const const_UnitigMap<UnitigData>& um, const KmerHashTable<const_UnitigMap<UnitigData>>& h_um_e,
 					const Path<UnitigData>& p, const PairID& r, const size_t level, const size_t min_cov_vertex,
-					double& best_score, vector<Path<UnitigData>>& best_successors, vector<Path<UnitigData>>& over_represented);
+					double& best_score, vector<Path<UnitigData>>& best_successors, vector<Path<UnitigData>>& over_represented, const uint64_t hap_id);
 
 void exploreSubGraphLong(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>& bf_read, const PairID& p_read, const char* ref, const size_t ref_len,
 						const const_UnitigMap<UnitigData>& um, const const_UnitigMap<UnitigData>& um_e,
 						const Path<UnitigData>& p, const PairID& r, const size_t min_cov_vertex,
-						double& best_score, vector<Path<UnitigData>>& best_successors, vector<Path<UnitigData>>& semi_weak_successors);
+						double& best_score, vector<Path<UnitigData>>& best_successors, vector<Path<UnitigData>>& semi_weak_successors, const uint64_t hap_id);
 
 void exploreSubGraphLong(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>& bf_read, const PairID& p_read, const char* ref, const size_t ref_len,
 						const const_UnitigMap<UnitigData>& um, const KmerHashTable<const_UnitigMap<UnitigData>>& h_um_e,
 						const Path<UnitigData>& p, const PairID& r, const size_t min_cov_vertex,
-						double& best_score, vector<Path<UnitigData>>& best_successors, vector<Path<UnitigData>>& semi_weak_successors);
+						double& best_score, vector<Path<UnitigData>>& best_successors, vector<Path<UnitigData>>& semi_weak_successors, const uint64_t hap_id);
 
 
 #endif

@@ -86,6 +86,19 @@ class PairID {
         PairID operator&(const PairID& rhs) const;
         PairID& operator&=(const PairID& rhs);
 
+        PairID operator-(const PairID& rhs) const;
+        PairID& operator-=(const PairID& rhs);
+
+        inline PairID operator+(const PairID& rhs) const{
+
+            return this->operator|(rhs);
+        }
+
+        inline PairID& operator+=(const PairID& rhs){
+
+            return this->operator|=(rhs);
+        }
+
         void clear();
 
         void add(const size_t pair_id);

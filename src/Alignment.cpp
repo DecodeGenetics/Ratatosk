@@ -483,7 +483,7 @@ pair<string, string> generateConsensus(const ResultCorrection* fw_s, const Resul
 void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg,
 					string& query, string& quality, 
 					const char* ref_seq, const char* ref_qual, const size_t ref_len,
-					const vector<pair<size_t, char>>& v_ambiguity,
+					const uint64_t hap_id, const vector<pair<size_t, char>>& v_ambiguity,
 					const size_t min_qual, const bool force_fix){
 
 	if (!v_ambiguity.empty()) {
@@ -495,6 +495,9 @@ void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg,
 		const bool r_hasQual = (ref_qual != nullptr);
 
 		const size_t min_qs_char = 33 + min_qual;
+
+		const uint64_t undetermined_hap_id = 0xffffffffffffffffULL;
+		const uint64_t rev_hap_id = (hap_id == undetermined_hap_id) ? undetermined_hap_id : (static_cast<bool>(hap_id & 0x1ULL) ? (hap_id - 1) : (hap_id + 1));
 
 		string query_tmp = query;
 
@@ -593,34 +596,39 @@ void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg,
 
 					if (!um.isEmpty) {
 
-						const_UnitigMap<UnitigData> um_tmp = um;
+						const PairID& hap_um = um.getData()->get_hapID();
 
-						um_tmp.dist = 0;
-						um_tmp.len = um_tmp.size - k + 1;
+						if ((hap_id == undetermined_hap_id) || hap_um.isEmpty() || hap_um.contains(hap_id) || !hap_um.contains(rev_hap_id)) {
 
-						const string unitig_seq = um_tmp.mappedSequenceToString();
-						const vector<pair<size_t, char>> v_amb = um_tmp.getData()->get_ambiguity_char(um_tmp);
+							const_UnitigMap<UnitigData> um_tmp = um;
 
-						size_t pos_snp_unitig = (pos_snp_buff - p_km.second) + um.dist;
+							um_tmp.dist = 0;
+							um_tmp.len = um_tmp.size - k + 1;
 
-						if (!um.strand) pos_snp_unitig = um.size - pos_snp_unitig - 1;
+							const string unitig_seq = um_tmp.mappedSequenceToString();
+							const vector<pair<size_t, char>> v_amb = um_tmp.getData()->get_ambiguity_char(um_tmp);
 
-						for (const auto p_amb : v_amb){
+							size_t pos_snp_unitig = (pos_snp_buff - p_km.second) + um.dist;
 
-							int64_t pos = static_cast<int64_t>(p_amb.first);
+							if (!um.strand) pos_snp_unitig = um.size - pos_snp_unitig - 1;
 
-							if (pos <= pos_snp_unitig) pos = static_cast<int64_t>(p.first) - static_cast<int64_t>(pos_snp_unitig - pos);
-							else pos = static_cast<int64_t>(p.first) + static_cast<int64_t>(pos - pos_snp_unitig);
+							for (const auto p_amb : v_amb){
 
-							if ((pos >= 0) && (pos < query_len) && (pos != p.first)) {
+								int64_t pos = static_cast<int64_t>(p_amb.first);
 
-								const unordered_map<size_t, char>::const_iterator it = m_ambiguity.find(pos);
+								if (pos <= pos_snp_unitig) pos = static_cast<int64_t>(p.first) - static_cast<int64_t>(pos_snp_unitig - pos);
+								else pos = static_cast<int64_t>(p.first) + static_cast<int64_t>(pos - pos_snp_unitig);
 
-								if ((it != m_ambiguity.end()) && (!isDNA(it->second) || confident_snp)) s_ambiguity.insert(pair<size_t, char>(pos, unitig_seq[p_amb.first]));
+								if ((pos >= 0) && (pos < query_len) && (pos != p.first)) {
+
+									const unordered_map<size_t, char>::const_iterator it = m_ambiguity.find(pos);
+
+									if ((it != m_ambiguity.end()) && (!isDNA(it->second) || confident_snp)) s_ambiguity.insert(pair<size_t, char>(pos, unitig_seq[p_amb.first]));
+								}
 							}
-						}
+	                	}
 
-	                    it_km += um.len - 1;
+		                it_km += um.len - 1;
 					}
 				}
 			}

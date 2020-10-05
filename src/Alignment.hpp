@@ -22,7 +22,7 @@ pair<string, string> generateConsensus(const ResultCorrection* fw_s, const Resul
 
 void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg,
 					string& query, string& quality, const char* ref_seq, const char* ref_qual, const size_t ref_len,
-					const vector<pair<size_t, char>>& v_ambiguity,
+					const uint64_t hap_id, const vector<pair<size_t, char>>& v_ambiguity,
 					const size_t min_qual, const bool force_fix = false);
 
 pair<int, int> selectBestSubstringAlignment(const char* ref, const size_t ref_len, const vector<Path<UnitigData>>& candidates, const double cut_threshold_norm_edit = -1.0);

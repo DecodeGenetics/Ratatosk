@@ -198,6 +198,44 @@ PairID& PairID::operator|=(const PairID& rhs) {
     return *this;
 }
 
+PairID PairID::operator-(const PairID& rhs) const {
+
+    PairID lhs(*this);
+
+    lhs -= rhs;
+    return lhs;
+}
+
+PairID& PairID::operator-=(const PairID& rhs) {
+
+    if ((&rhs != this) && (rhs.cardinality() != 0)) {
+
+        const_iterator it = begin(), it_end = end();
+        const_iterator r_it = rhs.begin(), r_it_end = rhs.end();
+
+        vector<uint32_t> old_ids;
+
+        old_ids.reserve(cardinality());
+
+        while ((it != it_end) && (r_it != r_it_end)){
+
+            if (*it > *r_it) ++r_it;
+            else if (*it < *r_it) ++it;
+            else {
+
+                old_ids.push_back(*r_it);
+
+                ++it;
+                ++r_it;
+            }
+        }
+
+        removeSortedVector(old_ids);
+    }
+
+    return *this;
+}
+
 PairID PairID::operator&(const PairID& rhs) const {
 
     PairID lhs(*this);

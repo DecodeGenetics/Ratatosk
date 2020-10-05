@@ -17,9 +17,9 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
             clear();
         }
 
-        UnitigData(const UnitigData& o) : cycle_kmer_cov(o.cycle_kmer_cov), connected_comp_id(o.connected_comp_id), read_ids(o.read_ids), ambiguity_ids(o.ambiguity_ids) {}
+        UnitigData(const UnitigData& o) : cycle_kmer_cov(o.cycle_kmer_cov), connected_comp_id(o.connected_comp_id), read_ids(o.read_ids), ambiguity_ids(o.ambiguity_ids), hap_ids(o.hap_ids) {}
 
-        UnitigData(UnitigData&& o) : cycle_kmer_cov(o.cycle_kmer_cov), connected_comp_id(o.connected_comp_id), read_ids(move(o.read_ids)), ambiguity_ids(move(o.ambiguity_ids)) {
+        UnitigData(UnitigData&& o) : cycle_kmer_cov(o.cycle_kmer_cov), connected_comp_id(o.connected_comp_id), read_ids(move(o.read_ids)), ambiguity_ids(move(o.ambiguity_ids)), hap_ids(move(o.hap_ids)) {
 
             o.clear();
         }
@@ -32,6 +32,7 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
                 connected_comp_id = o.connected_comp_id;
                 read_ids = o.read_ids;
                 ambiguity_ids = o.ambiguity_ids;
+                hap_ids = o.hap_ids;
             }
 
             return *this;
@@ -45,6 +46,7 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
                 connected_comp_id = o.connected_comp_id;
                 read_ids = move(o.read_ids);
                 ambiguity_ids = move(o.ambiguity_ids);
+                hap_ids = move(o.hap_ids);
 
                 o.clear();
             }
@@ -52,14 +54,14 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
             return *this;
         }
 
-        void clear(const bool clear_partitions = true){
+        void clear(){
 
-            if (clear_partitions) connected_comp_id = 0;
-
+            connected_comp_id = 0;
             cycle_kmer_cov = 0;
 
             read_ids.clear();
             ambiguity_ids.clear();
+            hap_ids.clear();
         }
 
         void clear(const UnitigMap<UnitigData>& um_dest){
@@ -81,13 +83,15 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
 
             for (const auto& p : v_src) v_dest.push_back({um_dest.size - k + 1 + p.first, p.second});
 
-            if ((pli_dest->get_readID().cardinality() == 0) || (pli_src->get_readID().cardinality() == 0)) read_ids.clear();
-            else {
+            //if ((pli_dest->get_readID().cardinality() == 0) || (pli_src->get_readID().cardinality() == 0)) read_ids.clear();
+            //else {
 
                 read_ids = pli_dest->get_readID() | pli_src->get_readID();
+                hap_ids = pli_dest->get_hapID() | pli_src->get_hapID();
 
                 read_ids.runOptimize();
-            }
+                hap_ids.runOptimize();
+            //}
 
             cycle_kmer_cov = 0;
             connected_comp_id = max(pli_src->getConnectedComp(), pli_dest->getConnectedComp());
@@ -128,8 +132,10 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
             const UnitigData* pli_src = um_src.getData();
 
             read_ids |= pli_src->get_readID();
+            hap_ids |= pli_src->get_hapID();
 
             read_ids.runOptimize();
+            hap_ids.runOptimize();
 
             connected_comp_id = max(pli_src->getConnectedComp(), pli_dest->getConnectedComp());
 
@@ -149,9 +155,11 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
 
             connected_comp_id = pli_src->getConnectedComp();
             read_ids = pli_src->get_readID();
+            hap_ids = pli_src->get_hapID();
 
             read_ids.runOptimize();
             ambiguity_ids.runOptimize();
+            hap_ids.runOptimize();
 
             increaseCoverage(pli_src->getKmerCoverage(um_src) * um_src.len);
 
@@ -221,6 +229,16 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
         inline PairID& get_readID() {
 
             return read_ids;
+        }
+
+        inline const PairID& get_hapID() const {
+
+            return hap_ids;
+        }   
+
+        inline PairID& get_hapID() {
+
+            return hap_ids;
         }
 
         inline size_t getConnectedComp() const {
@@ -354,6 +372,7 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
 
         PairID read_ids;
         PairID ambiguity_ids;
+        PairID hap_ids;
 };
 
 #endif

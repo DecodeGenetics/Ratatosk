@@ -98,7 +98,7 @@
 }*/
 
 pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> getSeeds(const Correct_Opt& opt, const CompactedDBG<UnitigData>& dbg,
-																													const string& s, const bool long_read_correct,
+																													const string& s, const bool long_read_correct, const uint64_t hap_id,
 																													const bool filter_non_unique_inexact_kmers) {
 
     auto comp_pair = [](const pair<size_t, const_UnitigMap<UnitigData>>& p1, const pair<size_t, const_UnitigMap<UnitigData>>& p2) {
@@ -107,6 +107,8 @@ pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, cons
 
         return (p1.first < p2.first);
     };
+
+    const uint64_t undetermined_hap_id = 0xffffffffffffffffULL;
 
     size_t i = 0;
     size_t j_solid = 0, j_all = 0;
@@ -158,6 +160,23 @@ pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, cons
 	    }
 
 	    if (exact_match != -1) v_um_solid.push_back(v_um[exact_match]);
+	}
+
+	// Remove solid matches that don't match the haploblock
+	if (hap_id != undetermined_hap_id) {
+
+		vector<pair<size_t, const_UnitigMap<UnitigData>>> v_um_solid_tmp;
+
+		const uint64_t rev_hap_id = static_cast<bool>(hap_id & 0x1ULL) ? (hap_id - 1) : (hap_id + 1);
+
+    	for (const auto& p : v_um_solid){
+
+    		const PairID& hap_ids = p.second.getData()->get_hapID();
+
+    		if (hap_ids.isEmpty() || hap_ids.contains(hap_id) || !hap_ids.contains(rev_hap_id)) v_um_solid_tmp.push_back(p);
+    	}
+
+    	v_um_solid = move(v_um_solid_tmp);
 	}
 
 	// Make sure solid matches overlap by k-1
@@ -312,6 +331,8 @@ void detectSNPs(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const Roa
 				size_t prev_pos_ref = 0;
 
 				const size_t id_part = ud->getConnectedComp();
+				const PairID& hap_ids = ud->get_hapID();
+				const bool hap_id_empty = hap_ids.isEmpty();
 
 		    	for (size_t i = 0; i < v_um.size(); ++i){
 
@@ -323,19 +344,39 @@ void detectSNPs(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const Roa
 
 		    			if (no_neighbor || part_neighbors[id_part].contains(id_part_snp_cand)) {
 
-				    		const string km_snp = p.second.mappedSequenceToString();
-				    		const size_t pos_snp = cstrMatch(km_snp.c_str(), seq_ref.c_str() + p.first);
+		    				const PairID& p_hap_ids = p.second.getData()->get_hapID();
 
-				    		if (pos_snp < k){
+		    				bool isHapCompatible = (hap_id_empty || p_hap_ids.isEmpty());
 
-					    		bool nuc_a_s = false, nuc_c_s = false, nuc_g_s = false, nuc_t_s = false;
-					    		bool nuc_a_k = false, nuc_c_k = false, nuc_g_k = false, nuc_t_k = false;
+		    				if (!isHapCompatible) {
 
-					    		getAmbiguityRev(seq_um[p.first + pos_snp], nuc_a_s, nuc_c_s, nuc_g_s, nuc_t_s);
-					    		getAmbiguityRev(km_snp[pos_snp], nuc_a_k, nuc_c_k, nuc_g_k, nuc_t_k);
+		    					for (const uint32_t p_hap_id : p_hap_ids){
 
-					    		seq_um[p.first + pos_snp] = getAmbiguity(nuc_a_s || nuc_a_k, nuc_c_s || nuc_c_k, nuc_g_s || nuc_g_k, nuc_t_s || nuc_t_k);
+		    						if (hap_ids.contains(static_cast<bool>(p_hap_id & 0x1ULL) ? (p_hap_id - 1) : (p_hap_id + 1))){
+
+		    							isHapCompatible = true;
+		    							break;
+		    						}
+		    					}
+		    				}
+
+		    				if (isHapCompatible){
+
+					    		const string km_snp = p.second.mappedSequenceToString();
+					    		const size_t pos_snp = cstrMatch(km_snp.c_str(), seq_ref.c_str() + p.first);
+
+					    		if (pos_snp < k){
+
+						    		bool nuc_a_s = false, nuc_c_s = false, nuc_g_s = false, nuc_t_s = false;
+						    		bool nuc_a_k = false, nuc_c_k = false, nuc_g_k = false, nuc_t_k = false;
+
+						    		getAmbiguityRev(seq_um[p.first + pos_snp], nuc_a_s, nuc_c_s, nuc_g_s, nuc_t_s);
+						    		getAmbiguityRev(km_snp[pos_snp], nuc_a_k, nuc_c_k, nuc_g_k, nuc_t_k);
+
+						    		seq_um[p.first + pos_snp] = getAmbiguity(nuc_a_s || nuc_a_k, nuc_c_s || nuc_c_k, nuc_g_s || nuc_g_k, nuc_t_s || nuc_t_k);
+					    		}
 				    		}
+				    		else ++nb_fp_avoided;
 			    		}
 			    		else ++nb_fp_avoided;
 		    		}
@@ -377,6 +418,8 @@ void detectSNPs(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const Roa
 					size_t prev_pos_ref = 0;
 
 					const size_t id_part = ud->getConnectedComp();
+					const PairID& hap_ids = ud->get_hapID();
+					const bool hap_id_empty = hap_ids.isEmpty();
 
 			    	for (size_t i = 0; i < v_um.size(); ++i){
 
@@ -388,19 +431,39 @@ void detectSNPs(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const Roa
 
 			    			if (no_neighbor || part_neighbors[id_part].contains(id_part_snp_cand)) {
 
-					    		const string km_snp = p.second.mappedSequenceToString();
-					    		const size_t pos_snp = cstrMatch(km_snp.c_str(), seq_ref.c_str() + p.first);
+			    				const PairID& p_hap_ids = p.second.getData()->get_hapID();
 
-					    		if (pos_snp < k){
+			    				bool isHapCompatible = (hap_id_empty || p_hap_ids.isEmpty());
 
-						    		bool nuc_a_s = false, nuc_c_s = false, nuc_g_s = false, nuc_t_s = false;
-						    		bool nuc_a_k = false, nuc_c_k = false, nuc_g_k = false, nuc_t_k = false;
+			    				if (!isHapCompatible) {
 
-						    		getAmbiguityRev(seq_um[p.first + pos_snp], nuc_a_s, nuc_c_s, nuc_g_s, nuc_t_s);
-						    		getAmbiguityRev(km_snp[pos_snp], nuc_a_k, nuc_c_k, nuc_g_k, nuc_t_k);
+			    					for (const uint32_t p_hap_id : p_hap_ids){
 
-						    		seq_um[p.first + pos_snp] = getAmbiguity(nuc_a_s || nuc_a_k, nuc_c_s || nuc_c_k, nuc_g_s || nuc_g_k, nuc_t_s || nuc_t_k);
+			    						if (hap_ids.contains(static_cast<bool>(p_hap_id & 0x1ULL) ? (p_hap_id - 1) : (p_hap_id + 1))){
+
+			    							isHapCompatible = true;
+			    							break;
+			    						}
+			    					}
+			    				}
+
+			    				if (isHapCompatible){
+
+						    		const string km_snp = p.second.mappedSequenceToString();
+						    		const size_t pos_snp = cstrMatch(km_snp.c_str(), seq_ref.c_str() + p.first);
+
+						    		if (pos_snp < k){
+
+							    		bool nuc_a_s = false, nuc_c_s = false, nuc_g_s = false, nuc_t_s = false;
+							    		bool nuc_a_k = false, nuc_c_k = false, nuc_g_k = false, nuc_t_k = false;
+
+							    		getAmbiguityRev(seq_um[p.first + pos_snp], nuc_a_s, nuc_c_s, nuc_g_s, nuc_t_s);
+							    		getAmbiguityRev(km_snp[pos_snp], nuc_a_k, nuc_c_k, nuc_g_k, nuc_t_k);
+
+							    		seq_um[p.first + pos_snp] = getAmbiguity(nuc_a_s || nuc_a_k, nuc_c_s || nuc_c_k, nuc_g_s || nuc_g_k, nuc_t_s || nuc_t_k);
+						    		}
 					    		}
+					    		else ++l_nb_fp_avoided;
 					    	}
 					    	else ++l_nb_fp_avoided;
 			    		}
@@ -730,14 +793,17 @@ size_t detectSTRs(CompactedDBG<UnitigData>& dbg, const size_t max_len_cycle, con
 	}
 }
 
-vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const bool long_read_correct, const bool map_reads, const size_t id_read_start){
+vector<Kmer> addCoverage(	CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const unordered_map<uint64_t, uint64_t, CustomHashUint64_t>& read2hap, 
+							const bool long_read_correct, const bool map_reads, const size_t id_read_start){
 
-	if (dbg.isInvalid() || (dbg.length() == 0)) return vector<Kmer>();
+	if (dbg.isInvalid() || (dbg.length() == 0)) vector<Kmer>();
 
 	vector<string> v_seq_in(opt.filename_seq_in);
 
 	const size_t k = dbg.getK();
 	const size_t nb_pairs = (long_read_correct ? countRecordsFASTX(v_seq_in) : (countRecordsFASTX(v_seq_in) / 2)) + 1;
+
+	const uint64_t off_limit_id = 0xffffffffffffffffULL;
 
 	size_t nextID = id_read_start + 1;
 	size_t nb_reads = 0;
@@ -752,12 +818,6 @@ vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
     string s;
 
     unordered_map<uint64_t, uint64_t, CustomHashUint64_t> name_hmap;
-
-    std::random_device rd; //Seed
-    std::default_random_engine generator(rd()); //Random number generator
-    std::uniform_int_distribution<long long unsigned> distribution(0, 0xFFFFFFFFFFFFFFFF); //Distribution on which to apply the generator
-
-    const uint64_t seed = distribution(generator); //Initialize the hash function seeds
 
     vector<Kmer> v_km_cent;
 
@@ -784,7 +844,7 @@ vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
     	return ((a.second < b.second) || ((a.second == b.second) && (a.first < b.first)));
     };
 
-    auto worker_function1 = [&](const char* seq_buf, const size_t seq_buf_sz, const uint64_t* ID_buf) {
+    auto worker_function1 = [&](char* seq_buf, const size_t seq_buf_sz, const uint64_t* ID_buf) {
 
     	uint64_t it_min_h;
 
@@ -792,16 +852,17 @@ vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
 
 	    size_t it_ID_buf = 0;
 
-    	const char* str = seq_buf;
         const char* str_end = seq_buf + seq_buf_sz;
 
-        while (str < str_end) { // for each input
+        while (seq_buf < str_end) { // for each input
 
-	        const int len = strlen(str);
+	        const int len = strlen(seq_buf);
 	        const uint64_t id = ID_buf[it_ID_buf] & 0x7fffffffffffffffULL;
 	        const bool first_mate = static_cast<bool>(ID_buf[it_ID_buf] >> 63);
 
-            KmerHashIterator<RepHash> it_kmer_h(str, len, k), it_kmer_h_end;
+	        toUpperCase(seq_buf, len);
+
+            KmerHashIterator<RepHash> it_kmer_h(seq_buf, len, k), it_kmer_h_end;
             UnitigMap<UnitigData> um_canonical;
 
             vector<Kmer> v_km;
@@ -811,7 +872,7 @@ vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
             for (; it_kmer_h != it_kmer_h_end; ++it_kmer_h) {
 
                 const std::pair<uint64_t, int> p_ = *it_kmer_h; // <k-mer hash, k-mer position in sequence>
-	            const UnitigMap<UnitigData> um = dbg.findUnitig(str, p_.second, len);
+	            const UnitigMap<UnitigData> um = dbg.findUnitig(seq_buf, p_.second, len);
 
 	            if (!um.isEmpty) { // Read maps to a Unitig
 
@@ -853,13 +914,13 @@ vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
 
             if (!v_km.empty() && !long_read_correct){
 
-            	const uint64_t h1 = XXH64(&v_km[0], v_km.size() * sizeof(Kmer), seed);
+            	const uint64_t h1 = XXH64(&v_km[0], v_km.size() * sizeof(Kmer), opt.h_seed);
 
             	reverse(v_km.begin(), v_km.end());
 
             	for (auto& km : v_km) km = km.twin();
 
-            	const uint64_t h = h1 + XXH64(&v_km[0], v_km.size() * sizeof(Kmer), seed);
+            	const uint64_t h = h1 + XXH64(&v_km[0], v_km.size() * sizeof(Kmer), opt.h_seed);
 
             	lck_h.acquire_reader();
 
@@ -873,12 +934,12 @@ vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
             	lck_h.release_reader();
         }
 
-            str += len + 1;
+            seq_buf += len + 1;
             ++it_ID_buf;
         }
     };
 
-    auto worker_function2 = [&](const char* seq_buf, const size_t seq_buf_sz, const uint64_t* ID_buf) {
+    auto worker_function2 = [&](char* seq_buf, const size_t seq_buf_sz, const uint64_t* ID_buf) {
 
     	uint64_t it_min_h;
 
@@ -886,21 +947,26 @@ vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
 
 	    size_t it_ID_buf = 0;
 
-    	const char* str = seq_buf;
         const char* str_end = seq_buf + seq_buf_sz;
 
-        while (str < str_end) { // for each input
+        while (seq_buf < str_end) { // for each input
 
-	        const int len = strlen(str);
+	        const int len = strlen(seq_buf);
+
 	        const unordered_map<uint64_t, uint64_t, CustomHashUint64_t>::const_iterator it_name_hmap = name_hmap.find(ID_buf[it_ID_buf]);
-	    	const uint64_t readNameID = (it_name_hmap == name_hmap.end()) ? 0 : it_name_hmap->second;
+	        const unordered_map<uint64_t, uint64_t, CustomHashUint64_t>::const_iterator it_read2hap = read2hap.empty() ? read2hap.end() : read2hap.find(ID_buf[it_ID_buf]);
 
-            KmerHashIterator<RepHash> it_kmer_h(str, len, k), it_kmer_h_end;
+	    	const uint64_t readNameID = (it_name_hmap == name_hmap.end()) ? 0 : it_name_hmap->second;
+	    	const uint64_t hapNameID = (it_read2hap == read2hap.end()) ? off_limit_id : it_read2hap->second;
+
+	    	toUpperCase(seq_buf, len);
+
+            KmerHashIterator<RepHash> it_kmer_h(seq_buf, len, k), it_kmer_h_end;
 
             for (; it_kmer_h != it_kmer_h_end; ++it_kmer_h) {
 
                 const std::pair<uint64_t, int> p_ = *it_kmer_h; // <k-mer hash, k-mer position in sequence>
-	            const UnitigMap<UnitigData> um = dbg.findUnitig(str, p_.second, len);
+	            const UnitigMap<UnitigData> um = dbg.findUnitig(seq_buf, p_.second, len);
 
 	            if (!um.isEmpty) { // Read maps to a Unitig
 
@@ -912,7 +978,9 @@ vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
 
 	            	ud->increaseCoverage(um.len);
 
-	            	if ((readNameID != 0) && (readNameID != 0xffffffffffffffffULL)) {
+	            	if (hapNameID != off_limit_id) ud->get_hapID().add(hapNameID);
+
+	            	if ((readNameID != 0) && (readNameID != off_limit_id)) {
 
 	            		PairID& r = ud->get_readID();
 
@@ -933,7 +1001,7 @@ vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
 	            }
 	        }
 
-            str += len + 1;
+            seq_buf += len + 1;
             ++it_ID_buf;
         }
     };
@@ -964,7 +1032,7 @@ vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
 
                 	if (pos_read == 0){ // New read
 
-		            	const uint64_t h_name = XXH64(fp.getNameString(), strlen(fp.getNameString()), seed);
+		            	const uint64_t h_name = XXH64(fp.getNameString(), strlen(fp.getNameString()), opt.h_seed);
 			        	const pair<unordered_map<uint64_t, uint64_t, CustomHashUint64_t>::const_iterator, bool> p = name_hmap.insert({h_name, nextID});
 
 			        	last_id = ((p.second ? nextID : p.first->second) | (static_cast<size_t>(p.second) << 63));
@@ -1027,7 +1095,7 @@ vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
 
                 if (len_read >= k){
 
-                	name_hash_buf[it_name_hash_buf++] = XXH64(fp.getNameString(), strlen(fp.getNameString()), seed);
+                	name_hash_buf[it_name_hash_buf++] = XXH64(fp.getNameString(), strlen(fp.getNameString()), opt.h_seed);
 
                     if ((thread_seq_buf_sz - seq_buf_sz - 1) < (len_read - pos_read)){
 
@@ -1072,7 +1140,7 @@ vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
 
 	    nextID = id_read_start + 1;
 
-	    for (size_t i = 0; i < nb_pairs; ++i) read_map_ids_sr[0][i] = pair<uint64_t, uint64_t>(0xffffffffffffffffULL, 0x0ULL);
+	    for (size_t i = 0; i < nb_pairs; ++i) read_map_ids_sr[0][i] = pair<uint64_t, uint64_t>(off_limit_id, 0x0ULL);
 
 	    if (opt.nb_threads == 1){
 
@@ -1087,7 +1155,7 @@ vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
 
         			read_map_ids_sr[1] = new pair<uint64_t, uint64_t>[nb_pairs];
 
-        			for (size_t i = 0; i < nb_pairs; ++i) read_map_ids_sr[1][i] = pair<uint64_t, uint64_t>(0xffffffffffffffffULL, 0x0ULL);
+        			for (size_t i = 0; i < nb_pairs; ++i) read_map_ids_sr[1][i] = pair<uint64_t, uint64_t>(off_limit_id, 0x0ULL);
             	}
 
             	worker_function1(buffer_seq[0], buffer_seq_sz[0], buffer_name[0]);
@@ -1129,7 +1197,7 @@ vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
 
 				            			read_map_ids_sr[1] = new pair<uint64_t, uint64_t>[nb_pairs];
 
-				            			for (size_t i = 0; i < nb_pairs; ++i) read_map_ids_sr[1][i] = pair<uint64_t, uint64_t>(0xffffffffffffffffULL, 0x0ULL);
+				            			for (size_t i = 0; i < nb_pairs; ++i) read_map_ids_sr[1][i] = pair<uint64_t, uint64_t>(off_limit_id, 0x0ULL);
 				            		}
 
 				            		lck_h.release_writer();
@@ -1183,7 +1251,7 @@ vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
 						pair<uint64_t, uint64_t>& p = read_map_ids_sr[v_read_map_ids[i].first / nb_pairs][v_read_map_ids[i].first % nb_pairs];
 
 						// Check if duplicate or ID already in use
-						if (p.first == 0xffffffffffffffffULL){
+						if (p.first == off_limit_id){
 
 							if ((i == 0) || (v_read_map_ids[i].second != v_read_map_ids[i-1].second)) p.first = nextID++;
 							else p.first = 0;
@@ -1204,7 +1272,7 @@ vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
 
 				for (const auto id : pid){
 
-					if (read_map_ids_sr[0][id].first == 0xffffffffffffffffULL) read_map_ids_sr[0][id].first = nextID++; // can be swapped
+					if (read_map_ids_sr[0][id].first == off_limit_id) read_map_ids_sr[0][id].first = nextID++; // can be swapped
 				}
 			}
 
@@ -1213,7 +1281,7 @@ vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
 
 		delete[] read_map_ids_sr[0];
 
-		resetUnitigData(dbg, false);
+		for (auto& um : dbg) um.getData()->clear();
 	}
 
     {
@@ -1293,15 +1361,21 @@ vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
 	for (auto& um : dbg){
 
 		UnitigData* ud = um.getData();
-		PairID& r = ud->get_readID();
+
+		PairID& p_ids = ud->get_readID();
+		PairID& hap_ids = ud->get_hapID();
 
 		const double km_frequency = ud->getKmerCoverage(um);
 
-		if ((km_frequency < opt.min_cov_vertices) || (!long_read_correct && (r.cardinality() < opt.min_cov_vertices))) to_delete.push_back(um.getUnitigHead());
-		else if ((r.cardinality() <= (um.size - k + 1) * opt.max_cov_vertices) && (km_frequency <= opt.max_cov_vertices)) r.runOptimize();
+		if ((km_frequency < opt.min_cov_vertices) || (!long_read_correct && (p_ids.cardinality() < opt.min_cov_vertices))) to_delete.push_back(um.getUnitigHead());
+		else if ((p_ids.cardinality() <= (um.size - k + 1) * opt.max_cov_vertices) && (km_frequency <= opt.max_cov_vertices)){
+
+			p_ids.runOptimize();
+			hap_ids.runOptimize();
+		}
 		else {
 
-			r.clear();
+			p_ids.clear();
 
 			++over_represented;
 		}
@@ -1317,13 +1391,297 @@ vector<Kmer> addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
 		if (!um.isEmpty){
 
 			const UnitigData* ud = um.getData();
-			const PairID& r = ud->get_readID();
 
-			if ((ud->getKmerCoverage(um) < opt.min_cov_vertices) || (!long_read_correct && (r.cardinality() < opt.min_cov_vertices))) dbg.remove(um);
+			if ((ud->getKmerCoverage(um) < opt.min_cov_vertices) || (!long_read_correct && (ud->get_readID().cardinality() < opt.min_cov_vertices))) dbg.remove(um);
 		}
 	}
 
 	return v_km_cent;
+}
+
+void addPhasing(CompactedDBG<UnitigData>& dbg, HapReads& hap_r, const Correct_Opt& opt,
+				const vector<string>& v_phase_filenames, const vector<string>& v_read_filenames,
+				const bool long_read_phasing, const bool mapHapReads) {
+
+	const size_t k = dbg.getK();
+	const uint64_t off_limit_id = 0xffffffffffffffffULL;
+
+    string s;
+
+	LockGraph lck_g(opt.nb_threads * 1024);
+
+    size_t len_read;
+    size_t pos_read;
+
+    size_t nb_reads = 0;
+
+    const size_t thread_seq_buf_sz = opt.buffer_sz;
+    const size_t thread_name_buf_sz = (thread_seq_buf_sz / (k + 1)) + 1;
+
+    auto reading_function1 = [&](FileParser& fp, char* seq_buf, size_t& seq_buf_sz, uint64_t* hap_hash_buf) {
+
+        size_t file_id = 0;
+        size_t it_name_hash_buf = 0;
+
+        const size_t sz_seq_buf = thread_seq_buf_sz - k;
+
+        const char* s_str = s.c_str();
+
+        seq_buf_sz = 0;
+
+        while (seq_buf_sz < sz_seq_buf){
+
+            const bool new_reading = (pos_read >= len_read);
+
+            if (!new_reading || fp.read(s, file_id)) {
+
+            	pos_read &= static_cast<size_t>(new_reading) - 1;
+
+            	if (opt.verbose && new_reading && ((++nb_reads % 1000000) == 0)) cout << "Ratatosk::addPhasing(): Processed " << nb_reads << " reads." << endl;
+
+                len_read = s.length();
+                s_str = s.c_str();
+
+                if (len_read >= k){
+
+                	const uint64_t h_name = XXH64(fp.getNameString(), strlen(fp.getNameString()), opt.h_seed);
+                	const unordered_map<uint64_t, uint64_t, CustomHashUint64_t>::const_iterator it_read2hap = hap_r.read2hap.find(h_name);
+
+                	if ((it_read2hap != hap_r.read2hap.end()) && (it_read2hap->second != off_limit_id)){
+
+                		hap_hash_buf[it_name_hash_buf++] = it_read2hap->second;
+
+	                    if ((thread_seq_buf_sz - seq_buf_sz - 1) < (len_read - pos_read)){
+
+	                        strncpy(&seq_buf[seq_buf_sz], &s_str[pos_read], thread_seq_buf_sz - seq_buf_sz - 1);
+
+	                        seq_buf[thread_seq_buf_sz - 1] = '\0';
+
+	                        pos_read += sz_seq_buf - seq_buf_sz;
+	                        seq_buf_sz = thread_seq_buf_sz;
+
+	                        break;
+	                    }
+	                    else {
+
+	                        strcpy(&seq_buf[seq_buf_sz], &s_str[pos_read]);
+
+	                        seq_buf_sz += (len_read - pos_read) + 1;
+	                        pos_read = len_read;
+	                    }
+                	}
+                	else pos_read = len_read;
+                }
+                else pos_read = len_read;
+            }
+            else return true;
+        }
+
+        return false;
+    };
+
+    auto worker_function1 = [&](char* seq_buf, const size_t seq_buf_sz, const uint64_t* hap_buf) {
+
+    	uint64_t it_min_h;
+
+	    RepHash rep;
+
+	    size_t it_hap_buf = 0;
+
+        const char* str_end = seq_buf + seq_buf_sz;
+
+        while (seq_buf < str_end) { // for each input
+
+	        const int len = strlen(seq_buf);
+
+        	toUpperCase(seq_buf, len);
+
+            KmerHashIterator<RepHash> it_kmer_h(seq_buf, len, k), it_kmer_h_end;
+
+            for (; it_kmer_h != it_kmer_h_end; ++it_kmer_h) {
+
+                const std::pair<uint64_t, int> p_ = *it_kmer_h; // <k-mer hash, k-mer position in sequence>
+	            const UnitigMap<UnitigData> um = dbg.findUnitig(seq_buf, p_.second, len);
+
+	            if (!um.isEmpty) { // Read maps to a Unitig
+
+	            	const uint64_t h = um.getUnitigHead().hash();
+
+	            	UnitigData* ud = um.getData();
+
+	            	lck_g.lock_unitig(h);
+
+	            	ud->get_hapID().add(hap_buf[it_hap_buf]);
+
+	            	lck_g.unlock_unitig(h);
+
+	            	it_kmer_h += um.len - 1;
+	            }
+	        }
+
+            seq_buf += len + 1;
+            ++it_hap_buf;
+        }
+    };
+
+	auto loadPhasing = [&](const vector<string>& v_filenames_phase) {
+
+		const size_t sz_buffer = 16384;
+
+    	char buffer[sz_buffer];
+
+    	int buffer_occupancy = 0;
+
+    	if (opt.verbose) cout << "Ratatosk::addPhasing(): Associating " << (long_read_phasing ? "long" : "short") << " reads to their haploblocks" << endl;
+
+		for (const auto& filename : v_filenames_phase){
+
+            gzFile gfp = gzopen(filename.c_str(), "r");
+
+            if (gfp != Z_NULL) {
+
+            	int l_read = gzread(gfp, buffer, sz_buffer);
+
+	            while (l_read != 0){
+
+	            	const char* l_buffer = buffer;
+	            	const char* l_next_buffer = nullptr;
+
+	            	size_t l_buffer_occupancy = buffer_occupancy + l_read;
+
+	            	l_next_buffer = static_cast<const char*>(memchr(l_buffer, '\n', l_buffer_occupancy));
+
+	            	while (l_next_buffer != nullptr) {
+
+		            	if (l_buffer[0] != '#'){ // This is a comment or a header
+
+						    const char* haplotype_cstr = strchr(l_buffer, '\t');
+						    const char* haploblock_cstr = (haplotype_cstr == nullptr) ? nullptr : strchr(haplotype_cstr + 1, '\t');
+
+						    if (haploblock_cstr != nullptr) {
+
+						    	const string haplotype_str(haplotype_cstr + 1, haploblock_cstr - (haplotype_cstr + 1));
+						    	const string haploblock_str(haploblock_cstr + 1, l_next_buffer - (haploblock_cstr + 1));
+
+						    	if ((haploblock_str != "none") && (haplotype_str != "none")) {
+
+							    	const pair<unordered_map<string, uint64_t, CustomHashString>::const_iterator, bool> p_block = hap_r.block2id.insert({haploblock_str, hap_r.block_id});
+							    	const pair<unordered_map<string, uint64_t, CustomHashString>::const_iterator, bool> p_type = hap_r.type2id.insert({haplotype_str, hap_r.type_id});
+
+							    	const uint64_t hap_block_type = (p_block.first->second << 1) + p_type.first->second;
+							    	const uint64_t h_record = XXH64(l_buffer, haplotype_cstr - l_buffer, opt.h_seed);
+
+							    	hap_r.block_id += static_cast<size_t>(p_block.second);
+							    	hap_r.type_id += static_cast<size_t>(p_type.second);
+
+					        		pair<unordered_map<uint64_t, uint64_t, CustomHashUint64_t>::iterator, bool> p_read2hap = hap_r.read2hap.insert({h_record, hap_block_type});
+
+					        		// Insertion did not take place:
+					        		// - Long read phasing: ID collision -> Set read ID to unphased
+					        		// - Short read phasing: Collision is due to mates from same pair. If Haploblock is incompatible, set read ID to unphased
+					        		if (!p_read2hap.second && (long_read_phasing || (!long_read_phasing && (p_read2hap.first->second != hap_block_type)))) p_read2hap.first->second = off_limit_id;
+				        		}
+						    }
+							else cerr << "Ratatosk::addPhasing(): Malformed phasing record. Record is discarded." << endl;
+						}
+
+						l_buffer_occupancy -= (l_next_buffer - l_buffer) + 1;
+						l_buffer = l_next_buffer + 1;
+						l_next_buffer = static_cast<const char*>(memchr(l_buffer, '\n', l_buffer_occupancy));
+					}
+
+					if (l_buffer_occupancy != 0) memmove(buffer, l_buffer, l_buffer_occupancy);
+					
+					buffer_occupancy = l_buffer_occupancy;
+					l_read = gzread(gfp, (buffer + buffer_occupancy), (sz_buffer - buffer_occupancy));
+	            }
+
+	            gzclose(gfp);
+        	}
+        	else cerr << "Ratatosk::addPhasing(): Could not open file " << filename << " for phasing. File is discarded." << endl;
+    	}
+
+    	if (opt.verbose) cout << "Ratatosk::addPhasing(): " << hap_r.read2hap.size() << " phased reads added." << endl;
+    	if (opt.verbose) cout << "Ratatosk::addPhasing(): " << hap_r.block2id.size() << " haploblocks with " << hap_r.type2id.size() << " haplotypes compacted." << endl;
+	};
+
+    auto runHapMapping = [&](const vector<string>& filenames) {
+
+    	if (opt.verbose) cout << "Ratatosk::addPhasing(): Associating haploblocks to unitigs." << endl;
+
+        char** buffer_seq = new char*[opt.nb_threads];
+        size_t* buffer_seq_sz = new size_t[opt.nb_threads];
+        uint64_t** buffer_name = new uint64_t*[opt.nb_threads];
+
+        FileParser fp(filenames);
+
+	    len_read = 0;
+	    pos_read = 0;
+
+	    if (opt.nb_threads == 1){
+
+        	buffer_seq[0] = new char[thread_seq_buf_sz];
+        	buffer_name[0] = new uint64_t[thread_name_buf_sz];
+
+            while (!reading_function1(fp, buffer_seq[0], buffer_seq_sz[0], buffer_name[0])) worker_function1(buffer_seq[0], buffer_seq_sz[0], buffer_name[0]);
+	    }
+	    else {
+
+        	bool stop = false;
+
+	        vector<thread> workers; // need to keep track of threads so we can join them
+
+	        mutex mutex_file;
+
+	        for (size_t t = 0; t < opt.nb_threads; ++t){
+
+	        	buffer_seq[t] = new char[thread_seq_buf_sz];
+	        	buffer_name[t] = new uint64_t[thread_name_buf_sz];
+
+	            workers.emplace_back(
+
+	                [&, t]{
+
+	                    while (true) {
+
+	                        {
+	                            unique_lock<mutex> lock(mutex_file);
+
+	                            if (stop) return;
+
+	                            stop = reading_function1(fp, buffer_seq[t], buffer_seq_sz[t], buffer_name[t]);
+	                        }
+
+	                        worker_function1(buffer_seq[t], buffer_seq_sz[t], buffer_name[t]);
+	                    }
+	                }
+	            );
+	        }
+
+	        for (auto& t : workers) t.join();
+    	}
+
+    	for (auto& um : dbg) um.getData()->get_hapID().runOptimize();
+
+        for (size_t t = 0; t < opt.nb_threads; ++t){
+
+        	delete[] buffer_seq[t];
+        	delete[] buffer_name[t];
+        }
+
+        delete[] buffer_seq;
+        delete[] buffer_name;
+        delete[] buffer_seq_sz;
+
+        fp.close();
+	};
+
+	if (!v_phase_filenames.empty() && !v_read_filenames.empty()){
+
+		loadPhasing(v_phase_filenames);
+
+		if (mapHapReads) runHapMapping(v_read_filenames);
+	}
 }
 
 void expandConnectedComponent(CompactedDBG<UnitigData>& dbg, const size_t id_mapped, const size_t id_visited) { 
@@ -1765,8 +2123,6 @@ pair<BlockedBloomFilter, size_t> buildBFF(const vector<string>& v_filenames_in, 
 	    kms_opt.g = g;
 	    kms_opt.q = 0;
 
-	    //if (long_reads) kms_opt.e /= 10;
-
 	    KmerStream kms(kms_opt);
 
 	    nb_unique_kmers = max(1UL, kms.KmerF0());
@@ -1790,18 +2146,16 @@ pair<BlockedBloomFilter, size_t> buildBFF(const vector<string>& v_filenames_in, 
     // Main worker thread
     auto worker_function = [&](char* seq_buf, const size_t seq_buf_sz) {
 
-        char* str = seq_buf;
-
         const char* str_end = seq_buf + seq_buf_sz;
 
-        while (str < str_end) { // for each input
+        while (seq_buf < str_end) { // for each input
 
-            const int len = strlen(str);
+            const int len = strlen(seq_buf);
 
-            for (char* s = str; s != str + len; ++s) *s &= 0xDF; // Put characters in upper case
+            toUpperCase(seq_buf, len);
 
-            KmerHashIterator<RepHash> it_kmer_h(str, len, k), it_kmer_h_end;
-        	minHashIterator<RepHash> it_min(str, len, k, g, RepHash(), true);
+            KmerHashIterator<RepHash> it_kmer_h(seq_buf, len, k), it_kmer_h_end;
+        	minHashIterator<RepHash> it_min(seq_buf, len, k, g, RepHash(), true);
 
             for (; it_kmer_h != it_kmer_h_end; ++it_kmer_h) {
 
@@ -1814,7 +2168,7 @@ pair<BlockedBloomFilter, size_t> buildBFF(const vector<string>& v_filenames_in, 
                 if (!bf_uniq.insert(p_.first, min_hr, multi_threaded)) bf_non_uniq.insert(p_.first, min_hr, multi_threaded);
             }
 
-            str += len + 1;
+            seq_buf += len + 1;
         }
     };
 
@@ -1938,7 +2292,7 @@ string retrieveMissingReads(const Correct_Opt& opt){
 
     if (opt.verbose) cout << "Ratatosk::retrieveMissingReads(): Adding coverage to long read graph" << endl;
 
-    addCoverage(dbg_lr, opt_pass_lr, true, false);
+    addCoverage(dbg_lr, opt_pass_lr, unordered_map<uint64_t, uint64_t, CustomHashUint64_t>(), true, false);
 
     size_t min_cov_vertices = opt.min_cov_vertices;
     size_t nb_km_lr = dbg_lr.nbKmers();
@@ -2090,7 +2444,7 @@ string retrieveMissingReads(const Correct_Opt& opt){
 	            size_t nb_km = 0;
 	            size_t remaining_len_km = len_km;
 
-	            for (char* s = seq_buf; s != seq_buf + len; ++s) *s &= 0xDF; // Put characters in upper case
+	            toUpperCase(seq_buf, len); // Put characters in upper case
 
 	            KmerHashIterator<RepHash> it_kmer_h(seq_buf, len, k), it_kmer_h_end;
 	        	minHashIterator<RepHash> it_min(seq_buf, len, k, g, RepHash(), true);

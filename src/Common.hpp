@@ -8,7 +8,7 @@
 #include "PairID.hpp"
 #include "TinyBloomFilter.hpp"
 
-#define RATATOSK_VERSION "0.2.3"
+#define RATATOSK_VERSION "0.3.0"
 
 struct Correct_Opt : CDBG_Build_opt {
 
@@ -16,6 +16,9 @@ struct Correct_Opt : CDBG_Build_opt {
 	vector<string> filenames_helper_long_in;
 
 	vector<string> filenames_short_all;
+
+	vector<string> filenames_long_phase;
+	vector<string> filenames_short_phase;
 
 	string filename_long_out;
 
@@ -34,19 +37,21 @@ struct Correct_Opt : CDBG_Build_opt {
     size_t min_nb_km_unmapped;
 
     size_t nb_partitions;
+    size_t min_bases_partition;
 
     size_t max_len_weak_region1;
     size_t max_len_weak_region2;
 
     size_t buffer_sz;
+    size_t h_seed;
 
     double weak_region_len_factor;
     double large_k_factor;
 
 	Correct_Opt() : out_qual(0), trim_qual(0), min_qv(6), small_k(31), insert_sz(500),
-					nb_partitions(1000), buffer_sz(1048576), min_cov_vertices(2),
+					nb_partitions(1000), min_bases_partition(100000), buffer_sz(1048576), min_cov_vertices(2),
 					min_nb_km_unmapped(31), min_cov_edges(2), max_cov_vertices(512),
-					weak_region_len_factor(1.25), large_k_factor(1.5),
+					weak_region_len_factor(1.25), large_k_factor(1.5), h_seed(0),
 					max_len_weak_region1(1000), max_len_weak_region2(10000) {
 
 						k = 63;
@@ -55,6 +60,48 @@ struct Correct_Opt : CDBG_Build_opt {
 						deleteIsolated = true;
 						useMercyKmers = false;
 					}
+};
+
+struct CustomHashUint64_t {
+
+    size_t operator()(const uint64_t v) const {
+
+        return XXH64(&v, sizeof(uint64_t), 0);
+    }
+};
+
+struct CustomHashString {
+
+    size_t operator()(const string& s) const {
+
+        return XXH64(s.c_str(), s.length(), 0);
+    }
+};
+
+struct HapReads {
+
+	unordered_map<uint64_t, uint64_t, CustomHashUint64_t> read2hap;
+
+	unordered_map<string, uint64_t, CustomHashString> block2id;
+	unordered_map<string, uint64_t, CustomHashString> type2id;
+
+    size_t block_id;
+    size_t type_id;
+
+    HapReads() {
+
+    	clear();
+    }
+
+    void clear() {
+
+    	read2hap.clear();
+    	block2id.clear();
+    	type2id.clear();
+
+    	block_id = 0;
+    	type_id = 0;
+    }
 };
 
 // returns maximal entropy score for random sequences which is log2|A| where A is the alphabet
@@ -72,6 +119,11 @@ size_t getNumberSharedPairID(const TinyBloomFilter<uint32_t>& tbf_a, const PairI
 
 // This order of nucleotide in this array is important
 static const char ambiguity_c[16] = {'.', 'A', 'C', 'M', 'G', 'R', 'S', 'V', 'T', 'W', 'Y', 'H', 'K', 'D', 'B', 'N'};
+
+inline void toUpperCase(char* s, const size_t len) {
+
+	for (char* s_tmp = s; s_tmp < (s + len); ++s_tmp) *s_tmp &= 0xDF;
+}
 
 inline void copyFile(const string& dest, const vector<string>& src){
 

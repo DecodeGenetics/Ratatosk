@@ -5,7 +5,7 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
 																				const pair<size_t, const_UnitigMap<UnitigData>>& um_solid_start,
 																				const pair<size_t, const_UnitigMap<UnitigData>>& um_solid_end, 
 																				const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_um_weak, size_t i_weak,
-																				const size_t min_cov_vertex, const bool long_read_correct) {
+																				const size_t min_cov_vertex, const bool long_read_correct, const uint64_t hap_id) {
 
 	auto customSort = [](const pair<Path<UnitigData>, size_t>& p1, const pair<Path<UnitigData>, size_t>& p2){
 
@@ -24,6 +24,8 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
 
     const size_t max_len_weak_region = long_read_correct ? opt.max_len_weak_region2 : opt.max_len_weak_region1;
 	const size_t max_paths = 512;
+
+	const uint64_t undetermined_hap_id = 0xffffffffffffffffULL;
 
 	size_t next_weak_pos;
 
@@ -72,14 +74,14 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
 						if (no_end){
 
 		        			g_prev_path = explorePathsBFS(	opt, s.c_str() + p.second, l_len_weak_region, bf, r, (begin ? um_solid_start.second : p.first.back()),
-			        										min_cov_vertex, long_read_correct);
+			        										min_cov_vertex, long_read_correct, hap_id);
 		        		}
 		        		else {
 
 		        			const vector<pair<size_t, const_UnitigMap<UnitigData>>> v_end(1, um_solid_end);
 
 		        			g_prev_path = explorePathsBFS2(	opt, s.c_str() + p.second, l_len_weak_region, bf, r, (begin ? um_solid_start.second : p.first.back()), v_end,
-			        										min_cov_vertex, long_read_correct);
+			        										min_cov_vertex, long_read_correct, hap_id);
 		        		}
 	        		}
             	}
@@ -102,7 +104,7 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
 					if (!g_prev_path_ext.second && g_prev_path_ext.first.empty() && (l_len_weak_region <= max_len_weak_region)){
 
             			g_prev_path_ext = explorePathsBFS(	opt, s.c_str() + p.second, l_len_weak_region, bf, r, (begin ? um_solid_start.second : p.first.back()),
-            												min_cov_vertex, long_read_correct);
+            												min_cov_vertex, long_read_correct, hap_id);
             		}
 
 	            	if (g_prev_path_ext.second && !g_prev_path_ext.first.empty()){
@@ -141,7 +143,7 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
 	        		if (l_len_weak_region <= max_len_weak_region){
 
 	        			g_prev_path = explorePathsBFS2(	opt, s.c_str() + p.second, l_len_weak_region, bf, r, (begin ? um_solid_start.second : p.first.back()), v_um_weak_tmp,
-	            										min_cov_vertex, long_read_correct);
+	            										min_cov_vertex, long_read_correct, hap_id);
             		}
 	            }
 
@@ -163,7 +165,7 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
             		if (!g_prev_path_ext.second && g_prev_path_ext.first.empty() && (l_len_weak_region <= max_len_weak_region)){
 
             			g_prev_path_ext = explorePathsBFS(	opt, s.c_str() + p.second, l_len_weak_region, bf, r, (begin ? um_solid_start.second : p.first.back()),
-            												min_cov_vertex, long_read_correct);
+            												min_cov_vertex, long_read_correct, hap_id);
             		}
 
             		if (g_prev_path_ext.second && !g_prev_path_ext.first.empty()){
@@ -226,6 +228,8 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
 
 					const double score_kmer = 1.0 - (static_cast<double>(align.editDistance) / path_curr.length());
 
+					edlibFreeAlignResult(align);
+
 			    	PairID r_um = v_um[0].getData()->get_readID();
 
 			    	for (size_t j = 1; j < v_um.size(); ++j){
@@ -235,7 +239,9 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
 
 					const double score_read = static_cast<double>(getNumberSharedPairID(r, r_um)) / r.cardinality();
 
-					double score = (score_read * score_kmer) / ((score_read * score_kmer) + (1.0 - score_read) * (1.0 - score_kmer));
+					double score = score_read * score_kmer;
+
+					score /= score + ((1.0 - score_read) * (1.0 - score_kmer));
 
 					if (std::isnan(score)) score = 0.0;
 
@@ -246,8 +252,6 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
 					}
 
 					p_str_vum_prev = move(p_str_vum);
-
-					edlibFreeAlignResult(align);
 			    }
 			}
 
@@ -265,7 +269,7 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
 pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt,
 										const string& s_fw, const string& q_fw,
 										const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_um_solid, const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_um_weak,
-										const bool long_read_correct, const Roaring* all_partitions) {
+										const bool long_read_correct, const Roaring* all_partitions, const uint64_t hap_id) {
 
 	const bool out_qual = static_cast<bool>(opt.out_qual) || static_cast<bool>(opt.trim_qual);
 
@@ -391,6 +395,8 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 		const bool has_end_pt = ((i_s + 1) < v_s.size());
 		const double l_max_norm_edit_distance = (max_norm_edit_distance * 1.5);
 
+		const uint64_t undetermined_hap_id = 0xffffffffffffffffULL;
+
         pair<size_t, const_UnitigMap<UnitigData>> um_solid1 = v_s[i_s]; // Last hit on the leftmost solid region
         pair<size_t, const_UnitigMap<UnitigData>> um_solid2 = has_end_pt ? v_s[i_s + 1] : make_pair(s.length() - opt.k, const_UnitigMap<UnitigData>()); // First hit on the rightmost solid region
 
@@ -431,15 +437,6 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 			//q_corrected += q.substr(pos, len_weak_region);
 		};
 
-		if (rc != nullptr) {
-		
-			r_s = rc->getTargetPairID();
-			r_w = rc->getWeakPairID();
-			r_e = rc->getSourcePairID();
-		
-			min_cov_vertex = rc->getMinCovVertex();
-		}
-
 		//if (!q.empty() && (len_weak_region > opt.insert_sz)){ // Read has quality scores and region to correct is more than 500 bp long
 		//
 		//	pass_min_qual_score = false;
@@ -463,6 +460,10 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 
 			Roaring r_id_part_solid;
 			Roaring r_id_neighbors;
+
+			PairID uniq_hap_ids;
+
+			size_t cov_vertex = 0xffffffffffffffffULL;
 
 			if (rc == nullptr){
 				
@@ -540,144 +541,171 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 						for (const uint32_t id : pid) r_e.add(id);
 					}
 				}
-			}
-			else r_id_neighbors = rc->getPartitions();
 
-			if (!v_w.empty()) {
-				
-				const size_t start_bound = um_solid1.first + opt.insert_sz;
-				const size_t end_bound = (um_solid2.first <= opt.insert_sz) ? 0 : (um_solid2.first - opt.insert_sz);
+				if (!v_w.empty()) {
+					
+					const size_t start_bound = um_solid1.first + opt.insert_sz;
+					const size_t end_bound = (um_solid2.first <= opt.insert_sz) ? 0 : (um_solid2.first - opt.insert_sz);
 
-				size_t i_w_s = 0;
-				size_t i_w_e = i_w - static_cast<size_t>(i_w >= v_w.size());
+					size_t i_w_s = 0;
+					size_t i_w_e = i_w - static_cast<size_t>(i_w >= v_w.size());
 
-				vector<pair<size_t, const_UnitigMap<UnitigData>>>::const_iterator it_front, it_back;
+					vector<pair<size_t, const_UnitigMap<UnitigData>>>::const_iterator it_front, it_back;
 
-				// Establish boundaries of semi-solid k-mers we want to use
-				while ((i_w_e > 0) && (v_w[i_w_e].first > min_start)) --i_w_e;
+					// Establish boundaries of semi-solid k-mers we want to use
+					while ((i_w_e > 0) && (v_w[i_w_e].first > min_start)) --i_w_e;
 
-				i_w_e += static_cast<size_t>(((i_w_e < v_w.size()) && (v_w[i_w_e].first < min_start)));
-				i_w_s = i_w_e;
+					i_w_e += static_cast<size_t>(((i_w_e < v_w.size()) && (v_w[i_w_e].first < min_start)));
+					i_w_s = i_w_e;
 
-				while ((i_w_e < v_w.size()) && (v_w[i_w_e].first < min_end)) ++i_w_e;
+					while ((i_w_e < v_w.size()) && (v_w[i_w_e].first < min_end)) ++i_w_e;
 
-				it_front = v_w.begin() + i_w_s;
-				it_back = v_w.begin() + i_w_e;
+					it_front = v_w.begin() + i_w_s;
+					it_back = v_w.begin() + i_w_e;
 
-				if (all_partitions != nullptr){
+					if (all_partitions != nullptr){
 
-					if (r_id_neighbors.cardinality() == 0){
+						if (r_id_neighbors.cardinality() == 0){
 
-						// Add partitions from unique semi-solid k-mers to to list of solid partitions
-						while ((i_w_s < v_w.size()) && (v_w[i_w_s].first < min_end)){
+							// Add partitions from unique semi-solid k-mers to to list of solid partitions
+							while ((i_w_s < v_w.size()) && (v_w[i_w_s].first < min_end)){
 
-					    	if (hasUniquePosition(v_w, i_w_s)) r_id_part_solid.add(v_w[i_w_s].second.getData()->getConnectedComp());
+						    	if (hasUniquePosition(v_w, i_w_s)) r_id_part_solid.add(v_w[i_w_s].second.getData()->getConnectedComp());
 
-							++i_w_s;
+								++i_w_s;
+							}
+
+							// Get all partitions neighboring solid partitions
+							for (const uint32_t id_part_s_solid : r_id_part_solid){
+							
+								for (const uint32_t id_part_neighbor : all_partitions[id_part_s_solid]) r_id_neighbors.add(id_part_neighbor);
+							}
 						}
 
-						// Get all partitions neighboring solid partitions
-						for (const uint32_t id_part_s_solid : r_id_part_solid){
-						
-							for (const uint32_t id_part_neighbor : all_partitions[id_part_s_solid]) r_id_neighbors.add(id_part_neighbor);
+						// Keep only semi-solid k-mers from list of neighboring or solid partitions
+						for (; it_front != it_back; ++it_front){
+
+							if ((it_front->first <= start_bound) || (it_front->first >= end_bound)){ // Semi solid k-mer is within range of partition radius
+
+								if (r_id_neighbors.contains(it_front->second.getData()->getConnectedComp())) l_v_w.push_back(*it_front); // Semi solid k-mer is a neighbor
+							}
+							else l_v_w.push_back(*it_front);
 						}
 					}
+					else {
 
-					// Keep only semi-solid k-mers from list of neighboring or solid partitions
-					for (; it_front != it_back; ++it_front){
+						// Keep only semi-solid k-mers from list of neighboring or solid partitions
+						for (; it_front != it_back; ++it_front) l_v_w.push_back(*it_front);
+					}
 
-						if ((it_front->first <= start_bound) || (it_front->first >= end_bound)){ // Semi solid k-mer is within range of partition radius
 
-							if (r_id_neighbors.contains(it_front->second.getData()->getConnectedComp())) l_v_w.push_back(*it_front); // Semi solid k-mer is a neighbor
+					if (!l_v_w.empty()){ // Filter semi-solid k-mers
+
+						vector<pair<size_t, const_UnitigMap<UnitigData>>> l_v_w_tmp;
+
+						if (hap_id != undetermined_hap_id){ // Remove semi-solid k-mers that don't match the haploblock
+
+							const uint64_t rev_hap_id = static_cast<bool>(hap_id & 0x1ULL) ? (hap_id - 1) : (hap_id + 1);
+
+							for (auto& um_semi_solid : l_v_w){
+
+								const PairID& p_hapID = um_semi_solid.second.getData()->get_hapID();
+
+								if (p_hapID.isEmpty() || p_hapID.contains(hap_id) || !p_hapID.contains(rev_hap_id)) l_v_w_tmp.push_back(move(um_semi_solid));
+							}
+
+							l_v_w = move(l_v_w_tmp);
 						}
-						else l_v_w.push_back(*it_front);
+
+						// Remove all positions having 2+ semi solid k-mers
+						{
+							const size_t l_v_w_sz = l_v_w.size();
+
+							for (int64_t i = 0; i < l_v_w_sz; ++i){
+
+								if ((i != 0) && (l_v_w[i].first == l_v_w[i-1].first)) l_v_w[i].second.isEmpty = true;
+								else if ((i != l_v_w_sz-1) && (l_v_w[i].first == l_v_w[i+1].first)) l_v_w[i].second.isEmpty = true;
+							}
+
+							for (auto& p : l_v_w){
+
+								if (!p.second.isEmpty) l_v_w_tmp.push_back(move(p));
+							}
+
+							l_v_w = move(l_v_w_tmp);
+						}
 					}
 				}
-				else {
 
-					// Keep only semi-solid k-mers from list of neighboring or solid partitions
-					for (; it_front != it_back; ++it_front) l_v_w.push_back(*it_front);
-				}
+				if (r_w.isEmpty() && !l_v_w.empty()) {
 
-				if (!l_v_w.empty()){ // Remove all positions having 2+ semi solid k-mers
+					unordered_set<const PairID*> s_rw;
 
-					vector<pair<size_t, const_UnitigMap<UnitigData>>> l_v_w_tmp;
+					for (const auto& p : l_v_w){
 
-					const size_t l_v_w_sz = l_v_w.size();
+				    	const PairID* pid_ptr = &(p.second.getData()->get_readID());
 
-					for (int64_t i = 0; i < l_v_w_sz; ++i){
-
-						if ((i != 0) && (l_v_w[i].first == l_v_w[i-1].first)) l_v_w[i].second.isEmpty = true;
-						else if ((i != l_v_w_sz-1) && (l_v_w[i].first == l_v_w[i+1].first)) l_v_w[i].second.isEmpty = true;
+				    	if (s_rw.insert(pid_ptr).second) min_cov_vertex = min(pid_ptr->cardinality() - 1, min_cov_vertex);
 					}
 
-					for (auto& p : l_v_w){
+					if (!s_rw.empty()){
 
-						if (!p.second.isEmpty) l_v_w_tmp.push_back(move(p));
-					}
+						for (const PairID* pid_ptr : s_rw){
 
-					l_v_w = move(l_v_w_tmp);
-				}
-			}
+							const PairID& pid = *pid_ptr;
 
-			if ((rc == nullptr) && r_w.isEmpty() && !l_v_w.empty()) {
-
-				unordered_set<const PairID*> s_rw;
-
-				for (const auto& p : l_v_w){
-
-			    	const PairID* pid_ptr = &(p.second.getData()->get_readID());
-
-			    	if (s_rw.insert(pid_ptr).second) min_cov_vertex = min(pid_ptr->cardinality() - 1, min_cov_vertex);
-				}
-
-				if (!s_rw.empty()){
-
-					for (const PairID* pid_ptr : s_rw){
-
-						const PairID& pid = *pid_ptr;
-
-						for (const uint32_t id : pid) r_w.add(id);
+							for (const uint32_t id : pid) r_w.add(id);
+						}
 					}
 				}
-			}
 
-			if (rc == nullptr){
+				if (long_read_correct || (min_cov_vertex == 0xffffffffffffffffULL)) cov_vertex = opt.min_cov_vertices;
+				else cov_vertex = max(static_cast<size_t>((min_cov_vertex + 1) * 0.1), opt.min_cov_vertices);
+
+				{
+					PairID r;
+
+					if (has_end_pt){
+
+						if (r_w.isEmpty()) r = r_s & r_e;
+						else if (long_read_correct) r = r_s & r_w & r_e;
+						else r = (r_s & r_w) | (r_w & r_e);
+					}
+					else if (!r_w.isEmpty()) r = r_s & r_w;
+
+					if (r.cardinality() >= cov_vertex) r_s = move(r);
+					else {
+
+						r_s |= r_w;
+						r_s |= r_e;
+					}
+
+					r_w.clear();
+					r_e.clear();
+				}
 
 				res_corrected.setSourcePairID(r_s);
 				res_corrected.setWeakPairID(r_w);
 				res_corrected.setTargetPairID(r_e);
 				res_corrected.setPartitions(r_id_neighbors);
-				res_corrected.setMinCovVertex(min_cov_vertex);
+				res_corrected.setCovVertex(cov_vertex);
 			}
-
-			const size_t cov_vertex = (long_read_correct || (min_cov_vertex == 0xffffffffffffffffULL)) ? opt.min_cov_vertices : max(static_cast<size_t>((min_cov_vertex + 1) * 0.1), opt.min_cov_vertices);
-
-			PairID r;
-
-			if (has_end_pt){
-
-				if (r_w.isEmpty()) r = r_s & r_e;
-				else if (long_read_correct) r = r_s & r_w & r_e;
-				else r = (r_s & r_w) | (r_w & r_e);
-			}
-			else if (!r_w.isEmpty()) r = r_s & r_w;
-
-			if (r.cardinality() >= cov_vertex) r_s = move(r);
 			else {
 
-				r_s |= r_w;
-				r_s |= r_e;
-			}
+				r_s = rc->getTargetPairID();
+				r_w = rc->getWeakPairID();
+				r_e = rc->getSourcePairID();
 
-			r_w.clear();
-			r_e.clear();
+				r_id_neighbors = rc->getPartitions();
+			
+				cov_vertex = rc->getCovVertex();
+			}
 
 			TinyBloomFilter<uint32_t> bf_s(r_s.cardinality(), 14);
 
 			for (const uint32_t id : r_s) bf_s.insert(id);
 
-	    	pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> paths1 = extractSemiWeakPaths(opt, s, bf_s, r_s, um_solid1, um_solid2, l_v_w, 0, cov_vertex, long_read_correct);
+	    	pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> paths1 = extractSemiWeakPaths(opt, s, bf_s, r_s, um_solid1, um_solid2, l_v_w, 0, cov_vertex, long_read_correct, hap_id);
 
 	    	if (paths1.first.empty()){
 
@@ -742,7 +770,7 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 	            	um_solid1 = l_v_w[best_id];
 	            	len_weak_region = um_solid2.first - um_solid1.first + opt.k;
 
-	            	paths1 = extractSemiWeakPaths(opt, s, bf_s, r_s, um_solid1, um_solid2, l_v_w, i_w_e, cov_vertex, long_read_correct);
+	            	paths1 = extractSemiWeakPaths(opt, s, bf_s, r_s, um_solid1, um_solid2, l_v_w, i_w_e, cov_vertex, long_read_correct, hap_id);
 	    		}
 
 	        	if (!paths1.first.empty()){
@@ -825,7 +853,7 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 	    	}
     	}
 
-    	fixAmbiguity(dbg, s_corrected, q_corrected, s_start, q_start, res_corrected.getLengthOldSequence(), v_ambiguity, opt.min_qv, true);
+    	fixAmbiguity(dbg, s_corrected, q_corrected, s_start, q_start, res_corrected.getLengthOldSequence(), hap_id, v_ambiguity, opt.min_qv, true);
 
     	if (res_corrected.getNbCorrectedPosOldSeq() == res_corrected.getLengthOldSequence()){
 
