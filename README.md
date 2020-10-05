@@ -118,11 +118,20 @@ Usage: Ratatosk [PARAMETERS]
 
    > Optional with required argument:
 
-   -i, --insert_sz                 Insert size of the input short reads (default: 500)
-   -k, --k1                        Length of short k-mers for 1st pass correction (default: 31)
-   -K, --k2                        Length of long k-mers for 2nd pass correction (default: 63)
-   -w, --max_len_weak1             Do not correct weak regions >= w bases during 1st pass correction (default: 1000)
-   -W, --max_len_weak2             Do not correct weak regions >= w bases during 2nd pass correction (default: 10000)
+   -i, --insert-sz                 Insert size of the input paired-end short reads (default: 500)
+   -k, --k1                        Length of short k-mers for 1st pass (default: 31)
+   -K, --k2                        Length of long k-mers for 2nd pass (default: 63)
+   -w, --max-len-weak1             Do not correct weak regions >= w bases during 1st pass (default: 1000)
+   -W, --max-len-weak2             Do not correct weak regions >= w bases during 2nd pass (default: 10000)
+
+[EXPERIMENTAL PARAMETERS]:
+
+   > Optional with required argument:
+
+   -p, --in-short-phase            Input short read phasing file (diploid only)
+                                   List of input short read phasing files (one file per line)
+   -P, --in-long-phase             Input long read phasing file (diploid only)
+                                   List of input long read phasing files (one file per line)
 ```
 
 ### ***de novo*** correction
