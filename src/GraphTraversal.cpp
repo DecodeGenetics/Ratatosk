@@ -1,11 +1,12 @@
 #include "GraphTraversal.hpp"
 
 pair<vector<Path<UnitigData>>, bool> explorePathsBFS(	const Correct_Opt& opt, const char* ref, const size_t ref_len,
-														const TinyBloomFilter<uint32_t>& bf, const PairID& r,
-														const const_UnitigMap<UnitigData>& um_s,
-														const size_t min_cov_vertex, const bool long_read_correct, const uint64_t hap_id){
+														const WeightsPairID& w_pid, const const_UnitigMap<UnitigData>& um_s,
+														const bool long_read_correct, const uint64_t hap_id){
 
 	const uint64_t undetermined_hap_id = 0xffffffffffffffffULL;
+
+	vector<Path<UnitigData>> v, v_tmp;
 
 	auto resizeVector = [&](vector<Path<UnitigData>>& v) {
 
@@ -37,73 +38,53 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS(	const Correct_Opt& opt, co
 	    for (auto& p : v) q.push(move(p));
 	};
 
-	auto computeScore = [&](const Path<UnitigData>& p) {
+	auto explore = [&](const const_UnitigMap<UnitigData>& um, const Path<UnitigData>& path, const size_t level) -> vector<Path<UnitigData>> {
 
-		double score = 0.0;
+		vector<Path<UnitigData>> terminal_paths;
+		vector<Path<UnitigData>> non_terminal_paths;
 
-		if (p.length() != 0){
+		size_t end_pos_ref = 0;
 
-			const Path<UnitigData>::PathOut p_str_vum = p.toStringVector();
-			const string& path_curr = p_str_vum.toString();
-	    	const vector<const_UnitigMap<UnitigData>>& v_um = p_str_vum.toVector();
+		if ((path.length() > (um.len + opt.k - 1)) && !um.isEmpty){
 
-			EdlibAlignConfig config(edlibNewAlignConfig(-1, EDLIB_MODE_HW, EDLIB_TASK_DISTANCE, NULL, 0));
-			EdlibAlignResult align = edlibAlign(path_curr.c_str(), path_curr.length(), ref, ref_len, config);
+			EdlibAlignConfig config = edlibNewAlignConfig(-1, EDLIB_MODE_SHW, EDLIB_TASK_DISTANCE, NULL, 0);
+			EdlibAlignResult align = edlibAlign(path.toString().c_str(), path.length() - um.len - opt.k + 1, ref, ref_len, config);
 
-	    	PairID r_um = v_um[0].getData()->get_readID();
-
-	    	for (size_t j = 1; j < v_um.size(); ++j){
-
-	    		if (!v_um[j].isSameReferenceUnitig(v_um[j-1])) r_um |= v_um[j].getData()->get_readID();
-	    	}
-
-			const double score_kmer = 1.0 - (static_cast<double>(align.editDistance) / path_curr.length());
-			const double score_read = static_cast<double>(getNumberSharedPairID(r, r_um)) / r.cardinality();
+			end_pos_ref = align.endLocations[0] + 1;
 
 			edlibFreeAlignResult(align);
-
-			score = score_read * score_kmer;
-			score /= score + ((1.0 - score_read) * (1.0 - score_kmer));
 		}
 
-		return (std::isnan(score) ? 0.0 : score);
+		if ((ref_len - end_pos_ref) != 0){
+
+			pair<double, double> scores;
+
+			if (long_read_correct) scores = exploreSubGraphLong(opt, w_pid, ref + end_pos_ref, ref_len - end_pos_ref, um, const_UnitigMap<UnitigData>(), terminal_paths, non_terminal_paths, hap_id);
+			else scores = exploreSubGraph(opt, w_pid, ref + end_pos_ref, ref_len - end_pos_ref, um, const_UnitigMap<UnitigData>(), level - 1, terminal_paths, non_terminal_paths, hap_id);
+
+			if (non_terminal_paths.size() > 1) {
+
+				if (scores.second != 0.0) non_terminal_paths = selectMostContiguous(non_terminal_paths, w_pid);
+				else {
+
+					non_terminal_paths = selectMostContiguous(non_terminal_paths, opt.min_cov_vertices, hap_id);
+
+					if (!non_terminal_paths.empty()) non_terminal_paths = vector<Path<UnitigData>>(1, non_terminal_paths[selectBestSubstringAlignment(ref + end_pos_ref, ref_len - end_pos_ref, non_terminal_paths).first]);
+				}
+			}
+		}
+
+		return non_terminal_paths;
 	};
-
-	auto explore = [&](const const_UnitigMap<UnitigData>& um, const size_t level) -> vector<Path<UnitigData>> {
-
-		vector<Path<UnitigData>> best_successors;
-		vector<Path<UnitigData>> over_represented;
-
-		double best_score = 0;
-
-		if (long_read_correct){
-
-			exploreSubGraphLong(opt, bf, r, ref, ref_len, um, const_UnitigMap<UnitigData>(), Path<UnitigData>(), um.getData()->get_readID(),
-								min_cov_vertex, best_score, best_successors, over_represented, hap_id);
-		}
-		else {
-
-			exploreSubGraph(opt, bf, r, ref, ref_len, um, const_UnitigMap<UnitigData>(), Path<UnitigData>(), um.getData()->get_readID(),
-							level - 1, min_cov_vertex, best_score, best_successors, over_represented, hap_id);
-		}
-
-		if (!best_successors.empty()) best_successors = vector<Path<UnitigData>>(1, best_successors[selectBestSubstringAlignment(ref, ref_len, best_successors).first]);
-
-		return best_successors;
-	};
-
-	vector<Path<UnitigData>> v, v_tmp;
 
 	if (!um_s.isEmpty){
 
-		const size_t level = 3;
+		const size_t level = 4;
 
 		const double seq_entropy = getEntropy(ref, ref_len);
 
-		const bool out_qual = static_cast<bool>(opt.out_qual) || static_cast<bool>(opt.trim_qual);
-
-		const size_t max_len_path = max((ref_len - opt.k) * opt.weak_region_len_factor, 1.0) + opt.k;
-		const size_t min_len_path = max((ref_len - opt.k) / opt.weak_region_len_factor, 1.0) + opt.k;
+		const size_t min_len_path = getMinMaxLength(ref_len - opt.k, opt.weak_region_len_factor).first + opt.k;
+		const size_t max_len_path = getMinMaxLength(ref_len - opt.k, opt.weak_region_len_factor).second + opt.k;
 
 		const size_t max_len_subpath = opt.k * opt.large_k_factor;
 
@@ -144,16 +125,12 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS(	const Correct_Opt& opt, co
 			    back.len = max_len_path - opt.k + 1;
 			}
 
-		    if (out_qual) p_tmp.extend(back, 1.0);
-		    else p_tmp.extend(back);
-
+		    p_tmp.extend(back, 1.0);
     		v.push_back(p_tmp);
     		p_tmp.clear();
 		}
 
-	    if (out_qual) p_tmp.extend(um_start_tmp, 1.0);
-	    else p_tmp.extend(um_start_tmp);
-
+	    p_tmp.extend(um_start_tmp, 1.0);
 	    q.push(move(p_tmp));
 
 	    while (v.empty()){
@@ -171,63 +148,36 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS(	const Correct_Opt& opt, co
 
 		        	if (p.size() < max_branches){
 
-						const Kmer head = um.strand ? um.getUnitigHead() : um.getUnitigHead().twin();
-		        		const KmerHashTable<vector<Path<UnitigData>>>::const_iterator it_km_h = km_h.find(head);
-
-		        		vector<Path<UnitigData>> exploreFW;
-
-		        		if (it_km_h == km_h.end()){
-
-		        			exploreFW = explore(um, level);
-		        			km_h.insert(head, exploreFW);
-		        		}
-		        		else exploreFW = *it_km_h;
+		        		const vector<Path<UnitigData>> exploreFW = explore(um, p, level);
 
 		        		bool extended = false;
 
 			        	for (const auto& path : exploreFW){
 
-			        		Path<UnitigData> p_tmp(p);
+			        		Path<UnitigData> p_ext(p);
 
 			        		const vector<const_UnitigMap<UnitigData>> v_path = path.toVector();
+			        		const vector<char> v_qual = path.toQualityVector();
 
-			        		if (out_qual){
+			        		for (size_t i = 0; i < v_path.size(); ++i){
 
-				        		const vector<char> v_qual = path.toQualityVector();
+			        			p_ext.extend(v_path[i], getScore(v_qual[i]));
 
-				        		for (size_t i = 0; i < v_path.size(); ++i){
+			        			if ((p_ext.length() >= min_len_path) && (p_ext.length() <= max_len_path)){
 
-				        			p_tmp.extend(v_path[i], getScore(v_qual[i]));
-
-				        			if ((p_tmp.length() >= min_len_path) && (p_tmp.length() <= max_len_path)){
-
-				        				v_tmp.push_back(p_tmp);
-				        				extended = true;
-				        			}
-				        		}
-			        		}
-			        		else {
-
-				        		for (size_t i = 0; i < v_path.size(); ++i){
-
-				        			p_tmp.extend(v_path[i]);
-
-				        			if ((p_tmp.length() >= min_len_path) && (p_tmp.length() <= max_len_path)){
-
-				        				v_tmp.push_back(p_tmp);
-				        				extended = true;
-				        			}
-				        		}
+			        				v_tmp.push_back(p_ext);
+			        				extended = true;
+			        			}
 			        		}
 
 			        		if ((!long_read_correct && (path.size() == level)) || (long_read_correct && (path.length() >= max_len_subpath))){
 
-				        		q.push(move(p_tmp));
+				        		q.push(move(p_ext));
 				        		extended = true;
 				        	}
 		        		}
 
-		        		if (!extended && (p.length() <= max_len_path) && (computeScore(p) >= 0.25)) v_tmp.push_back(p);
+		        		if (!extended && (p.length() <= max_len_path)) v_tmp.push_back(p);
 
 		        		if (v_tmp.size() >= max_paths){
 
@@ -294,9 +244,8 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS(	const Correct_Opt& opt, co
 }
 
 pair<vector<Path<UnitigData>>, bool> explorePathsBFS2(	const Correct_Opt& opt, const char* ref, const size_t ref_len,
-														const TinyBloomFilter<uint32_t>& bf, const PairID& r,
-														const const_UnitigMap<UnitigData>& um_s, const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_um_e,
-														const size_t min_cov_vertex, const bool long_read_correct, const uint64_t hap_id){
+														const WeightsPairID& w_pid, const const_UnitigMap<UnitigData>& um_s, const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_um_e,
+														const bool long_read_correct, const uint64_t hap_id){
 
 	KmerHashTable<const_UnitigMap<UnitigData>> um_h;
 
@@ -335,45 +284,58 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS2(	const Correct_Opt& opt, c
 	    for (auto& p : v) q.push(move(p));
 	};
 
-	auto explore = [&](const const_UnitigMap<UnitigData>& um, const size_t level) -> pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> {
+	auto explore = [&](const const_UnitigMap<UnitigData>& um, const Path<UnitigData>& path, const size_t level) -> pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> {
 
-		vector<Path<UnitigData>> best_successors;
-		vector<Path<UnitigData>> over_represented;
+		vector<Path<UnitigData>> terminal_paths;
+		vector<Path<UnitigData>> non_terminal_paths;
 
-		double best_score = 0;
+		size_t end_pos_ref = 0;
 
-		if (long_read_correct){
+		if ((path.length() > (um.len + opt.k - 1)) && !um.isEmpty){
 
-			exploreSubGraphLong(opt, bf, r, ref, ref_len, um, um_h, Path<UnitigData>(), um.getData()->get_readID(),
-								min_cov_vertex, best_score, best_successors, over_represented, hap_id);
+			EdlibAlignConfig config = edlibNewAlignConfig(-1, EDLIB_MODE_SHW, EDLIB_TASK_DISTANCE, NULL, 0);
+			EdlibAlignResult align = edlibAlign(path.toString().c_str(), path.length() - um.len - opt.k + 1, ref, ref_len, config);
+
+			end_pos_ref = align.endLocations[0] + 1;
+
+			edlibFreeAlignResult(align);
 		}
-		else {
 
-			exploreSubGraph(opt, bf, r, ref, ref_len, um, um_h, Path<UnitigData>(), um.getData()->get_readID(),
-							level - 1, min_cov_vertex, best_score, best_successors, over_represented, hap_id);
+		if ((ref_len - end_pos_ref) != 0) {
+
+			pair<double, double> scores;
+
+			if (long_read_correct) scores = exploreSubGraphLong(opt, w_pid, ref + end_pos_ref, ref_len - end_pos_ref, um, um_h, terminal_paths, non_terminal_paths, hap_id);
+			else scores = exploreSubGraph(opt, w_pid, ref + end_pos_ref, ref_len - end_pos_ref, um, um_h, level - 1, terminal_paths, non_terminal_paths, hap_id);
+
+			if (non_terminal_paths.size() > 1) {
+
+				if (scores.second != 0.0) non_terminal_paths = selectMostContiguous(non_terminal_paths, w_pid);
+				else {
+
+					non_terminal_paths = selectMostContiguous(non_terminal_paths, opt.min_cov_vertices, hap_id);
+					
+					if (!non_terminal_paths.empty()) non_terminal_paths = vector<Path<UnitigData>>(1, non_terminal_paths[selectBestSubstringAlignment(ref + end_pos_ref, ref_len - end_pos_ref, non_terminal_paths).first]);
+				}
+			}
 		}
 
-		if (!best_successors.empty()) best_successors = vector<Path<UnitigData>>(1, best_successors[selectBestSubstringAlignment(ref, ref_len, best_successors).first]);
-
-    	return {over_represented, best_successors};
+    	return {terminal_paths, non_terminal_paths};
 	};
 
 	vector<Path<UnitigData>> v, v_tmp;
 
 	if (!um_s.isEmpty){
 
-		const size_t level = 3;
+		const size_t level = 4;
 
 		const double seq_entropy = getEntropy(ref, ref_len);
 
-		const bool out_qual = static_cast<bool>(opt.out_qual) || static_cast<bool>(opt.trim_qual);
-
-		const size_t max_len_path = max((ref_len - opt.k) * opt.weak_region_len_factor, 1.0) + opt.k;
-		const size_t min_len_path = max((ref_len - opt.k) / opt.weak_region_len_factor, 1.0) + opt.k;
+		const size_t min_len_path = getMinMaxLength(ref_len - opt.k, opt.weak_region_len_factor).first + opt.k;
+		const size_t max_len_path = getMinMaxLength(ref_len - opt.k, opt.weak_region_len_factor).second + opt.k;
 
 		const size_t max_len_subpath = opt.k * opt.large_k_factor;
 
-		//const size_t max_paths = getMaxPaths(seq_entropy, max_len_path, opt.k);
 		const size_t max_paths = 1024;
 
 		size_t max_branches = 2 * getMaxBranch(seq_entropy, max_len_path, opt.k);
@@ -425,8 +387,7 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS2(	const Correct_Opt& opt, c
 				    	back_tmp.len -= um_e.dist;
 				    }
 
-				    if (out_qual) p_start_tmp.extend(back_tmp, 1.0);
-				    else p_start_tmp.extend(back_tmp);
+				    p_start_tmp.extend(back_tmp, 1.0);
 
 	        		v.push_back(p_start_tmp);
 	        		p_start_tmp.clear();
@@ -434,9 +395,7 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS2(	const Correct_Opt& opt, c
 			}
 		}
 
-		if (out_qual) p_start_tmp.extend(um_start_tmp, 1.0);
-		else p_start_tmp.extend(um_start_tmp);
-
+		p_start_tmp.extend(um_start_tmp, 1.0);
 	    q.push(move(p_start_tmp));
 
 	    while (v.empty()){
@@ -455,58 +414,32 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS2(	const Correct_Opt& opt, c
 
 		        	if (p.size() < max_branches) {
 
-						pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> exploreFW;
-
-		        		const KmerHashTable<pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>>>::const_iterator it_km_h = km_h.find(head);
-
-		        		if (it_km_h == km_h.end()){
-
-		        			exploreFW = explore(um, level);
-
-		        			km_h.insert(head, exploreFW);
-		        		}
-		        		else exploreFW = *it_km_h;
+						const pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> exploreFW = explore(um, p, level);
 
 			        	for (const auto& path : exploreFW.first){
 
-			        		Path<UnitigData> p_tmp(p);
+			        		Path<UnitigData> p_ext(p);
 
 			        		const vector<const_UnitigMap<UnitigData>> v_path = path.toVector();
+			        		const vector<char> v_qual = path.toQualityVector();
 
-			        		if (out_qual){
+			        		for (size_t i = 0; i < v_path.size(); ++i) p_ext.extend(v_path[i], getScore(v_qual[i]));
 
-				        		const vector<char> v_qual = path.toQualityVector();
-
-				        		for (size_t i = 0; i < v_path.size(); ++i) p_tmp.extend(v_path[i], getScore(v_qual[i]));
-			        		}
-			        		else {
-
-			        			for (size_t i = 0; i < v_path.size(); ++i) p_tmp.extend(v_path[i]);
-			        		}
-
-			        		v_tmp.push_back(move(p_tmp));
+			        		v_tmp.push_back(move(p_ext));
 		        		}
 
 			        	for (const auto& path : exploreFW.second){
 
 			        		if ((!long_read_correct && (path.size() == level)) || (long_read_correct && (path.length() >= max_len_subpath))){
 
-				        		Path<UnitigData> p_tmp(p);
+				        		Path<UnitigData> p_ext(p);
 
 				        		const vector<const_UnitigMap<UnitigData>> v_path = path.toVector();
+				        		const vector<char> v_qual = path.toQualityVector();
 
-				        		if (out_qual){
+				        		for (size_t i = 0; i < v_path.size(); ++i) p_ext.extend(v_path[i], getScore(v_qual[i]));
 
-					        		const vector<char> v_qual = path.toQualityVector();
-
-					        		for (size_t i = 0; i < v_path.size(); ++i) p_tmp.extend(v_path[i], getScore(v_qual[i]));
-				        		}
-				        		else {
-
-				        			for (size_t i = 0; i < v_path.size(); ++i) p_tmp.extend(v_path[i]);
-				        		}
-
-			        			q.push(move(p_tmp));
+			        			q.push(move(p_ext));
 			        		}
 		        		}
 		        		
@@ -641,239 +574,116 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS2(	const Correct_Opt& opt, c
 	return {v, true};
 }
 
-void exploreSubGraph(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>& bf_read, const PairID& p_read, const char* ref, const size_t ref_len,
-					const const_UnitigMap<UnitigData>& um, const const_UnitigMap<UnitigData>& um_e,
-					const Path<UnitigData>& p, const PairID& r, const size_t level, const size_t min_cov_vertex,
-					double& best_score, vector<Path<UnitigData>>& best_successors, vector<Path<UnitigData>>& over_represented, const uint64_t hap_id) {
-
-	struct info_traversal {
-
-		Path<UnitigData> p;
-		PairID r;
-
-		size_t l;
-
-		info_traversal(const Path<UnitigData>& p_, const PairID& r_, const size_t l_) : p(p_), r(r_), l(l_) {};
-	};
-
-	auto checkContiguity = [](const vector<const_UnitigMap<UnitigData>>& v_um, const size_t min_cov){
-
-		PairID p_inter;
-
-		for (const auto& um : v_um){
-
-			const PairID& p_id_um = um.getData()->get_readID();
-
-			if (p_id_um.cardinality() == 0) return true;
-			else p_inter &= p_id_um;
-		}
-
-		if (p_inter.cardinality() < min_cov) return false;
-
-		return true;	
-	};
-
-	auto getScorePath = [&p_read, &ref, ref_len](const Path<UnitigData>& path, const PairID& p_id_path){
-
-		double score = 0.0;
-
-		if (path.length() != 0){
-
-			const Path<UnitigData>::PathOut path_str_um = path.toStringVector();
-			const string& path_str = path_str_um.toString();
-			//const vector<const_UnitigMap<UnitigData>>& path_ums = path_str_um.toVector();
-
-			EdlibAlignConfig config(edlibNewAlignConfig(-1, EDLIB_MODE_HW, EDLIB_TASK_DISTANCE, NULL, 0));
-			EdlibAlignResult align = edlibAlign(path_str.c_str(), path_str.length(), ref, ref_len, config);
-
-			const double score_kmer = 1.0 - (static_cast<double>(align.editDistance) / path_str.length());
-			const double score_read = static_cast<double>(getNumberSharedPairID(p_read, p_id_path)) / p_read.cardinality();
-
-			edlibFreeAlignResult(align);
-
-			score = score_read * score_kmer;
-			score /= score + ((1.0 - score_read) * (1.0 - score_kmer));
-		}
-
-		return (std::isnan(score) ? 0.0 : score);
-	};
-
-	const bool out_qual = static_cast<bool>(opt.out_qual) || static_cast<bool>(opt.trim_qual);
+pair<double, double> exploreSubGraph(	const Correct_Opt& opt, const WeightsPairID& w_pid, const char* ref, const size_t ref_len,
+										const const_UnitigMap<UnitigData>& um, const const_UnitigMap<UnitigData>& um_e, const size_t level,
+										vector<Path<UnitigData>>& terminal_paths, vector<Path<UnitigData>>& non_terminal_paths, const uint64_t hap_id) {
 
 	const uint64_t undetermined_hap_id = 0xffffffffffffffffULL;
-	const uint64_t rev_hap_id = (hap_id == undetermined_hap_id) ? undetermined_hap_id : (static_cast<bool>(hap_id & 0x1ULL) ? (hap_id - 1) : (hap_id + 1));
+
+	double score_t = 0.0, score_nt = 0.0;
+	double score_align_t = 0.0, score_align_nt = 0.0;
 
 	stack<info_traversal> stck;
 
-	stck.push(info_traversal(p, r, level));
+	stck.push(info_traversal(level));
 
 	while (!stck.empty()){
 
 		const info_traversal i_t = stck.top();
 		const const_UnitigMap<UnitigData>& um_start = (i_t.p.length() == 0) ? um : i_t.p.back();
 		const UnitigData* pli = um_start.getData();
+		const PairID& r_start = pli->get_readID();
 
 		stck.pop();
 
 		for (const auto& succ : um_start.getSuccessors()){
 
-			const UnitigData* pli_succ = succ.getData();
-			const PairID& r_succ = pli_succ->get_readID();
-			const PairID& h_succ = pli_succ->get_hapID();
+			const UnitigData* ud_succ = succ.getData();
+			const PairID& r_succ = ud_succ->get_readID();
+			const PairID& hap_succ = ud_succ->get_hapID();
 
-			if ((hap_id == undetermined_hap_id) || h_succ.isEmpty() || h_succ.contains(hap_id) || !h_succ.contains(rev_hap_id)) {
+			if (hasEnoughSharedPairID(r_start, r_succ, opt.min_cov_vertices)){
+
+				Path<UnitigData> path(i_t.p);
+
+				path.extend(succ);
 
 				if (!um_e.isEmpty && (succ.isSameReferenceUnitig(um_e)) && (um_e.strand == succ.strand) && (succ.dist <= um_e.dist)){
 
-					Path<UnitigData> path(i_t.p);
+					const pair<double, double> scores = getScorePath(path, w_pid, hap_id, ref, ref_len);
 
-					path.extend(succ);
+					if (scores.first >= score_t) {
 
-					if (!out_qual){
+						path.setQuality(getQual(scores.first, opt.out_qual));
 
-						if (path.length() <= 50) {
+						if (scores.first > score_t) terminal_paths.clear();
+						terminal_paths.push_back(path);
 
-							if (checkContiguity(path.toVector(), 3)) over_represented.push_back(move(path));
-						}
-						else over_represented.push_back(move(path));
-					}
-					else {
-
-						const PairID r_curr = i_t.r | r_succ;
-
-						const double score = getScorePath(path, r_curr);
-
-						if (score != std::numeric_limits<double>::min()){
-
-							path.setQuality(getQual(score, opt.out_qual));
-
-							over_represented.push_back(move(path));
-						}
+						score_t = scores.first;
+						score_align_t = scores.second;
 					}
 				}
+				
+				if (i_t.l != 0) stck.push(info_traversal(path, i_t.l - 1));
+				else {
 
-				size_t l_count = 0;
+					const pair<double, double> scores = getScorePath(path, w_pid, hap_id, ref, ref_len);
 
-				if (r_succ.isEmpty()) l_count = min_cov_vertex;
-				else l_count = min_cov_vertex & (static_cast<size_t>(!hasEnoughSharedPairID(bf_read, p_read, r_succ, min_cov_vertex)) - 1);
+					if (scores.first >= score_nt) {
 
-				if (l_count >= min_cov_vertex){
+						path.setQuality(getQual(scores.first, opt.out_qual));
 
-					Path<UnitigData> path(i_t.p);
+						if (scores.first > score_nt) non_terminal_paths.clear();
 
-					path.extend(succ);
+						non_terminal_paths.push_back(path);
 
-					const PairID r_curr = i_t.r | r_succ;
-					
-					if (i_t.l != 0) stck.push(info_traversal(path, r_curr, i_t.l - 1));
-					else {
-
-						const double score = getScorePath(path, r_curr);
-
-						if (score > best_score){
-
-							best_score = score;
-							best_successors.clear();
-						}
-						
-						if (score >= best_score){
-
-							if (out_qual) path.setQuality(getQual(score, opt.out_qual));
-
-							best_successors.push_back(move(path));
-						}
+						score_nt = scores.first;
+						score_align_nt = scores.second;
 					}
 				}
 			}
 		}
 	}
+
+	return {score_t, score_nt};
 }
 
-void exploreSubGraph(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>& bf_read, const PairID& p_read, const char* ref, const size_t ref_len,
-					const const_UnitigMap<UnitigData>& um, const KmerHashTable<const_UnitigMap<UnitigData>>& h_um_e,
-					const Path<UnitigData>& p, const PairID& r, const size_t level, const size_t min_cov_vertex,
-					double& best_score, vector<Path<UnitigData>>& best_successors, vector<Path<UnitigData>>& over_represented, const uint64_t hap_id) {
-
-	struct info_traversal {
-
-		Path<UnitigData> p;
-		PairID r;
-
-		size_t l;
-
-		info_traversal(const Path<UnitigData>& p_, const PairID& r_, const size_t l_) : p(p_), r(r_), l(l_) {};
-	};
-
-	auto checkContiguity = [](const vector<const_UnitigMap<UnitigData>>& v_um, const size_t min_cov){
-
-		PairID p_inter;
-
-		for (const auto& um : v_um){
-
-			const PairID& p_id_um = um.getData()->get_readID();
-
-			if (p_id_um.cardinality() == 0) return true;
-			else p_inter &= p_id_um;
-		}
-
-		if (p_inter.cardinality() < min_cov) return false;
-
-		return true;	
-	};
-
-	auto getScorePath = [&p_read, &ref, ref_len](const Path<UnitigData>& path, const PairID& p_id_path){
-
-		double score = 0.0;
-
-		if (path.length() != 0){
-
-			const Path<UnitigData>::PathOut path_str_um = path.toStringVector();
-			const string& path_str = path_str_um.toString();
-			//const vector<const_UnitigMap<UnitigData>>& path_ums = path_str_um.toVector();
-
-			EdlibAlignConfig config(edlibNewAlignConfig(-1, EDLIB_MODE_HW, EDLIB_TASK_DISTANCE, NULL, 0));
-			EdlibAlignResult align = edlibAlign(path_str.c_str(), path_str.length(), ref, ref_len, config);
-
-			const double score_kmer = 1.0 - (static_cast<double>(align.editDistance) / path_str.length());
-			const double score_read = static_cast<double>(getNumberSharedPairID(p_read, p_id_path)) / p_read.cardinality();
-
-			edlibFreeAlignResult(align);
-
-			score = score_read * score_kmer;
-			score /= score + ((1.0 - score_read) * (1.0 - score_kmer));
-		}
-
-		return (std::isnan(score) ? 0.0 : score);
-	};
-
-	const bool out_qual = static_cast<bool>(opt.out_qual) || static_cast<bool>(opt.trim_qual);
+pair<double, double> exploreSubGraph(	const Correct_Opt& opt, const WeightsPairID& w_pid, const char* ref, const size_t ref_len,
+										const const_UnitigMap<UnitigData>& um, const KmerHashTable<const_UnitigMap<UnitigData>>& h_um_e, const size_t level,
+										vector<Path<UnitigData>>& terminal_paths, vector<Path<UnitigData>>& non_terminal_paths, const uint64_t hap_id) {
 
 	const uint64_t undetermined_hap_id = 0xffffffffffffffffULL;
-	const uint64_t rev_hap_id = (hap_id == undetermined_hap_id) ? undetermined_hap_id : (static_cast<bool>(hap_id & 0x1ULL) ? (hap_id - 1) : (hap_id + 1));
+
+	double score_t = 0.0, score_nt = 0.0;
+	double score_align_t = 0.0, score_align_nt = 0.0;
 
 	stack<info_traversal> stck;
 
-	stck.push(info_traversal(p, r, level));
+	stck.push(info_traversal(level));
 
 	while (!stck.empty()){
 
 		const info_traversal i_t = stck.top();
 		const const_UnitigMap<UnitigData>& um_start = (i_t.p.length() == 0) ? um : i_t.p.back();
 		const UnitigData* pli = um_start.getData();
+		const PairID& r_start = pli->get_readID();
 
 		stck.pop();
 
 		for (const auto& succ : um_start.getSuccessors()){
 
-			const UnitigData* pli_succ = succ.getData();
+			const UnitigData* ud_succ = succ.getData();
+			const PairID& r_succ = ud_succ->get_readID();
+			const PairID& hap_succ = ud_succ->get_hapID();
 
-			const PairID& r_succ = pli_succ->get_readID();
-			const PairID& h_succ = pli_succ->get_hapID();
+			if (hasEnoughSharedPairID(r_start, r_succ, opt.min_cov_vertices)){
 
-			const Kmer head = succ.strand ? succ.getUnitigHead() : succ.getUnitigHead().twin();
-			const KmerHashTable<const_UnitigMap<UnitigData>>::const_iterator it_h_um_e = h_um_e.find(head);
+				const Kmer head = succ.strand ? succ.getUnitigHead() : succ.getUnitigHead().twin();
+				const KmerHashTable<const_UnitigMap<UnitigData>>::const_iterator it_h_um_e = h_um_e.find(head);
 
-			if ((hap_id == undetermined_hap_id) || h_succ.isEmpty() || h_succ.contains(hap_id) || !h_succ.contains(rev_hap_id)) {
+				Path<UnitigData> path(i_t.p);
+
+				path.extend(succ);
 
 				if (it_h_um_e != h_um_e.end()){
 
@@ -881,295 +691,157 @@ void exploreSubGraph(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>& bf
 
 					if (succ.dist <= um_e.dist){
 
-						Path<UnitigData> path(i_t.p);
+						const pair<double, double> scores = getScorePath(path, w_pid, hap_id, ref, ref_len);
 
-						path.extend(succ);
+						if (scores.first >= score_t) {
 
-						if (!out_qual){
+							path.setQuality(getQual(scores.first, opt.out_qual));
 
-							if (path.length() <= 50) {
+							if (scores.first > score_t) terminal_paths.clear();
+							terminal_paths.push_back(path);
 
-								if (checkContiguity(path.toVector(), 3)) over_represented.push_back(move(path));
-							}
-							else over_represented.push_back(move(path));
-						}
-						else {
-
-							const PairID r_curr = i_t.r | r_succ;
-
-							const double score = getScorePath(path, r_curr);
-
-							if (score != std::numeric_limits<double>::min()){
-
-								path.setQuality(getQual(score, opt.out_qual));
-
-								over_represented.push_back(move(path));
-							}
+							score_t = scores.first;
+							score_align_t = scores.second;
 						}
 					}
 				}
+				
+				if (i_t.l != 0) stck.push(info_traversal(path, i_t.l - 1));
+				else {
 
-				size_t l_count = 0;
+					const pair<double, double> scores = getScorePath(path, w_pid, hap_id, ref, ref_len);
 
-				if (r_succ.isEmpty()) l_count = min_cov_vertex;
-				else l_count = min_cov_vertex & (static_cast<size_t>(!hasEnoughSharedPairID(bf_read, p_read, r_succ, min_cov_vertex)) - 1);
+					if (scores.first >= score_nt) {
 
-				if (l_count >= min_cov_vertex){
+						path.setQuality(getQual(scores.first, opt.out_qual));
 
-					Path<UnitigData> path(i_t.p);
+						if (scores.first > score_nt) non_terminal_paths.clear();
 
-					path.extend(succ);
+						non_terminal_paths.push_back(path);
 
-					const PairID r_curr = i_t.r | r_succ;
-					
-					if (i_t.l != 0) stck.push(info_traversal(path, r_curr, i_t.l - 1));
-					else {
-
-						const double score = getScorePath(path, r_curr);
-
-						if (score > best_score){
-
-							best_score = score;
-							best_successors.clear();
-						}
-						
-						if (score >= best_score){
-
-							if (out_qual) path.setQuality(getQual(score, opt.out_qual));
-
-							best_successors.push_back(move(path));
-						}
+						score_nt = scores.first;
+						score_align_nt = scores.second;
 					}
 				}
 			}
 		}
 	}
+
+	return {score_t, score_nt};
 }
 
-void exploreSubGraphLong(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>& bf_read, const PairID& p_read, const char* ref, const size_t ref_len,
-						const const_UnitigMap<UnitigData>& um, const const_UnitigMap<UnitigData>& um_e,
-						const Path<UnitigData>& p, const PairID& r, const size_t min_cov_vertex,
-						double& best_score, vector<Path<UnitigData>>& best_successors, vector<Path<UnitigData>>& semi_weak_successors, const uint64_t hap_id) {
-
-	struct info_traversal {
-
-		Path<UnitigData> p;
-		PairID r;
-
-		bool c;
-
-		info_traversal(const Path<UnitigData>& p_, const PairID& r_, const bool c_) : p(p_), r(r_), c(c_) {};
-	};
-
-	auto getScorePath = [&p_read, &ref, ref_len](const Path<UnitigData>& path, const PairID& p_id_path){
-
-		double score = 0.0;
-
-		if (path.length() != 0){
-
-			const Path<UnitigData>::PathOut path_str_um = path.toStringVector();
-			const string& path_str = path_str_um.toString();
-			//const vector<const_UnitigMap<UnitigData>>& path_ums = path_str_um.toVector();
-
-			EdlibAlignConfig config(edlibNewAlignConfig(-1, EDLIB_MODE_HW, EDLIB_TASK_DISTANCE, NULL, 0));
-			EdlibAlignResult align = edlibAlign(path_str.c_str(), path_str.length(), ref, ref_len, config);
-
-			const double score_kmer = 1.0 - (static_cast<double>(align.editDistance) / path_str.length());
-			const double score_read = static_cast<double>(getNumberSharedPairID(p_read, p_id_path)) / p_read.cardinality();
-
-			edlibFreeAlignResult(align);
-
-			score = score_read * score_kmer;
-			score /= score + ((1.0 - score_read) * (1.0 - score_kmer));
-		}
-
-		return (std::isnan(score) ? 0.0 : score);
-	};
-
-	const bool out_qual = static_cast<bool>(opt.out_qual) || static_cast<bool>(opt.trim_qual);
-
-	const uint64_t undetermined_hap_id = 0xffffffffffffffffULL;
-	const uint64_t rev_hap_id = (hap_id == undetermined_hap_id) ? undetermined_hap_id : (static_cast<bool>(hap_id & 0x1ULL) ? (hap_id - 1) : (hap_id + 1));
+pair<double, double> exploreSubGraphLong(	const Correct_Opt& opt, const WeightsPairID& w_pid, const char* ref, const size_t ref_len,
+											const const_UnitigMap<UnitigData>& um, const const_UnitigMap<UnitigData>& um_e,
+											vector<Path<UnitigData>>& terminal_paths, vector<Path<UnitigData>>& non_terminal_paths, const uint64_t hap_id) {
 
 	const size_t max_len_subpath = opt.k * opt.large_k_factor;
 
+	double score_t = 0.0, score_nt = 0.0;
+	double score_align_t = 0.0, score_align_nt = 0.0;
+
 	stack<info_traversal> stck;
 
-	stck.push(info_traversal(p, r, false));
+	stck.push(info_traversal());
 
 	while (!stck.empty()){
 
 		const info_traversal i_t = stck.top();
 		const const_UnitigMap<UnitigData>& um_start = (i_t.p.length() == 0) ? um : i_t.p.back();
-		const UnitigData* pli = um_start.getData();
-
-		const bool short_cycle = (um_start.getData()->isInCycle() || um_start.getData()->get_readID().isEmpty());
-
-		Path<UnitigData> best_p;
-		PairID best_r;
-
-		double l_best_score = -1;
+		const UnitigData* ud = um_start.getData();
+		const PairID& r_start = ud->get_readID();
+		const size_t km_cov_start = ud->getKmerCoverage(um_start);
 
 		stck.pop();
 
 		for (const auto& succ : um_start.getSuccessors()){
 
-			const UnitigData* pli_succ = succ.getData();
-			const PairID& r_succ = pli_succ->get_readID();
-			const PairID& h_succ = pli_succ->get_hapID();
+			const UnitigData* ud_succ = succ.getData();
+			const PairID& r_succ = ud_succ->get_readID();
+			const size_t km_cov_succ = ud_succ->getKmerCoverage(succ);
 
-			if ((hap_id == undetermined_hap_id) || h_succ.isEmpty() || h_succ.contains(hap_id) || !h_succ.contains(rev_hap_id)) {
+			if ((km_cov_start >= opt.max_cov_vertices) || (km_cov_succ >= opt.max_cov_vertices) || hasEnoughSharedPairID(r_start, r_succ, opt.min_cov_vertices)){
+
+				Path<UnitigData> path(i_t.p);
+
+				path.extend(succ);
 
 				if (!um_e.isEmpty && (succ.isSameReferenceUnitig(um_e)) && (um_e.strand == succ.strand) && (succ.dist <= um_e.dist)){
 
-					Path<UnitigData> path(i_t.p);
+					const pair<double, double> scores = getScorePath(path, w_pid, hap_id, ref, ref_len);
 
-					path.extend(succ);
+					if (scores.first >= score_t) {
 
-					if (out_qual){
+						path.setQuality(getQual(scores.first, opt.out_qual));
 
-						const PairID r_curr = i_t.r | r_succ;
-						const double score = getScorePath(path, r_curr);
+						if (scores.first > score_t) terminal_paths.clear();
+						terminal_paths.push_back(path);
 
-						path.setQuality(getQual(score, opt.out_qual));
+						score_t = scores.first;
+						score_align_t = scores.second;
 					}
-
-					semi_weak_successors.push_back(move(path));
 				}
-
-				PairID r_curr = i_t.r;
-
-				size_t l_count = 0;
-
-				if (r_succ.isEmpty() && !r_curr.isEmpty()) l_count = min_cov_vertex;
+				
+				if (path.length() < max_len_subpath) stck.push(info_traversal(path));
 				else {
 
-					if (um.getData()->get_readID().isEmpty() && r_curr.isEmpty()) r_curr = r_succ;
-					else r_curr &= r_succ;
+					const pair<double, double> scores = getScorePath(path, w_pid, hap_id, ref, ref_len);
 
-					l_count = min_cov_vertex & (static_cast<size_t>(!hasEnoughSharedPairID(bf_read, p_read, r_curr, min_cov_vertex)) - 1);
-				}
+					if (scores.first >= score_nt) {
 
-				if (l_count == min_cov_vertex){
+						path.setQuality(getQual(scores.first, opt.out_qual));
 
-					Path<UnitigData> path(i_t.p);
+						if (scores.first > score_nt) non_terminal_paths.clear();
 
-					path.extend(succ);
-					
-					if (!short_cycle && (path.length() < max_len_subpath)) stck.push(info_traversal(path, r_curr, false));
-					else {
+						non_terminal_paths.push_back(path);
 
-						const double score = getScorePath(path, r_curr);
-
-						if (path.length() >= max_len_subpath){
-
-							if (score > best_score){
-
-								best_score = score;
-								best_successors.clear();
-							}
-							
-							if (score >= best_score){
-
-								if (out_qual) path.setQuality(getQual(score, opt.out_qual));
-
-								best_successors.push_back(path);
-							}
-						}
-						
-						if (short_cycle) {
-
-							if (score > l_best_score) l_best_score = score;
-
-							if (score >= l_best_score) {
-
-								best_p = path;
-								best_r = r_curr;
-							}
-						}
+						score_nt = scores.first;
+						score_align_nt = scores.second;
 					}
 				}
 			}
 		}
-
-		if (short_cycle && (l_best_score >= 0) && (best_p.length() < max_len_subpath)) stck.push(info_traversal(best_p, best_r, true));
 	}
+
+	return {score_t, score_nt};
 }
 
-void exploreSubGraphLong(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>& bf_read, const PairID& p_read, const char* ref, const size_t ref_len,
-						const const_UnitigMap<UnitigData>& um, const KmerHashTable<const_UnitigMap<UnitigData>>& h_um_e,
-						const Path<UnitigData>& p, const PairID& r, const size_t min_cov_vertex,
-						double& best_score, vector<Path<UnitigData>>& best_successors, vector<Path<UnitigData>>& semi_weak_successors, const uint64_t hap_id) {
-
-	struct info_traversal {
-
-		Path<UnitigData> p;
-		PairID r;
-		bool c;
-
-		info_traversal(const Path<UnitigData>& p_, const PairID& r_, const bool c_) : p(p_), r(r_), c(c_) {};
-	};
-
-	auto getScorePath = [&p_read, &ref, ref_len](const Path<UnitigData>& path, const PairID& p_id_path){
-
-		double score = 0.0;
-
-		if (path.length() != 0){
-
-			const Path<UnitigData>::PathOut path_str_um = path.toStringVector();
-			const string& path_str = path_str_um.toString();
-			//const vector<const_UnitigMap<UnitigData>>& path_ums = path_str_um.toVector();
-
-			EdlibAlignConfig config(edlibNewAlignConfig(-1, EDLIB_MODE_HW, EDLIB_TASK_DISTANCE, NULL, 0));
-			EdlibAlignResult align = edlibAlign(path_str.c_str(), path_str.length(), ref, ref_len, config);
-
-			const double score_kmer = 1.0 - (static_cast<double>(align.editDistance) / path_str.length());
-			const double score_read = static_cast<double>(getNumberSharedPairID(p_read, p_id_path)) / p_read.cardinality();
-
-			edlibFreeAlignResult(align);
-
-			score = score_read * score_kmer;
-			score /= score + ((1.0 - score_read) * (1.0 - score_kmer));
-		}
-
-		return (std::isnan(score) ? 0.0 : score);
-	};
-
-	const bool out_qual = static_cast<bool>(opt.out_qual) || static_cast<bool>(opt.trim_qual);
-
-	const uint64_t undetermined_hap_id = 0xffffffffffffffffULL;
-	const uint64_t rev_hap_id = (hap_id == undetermined_hap_id) ? undetermined_hap_id : (static_cast<bool>(hap_id & 0x1ULL) ? (hap_id - 1) : (hap_id + 1));
+pair<double, double> exploreSubGraphLong(	const Correct_Opt& opt, const WeightsPairID& w_pid, const char* ref, const size_t ref_len,
+											const const_UnitigMap<UnitigData>& um, const KmerHashTable<const_UnitigMap<UnitigData>>& h_um_e,
+											vector<Path<UnitigData>>& terminal_paths, vector<Path<UnitigData>>& non_terminal_paths, const uint64_t hap_id) {
 
 	const size_t max_len_subpath = opt.k * opt.large_k_factor;
 
+	double score_t = 0.0, score_nt = 0.0;
+	double score_align_t = 0.0, score_align_nt = 0.0;
+
 	stack<info_traversal> stck;
 
-	stck.push(info_traversal(p, r, false));
+	stck.push(info_traversal());
 
 	while (!stck.empty()) {
 
 		const info_traversal i_t = stck.top();
 		const const_UnitigMap<UnitigData>& um_start = (i_t.p.length() == 0) ? um : i_t.p.back();
-		const UnitigData* pli = um_start.getData();
-
-		const bool short_cycle = (um_start.getData()->isInCycle() || um_start.getData()->get_readID().isEmpty());
-
-		Path<UnitigData> best_p;
-		PairID best_r;
-
-		double l_best_score = -1;
+		const UnitigData* ud = um_start.getData();
+		const PairID& r_start = ud->get_readID();
+		const size_t km_cov_start = ud->getKmerCoverage(um_start);
 
 		stck.pop();
 
 		for (const auto& succ : um_start.getSuccessors()){
 
-			const UnitigData* pli_succ = succ.getData();
-			const PairID& r_succ = pli_succ->get_readID();
-			const PairID& h_succ = pli_succ->get_hapID();
-			const Kmer head = succ.strand ? succ.getUnitigHead() : succ.getUnitigHead().twin();
-			const KmerHashTable<const_UnitigMap<UnitigData>>::const_iterator it_h_um_e = h_um_e.find(head);
+			const UnitigData* ud_succ = succ.getData();
+			const PairID& r_succ = ud_succ->get_readID();
+			const size_t km_cov_succ = ud_succ->getKmerCoverage(succ);
 
-			if ((hap_id == undetermined_hap_id) || h_succ.isEmpty() || h_succ.contains(hap_id) || !h_succ.contains(rev_hap_id)) {
+			if ((km_cov_start >= opt.max_cov_vertices) || (km_cov_succ >= opt.max_cov_vertices) || hasEnoughSharedPairID(r_start, r_succ, opt.min_cov_vertices)){
+
+				const Kmer head = succ.strand ? succ.getUnitigHead() : succ.getUnitigHead().twin();
+				const KmerHashTable<const_UnitigMap<UnitigData>>::const_iterator it_h_um_e = h_um_e.find(head);
+
+				Path<UnitigData> path(i_t.p);
+
+				path.extend(succ);
 
 				if (it_h_um_e != h_um_e.end()){
 
@@ -1177,77 +849,411 @@ void exploreSubGraphLong(const Correct_Opt& opt, const TinyBloomFilter<uint32_t>
 
 					if (succ.dist <= um_e.dist){
 
-						Path<UnitigData> path(i_t.p);
+						const pair<double, double> scores = getScorePath(path, w_pid, hap_id, ref, ref_len);
 
-						path.extend(succ);
+						if (scores.first >= score_t) {
 
-						if (out_qual){
+							path.setQuality(getQual(scores.first, opt.out_qual));
 
-							const PairID r_curr = i_t.r | r_succ;
-							const double score = getScorePath(path, r_curr);
+							if (scores.first > score_t) terminal_paths.clear();
+							terminal_paths.push_back(path);
 
-							path.setQuality(getQual(score, opt.out_qual));
+							score_t = scores.first;
+							score_align_t = scores.second;
 						}
-
-						semi_weak_successors.push_back(move(path));
 					}
 				}
-
-				PairID r_curr = i_t.r;
-
-				size_t l_count = 0;
-
-				if (r_succ.isEmpty() && !r_curr.isEmpty()) l_count = min_cov_vertex;
+				
+				if (path.length() < max_len_subpath) stck.push(info_traversal(path));
 				else {
 
-					if (um.getData()->get_readID().isEmpty() && r_curr.isEmpty()) r_curr = r_succ;
-					else r_curr &= r_succ;
+					const pair<double, double> scores = getScorePath(path, w_pid, hap_id, ref, ref_len);
 
-					l_count = min_cov_vertex & (static_cast<size_t>(!hasEnoughSharedPairID(bf_read, p_read, r_curr, min_cov_vertex)) - 1);
-				}
+					if (scores.first >= score_nt) {
 
-				if (l_count == min_cov_vertex){
+						path.setQuality(getQual(scores.first, opt.out_qual));
 
-					Path<UnitigData> path(i_t.p);
+						if (scores.first > score_nt) non_terminal_paths.clear();
 
-					path.extend(succ);
-					
-					if (!short_cycle && (path.length() < max_len_subpath)) stck.push(info_traversal(path, r_curr, false));
-					else {
+						non_terminal_paths.push_back(path);
 
-						const double score = getScorePath(path, r_curr);
-
-						if (path.length() >= max_len_subpath){
-
-							if (score > best_score){
-
-								best_score = score;
-								best_successors.clear();
-							}
-							
-							if (score >= best_score){
-
-								if (out_qual) path.setQuality(getQual(score, opt.out_qual));
-
-								best_successors.push_back(path);
-							}
-						}
-						
-						if (short_cycle) {
-
-							if (score > l_best_score) l_best_score = score;
-
-							if (score >= l_best_score) {
-
-								best_p = path;
-								best_r = r_curr;
-							}
-						}
+						score_nt = scores.first;
+						score_align_nt = scores.second;
 					}
 				}
 			}
 		}
-
-		if (short_cycle && (l_best_score >= 0) && (best_p.length() < max_len_subpath)) stck.push(info_traversal(best_p, best_r, true));
 	}
+
+	return {score_t, score_nt};
+}
+
+pair<double, double> getScorePath(const Path<UnitigData>& path, const WeightsPairID& w_pid, const uint64_t hap_id, const char* ref, const size_t ref_len){
+
+	double score = 0.0;
+	double score_align = 0.0;
+	double score_pids = 0.0;
+
+	if (path.length() != 0){
+
+		const Path<UnitigData>::PathOut path_str_um = path.toStringVector();
+		const string& path_str = path_str_um.toString();
+		const vector<const_UnitigMap<UnitigData>>& v_um = path_str_um.toVector();
+		
+		EdlibAlignConfig config(edlibNewAlignConfig(-1, EDLIB_MODE_HW, EDLIB_TASK_DISTANCE, NULL, 0));
+		EdlibAlignResult align;
+
+		if (path_str.length() >= ref_len){
+
+			align = edlibAlign(ref, ref_len, path_str.c_str(), path_str.length(), config);
+			score_align = 1.0 - (static_cast<double>(align.editDistance) / ref_len);
+		}
+		else {
+
+			align = edlibAlign(path_str.c_str(), path_str.length(), ref, ref_len, config);
+			score_align = 1.0 - (static_cast<double>(align.editDistance) / path_str.length());
+		}
+
+		edlibFreeAlignResult(align);
+
+		if (w_pid.weighted_pids.isEmpty() && w_pid.noWeight_pids.isEmpty()) score = 0.0;
+		else {
+
+			for (const auto& um : v_um){
+
+				const PairID& pids = um.getData()->get_readID();
+
+				if (!pids.isEmpty()) {
+
+					const double shared_weighted = static_cast<double>(getNumberSharedPairID(pids, w_pid.weighted_pids));
+					const double shared_noWeight = static_cast<double>(getNumberSharedPairID(pids, w_pid.noWeight_pids));
+
+					score_pids += (shared_weighted * w_pid.weight) + shared_noWeight;
+				}
+			}
+
+			score_pids /= (w_pid.sum_pids_weights * v_um.size());
+
+			score = score_pids * score_align; // Conflate the two probabilities (1/2)
+			score /= score + ((1.0 - score_pids) * (1.0 - score_align)); // Conflate the two probabilities (2/2)
+			score = (std::isnan(score) ? 0.0 : score);
+		}
+	}
+
+	return pair<double, double>(score, score_align);
+}
+
+vector<Path<UnitigData>> selectMostContiguous(const vector<Path<UnitigData>>& v_paths, const WeightsPairID& w_pid) {
+
+	double score_contiguity = 0;
+
+	vector<Path<UnitigData>> v_paths_out;
+
+	for (const auto& path : v_paths) {
+
+		const vector<const_UnitigMap<UnitigData>> v_um = path.toVector();
+
+		PairID pid_weighted = (v_um.front().getData()->get_readID() & w_pid.weighted_pids);
+		PairID pid_no_weights = (v_um.front().getData()->get_readID() & w_pid.noWeight_pids);
+
+		for (const auto& um : v_um){
+
+			if (!pid_weighted.isEmpty()) pid_weighted &= (um.getData()->get_readID() & w_pid.weighted_pids);
+			if (!pid_no_weights.isEmpty()) pid_no_weights &= (um.getData()->get_readID() & w_pid.noWeight_pids);
+		}
+
+		const double l_score_contiguity = static_cast<double>(pid_weighted.cardinality()) * w_pid.weight + static_cast<double>(pid_no_weights.cardinality());
+
+		if (l_score_contiguity >= score_contiguity) {
+
+			if (l_score_contiguity > score_contiguity) v_paths_out.clear();
+
+			v_paths_out.push_back(path);
+
+			score_contiguity = l_score_contiguity;
+		}
+	}
+
+	return v_paths_out;
+}
+
+vector<Path<UnitigData>> selectMostContiguous(const vector<Path<UnitigData>>& v_paths, const size_t min_cov, const uint64_t hap_id) {
+
+	vector<Path<UnitigData>> v_paths_out;
+
+	for (const auto& path : v_paths) {
+
+		const vector<const_UnitigMap<UnitigData>> v_um = path.toVector();
+
+		PairID pid = v_um.front().getData()->get_readID();
+
+		for (const auto& um : v_um){
+
+			if (pid.cardinality() >= min_cov) pid &= um.getData()->get_readID();
+		}
+
+		if (pid.cardinality() >= min_cov) v_paths_out.push_back(path);
+	}
+
+	return v_paths_out;
+}
+
+vector<pair<size_t, char>> getAmbiguityVector(const vector<const_UnitigMap<UnitigData>>& v_um, const size_t k) {
+
+	vector<pair<size_t, char>> v_amb;
+
+	size_t prev_l = 0;
+	size_t pos_prev_l = 0;
+
+	for (const auto& um : v_um){
+
+		const vector<pair<size_t, char>> v_amb_um = um.getData()->get_ambiguity_char(um);
+
+		vector<pair<size_t, char>> v_amb_tmp;
+
+		auto it_prev = v_amb.begin() + pos_prev_l;
+		auto it_curr = v_amb_um.begin();
+
+		while ((it_prev != v_amb.end()) && (it_curr != v_amb_um.end()) && (it_curr->first < k-1)){
+
+			const size_t it_curr_pos = it_curr->first + prev_l;
+
+			if (it_prev->first < it_curr_pos){
+
+				v_amb_tmp.push_back(*it_prev);
+				++it_prev;
+			}
+			else if (it_prev->first > it_curr_pos){
+
+				v_amb_tmp.push_back({it_curr_pos, it_curr->second});
+				++it_curr;
+			}
+			else {
+
+				bool nuc_a_s, nuc_c_s, nuc_g_s, nuc_t_s;
+				bool nuc_a_v, nuc_c_v, nuc_g_v, nuc_t_v;
+
+				getAmbiguityRev(it_prev->second, nuc_a_s, nuc_c_s, nuc_g_s, nuc_t_s);
+				getAmbiguityRev(it_curr->second, nuc_a_v, nuc_c_v, nuc_g_v, nuc_t_v);
+
+				v_amb_tmp.push_back({it_prev->first, getAmbiguity((nuc_a_s || nuc_a_v), (nuc_c_s || nuc_c_v), (nuc_g_s || nuc_g_v), (nuc_t_s || nuc_t_v))});
+
+				++it_prev;
+				++it_curr;
+			}
+		}
+
+		while (it_prev != v_amb.end()){
+
+			v_amb_tmp.push_back(*it_prev);
+			++it_prev;
+		}
+
+		while (it_curr != v_amb_um.end()){
+
+			v_amb_tmp.push_back({it_curr->first + prev_l, it_curr->second});
+			++it_curr;
+		}
+
+		prev_l += um.len;
+
+		v_amb.erase(v_amb.begin() + pos_prev_l, v_amb.end());
+
+		for (auto& p : v_amb_tmp){
+
+			v_amb.push_back(move(p));
+
+			pos_prev_l += static_cast<size_t>(v_amb.back().first < prev_l);
+		}
+	}
+
+	return v_amb;
+}
+
+vector<pair<size_t, char>> getAmbiguityVector(const Path<UnitigData>::PathOut& path, const size_t k, const bool rm_solid_amb) {
+
+	vector<pair<size_t, char>> v1 = getAmbiguityVector(path.toVector(), k), v2;
+
+	if (rm_solid_amb) {
+
+		const size_t len = path.toString().length() - k;
+
+		for (const auto p : v1) {
+
+			if ((p.first >= k) && (p.first < len)) v2.push_back(p);
+		}
+
+		v1 = move(v2);
+	}
+
+	return v1;
+}
+
+void annotateConnectedComponents(CompactedDBG<UnitigData>& dbg) {
+
+	size_t cc_id = 1;
+
+	for (auto& um : dbg){
+
+		if (um.getData()->getConnectedComp() == 0) {
+
+			unordered_set<Kmer, KmerHash> km_s;
+			vector<UnitigMap<UnitigData>> v_um;
+
+			v_um.push_back(um);
+			km_s.insert(um.getUnitigHead());
+
+			while (!v_um.empty()) {
+
+				UnitigMap<UnitigData> um_pop = v_um.back();
+
+				v_um.pop_back();
+				um_pop.getData()->setConnectedComp(cc_id);
+
+				for (const auto& um_pred: um_pop.getPredecessors()){
+
+					if (km_s.insert(um_pred.getUnitigHead()).second) v_um.push_back(um_pred);
+				}
+
+				for (const auto& um_succ: um_pop.getSuccessors()){
+
+					if (km_s.insert(um_succ.getUnitigHead()).second) v_um.push_back(um_succ);
+				}
+			}
+		}
+	}
+}
+
+bool isValidSNPcandidate(local_graph_traversal& lgt, const const_UnitigMap<UnitigData>& um_a, const const_UnitigMap<UnitigData>& um_b, const size_t limit_length_path, const size_t limit_sz_stack){
+
+	const PairID& p_ids_a = um_a.getData()->get_readID();
+	const PairID& p_ids_b = um_b.getData()->get_readID();
+
+	const size_t k = um_a.getGraph()->getK();
+	const size_t max_len_path = limit_length_path + (um_a.size - k + 1);
+
+	auto exploreLocalGraphFW = [&]() {
+
+		if (lgt.m_km_fw.empty()) {
+
+			lgt.q_um_fw.push({um_a, {0, 0}});
+			lgt.m_km_fw.insert({(um_a.strand ? um_a.getUnitigHead() : um_a.getUnitigTail().twin()), 0});
+
+			lgt.p_ids_fw = p_ids_a;
+		}
+
+		while (!lgt.q_um_fw.empty()) {
+
+			const pair<const_UnitigMap<UnitigData>, pair<size_t, size_t>> elem_pop = lgt.q_um_fw.front();
+
+			const const_UnitigMap<UnitigData>& um_pop = elem_pop.first;
+
+			const Kmer km_pop = um_pop.strand ? um_pop.getUnitigHead() : um_pop.getUnitigTail().twin();
+
+			const size_t nb_nodes_before = elem_pop.second.second;
+			const size_t nb_nodes_after = nb_nodes_before + 1;
+
+			const size_t dist_before = elem_pop.second.first;
+			const size_t dist_after = dist_before + (um_pop.size - k + 1);
+
+			lgt.q_um_fw.pop();
+
+			if (dist_before <= lgt.m_km_fw.find(km_pop)->second) {
+
+				for (const auto& um : um_pop.getSuccessors()){
+
+					pair<unordered_map<Kmer, size_t, KmerHash>::iterator, bool> p_km_m = lgt.m_km_fw.insert({um.getMappedHead(), dist_after});
+
+					if (p_km_m.second){ // Unitig hasn't been visited so far
+
+						const PairID& p_ids_succ = um.getData()->get_readID();
+
+						if (hasEnoughSharedPairID(p_ids_succ, p_ids_a, 1)){ // Unitig shares enough reads with start unitig
+
+							lgt.p_ids_fw |= p_ids_succ;
+
+							if (dist_after < max_len_path) lgt.q_um_fw.push({um, {dist_after, nb_nodes_after}});
+							if (hasEnoughSharedPairID(p_ids_succ, p_ids_b, 1)) return true;
+						}
+						else p_km_m.first->second = 0xffffffffffffffffULL; // Unitig is visited but is invalid
+					}
+					else if ((p_km_m.first->second != 0xffffffffffffffffULL) && (dist_after < p_km_m.first->second)) { // Unitig is valid, has been visited already but distance is shorter
+
+						p_km_m.first->second = dist_after;
+
+						if (dist_after < max_len_path) lgt.q_um_fw.push({um, {dist_after, nb_nodes_after}});
+					}
+				}
+
+				if (lgt.m_km_fw.size() >= limit_sz_stack) return true;
+			}
+		}
+
+		return false;
+	};
+
+	auto exploreLocalGraphBW = [&]() {
+
+		if (lgt.m_km_bw.empty()) {
+
+			lgt.q_um_bw.push({um_a, {0, 0}});
+			lgt.m_km_bw.insert({(um_a.strand ? um_a.getUnitigHead() : um_a.getUnitigTail().twin()), 0});
+
+			lgt.p_ids_bw = p_ids_a;
+		}
+
+		while (!lgt.q_um_bw.empty()) {
+
+			const pair<const_UnitigMap<UnitigData>, pair<size_t, size_t>> elem_pop = lgt.q_um_bw.front();
+
+			const const_UnitigMap<UnitigData>& um_pop = elem_pop.first;
+
+			const Kmer km_pop = um_pop.strand ? um_pop.getUnitigHead() : um_pop.getUnitigTail().twin();
+
+			const size_t nb_nodes_before = elem_pop.second.second;
+			const size_t nb_nodes_after = nb_nodes_before + 1;
+
+			const size_t dist_before = elem_pop.second.first;
+			const size_t dist_after = dist_before + (um_pop.size - k + 1);
+
+			lgt.q_um_bw.pop();
+
+			if (dist_before <= lgt.m_km_bw.find(km_pop)->second) {
+
+				for (const auto& um : um_pop.getPredecessors()){
+
+					pair<unordered_map<Kmer, size_t, KmerHash>::iterator, bool> p_km_m = lgt.m_km_bw.insert({um.getMappedHead(), dist_after});
+
+					if (p_km_m.second){ // Unitig hasn't been visited so far
+
+						const PairID& p_ids_succ = um.getData()->get_readID();
+
+						if (hasEnoughSharedPairID(p_ids_succ, p_ids_a, 1)){ // Unitig shares enough reads with start unitig
+
+							lgt.p_ids_bw |= p_ids_succ;
+
+							if (dist_after < limit_length_path) lgt.q_um_bw.push({um, {dist_after, nb_nodes_after}});
+							if (hasEnoughSharedPairID(p_ids_succ, p_ids_b, 1)) return true;
+						}
+						else p_km_m.first->second = 0xffffffffffffffffULL; // Unitig is visited but is invalid
+					}
+					else if ((p_km_m.first->second != 0xffffffffffffffffULL) && (dist_after < p_km_m.first->second)) { // Unitig is valid, has been visited already but distance is shorter
+
+						p_km_m.first->second = dist_after;
+
+						if (dist_after < limit_length_path) lgt.q_um_bw.push({um, {dist_after, nb_nodes_after}});
+					}
+				}
+
+				if (lgt.m_km_bw.size() >= limit_sz_stack) return true;
+			}
+		}
+
+		return false;
+	};
+
+	if (hasEnoughSharedPairID(lgt.p_ids_fw, p_ids_b, 1) || hasEnoughSharedPairID(lgt.p_ids_bw, p_ids_b, 1)) return true;
+	else if ((lgt.m_km_fw.size() >= limit_sz_stack) || (lgt.m_km_bw.size() >= limit_sz_stack)) return true;
+	
+	return (exploreLocalGraphFW() || exploreLocalGraphBW());
 }

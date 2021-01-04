@@ -19,8 +19,6 @@ pair<int, int> selectBestAlignment(const vector<Path<UnitigData>>& candidates, c
 	best_end_loc = align.endLocations[0];
 	best_cand_id = 0;
 
-	//for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
-
 	edlibFreeAlignResult(align);
 
 	for (int i = 1; i < candidates.size(); ++i){
@@ -34,27 +32,11 @@ pair<int, int> selectBestAlignment(const vector<Path<UnitigData>>& candidates, c
 		config = edlibNewAlignConfig(best_edit_dist * max_len_norm + 1, EDLIB_MODE_NW, EDLIB_TASK_DISTANCE, NULL, 0);
 		align = edlibAlign(candidate.c_str(), candidate.length(), ref, len_ref, config);
 
-		if (align.editDistance >= 0){
+		if ((align.editDistance >= 0) && ((static_cast<double>(align.editDistance) / max_len_norm) < best_edit_dist)) {
 
-			if ((static_cast<double>(align.editDistance) / max_len_norm) < best_edit_dist) {
-
-				best_edit_dist = static_cast<double>(align.editDistance) / max_len_norm;
-				best_end_loc = align.endLocations[0];
-				best_cand_id = i;
-
-				//for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
-			}
-			/*else if ((static_cast<double>(align.editDistance) / max_len_norm) == best_edit_dist) {
-
-				for (size_t j = 0; j < align.numLocations; ++j){
-
-					if (align.endLocations[j] > best_end_loc){
-
-						best_cand_id = i;
-						best_end_loc = align.endLocations[j];
-					}
-				}
-			}*/
+			best_edit_dist = static_cast<double>(align.editDistance) / max_len_norm;
+			best_end_loc = align.endLocations[0];
+			best_cand_id = i;
 		}
 
 		edlibFreeAlignResult(align);
@@ -86,8 +68,6 @@ pair<int, int> selectBestPrefixAlignment(const char* ref, const size_t ref_len, 
 	best_cand_id = 0;
 	best_end_loc = align.endLocations[0];
 
-	//for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
-
 	edlibFreeAlignResult(align);
 
 	for (int i = 1; i < candidates.size(); ++i){
@@ -100,27 +80,11 @@ pair<int, int> selectBestPrefixAlignment(const char* ref, const size_t ref_len, 
 		config = edlibNewAlignConfig(best_edit_dist * max_len_norm + 1, EDLIB_MODE_SHW, EDLIB_TASK_DISTANCE, NULL, 0);
 		align = edlibAlign(candidate.c_str(), candidate.length(), ref, ref_len, config);
 
-		if (align.editDistance >= 0){
+		if ((align.editDistance >= 0) && ((static_cast<double>(align.editDistance) / max_len_norm) < best_edit_dist)) {
 
-			if ((static_cast<double>(align.editDistance) / max_len_norm) < best_edit_dist){
-
-				best_edit_dist = static_cast<double>(align.editDistance) / max_len_norm;
-				best_cand_id = i;
-				best_end_loc = align.endLocations[0];
-
-				//for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
-			}
-			/*else if ((static_cast<double>(align.editDistance) / max_len_norm) == best_edit_dist){
-
-				for (size_t j = 0; j < align.numLocations; ++j){
-
-					if (align.endLocations[j] > best_end_loc){
-
-						best_cand_id = i;
-						best_end_loc = align.endLocations[j];
-					}
-				}
-			}*/
+			best_edit_dist = static_cast<double>(align.editDistance) / max_len_norm;
+			best_cand_id = i;
+			best_end_loc = align.endLocations[0];
 		}
 
 		edlibFreeAlignResult(align);
@@ -153,8 +117,6 @@ pair<int, int> selectBestPrefixAlignment(const char* ref, const size_t ref_len, 
 	best_cand_id = 0;
 	best_end_loc = align.endLocations[0];
 
-	//for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
-
 	edlibFreeAlignResult(align);
 
 	for (int i = 1; i < candidates.size(); ++i){
@@ -167,27 +129,11 @@ pair<int, int> selectBestPrefixAlignment(const char* ref, const size_t ref_len, 
 		config = edlibNewAlignConfig(best_edit_dist * max_len_norm + 1, EDLIB_MODE_SHW, EDLIB_TASK_DISTANCE, NULL, 0);
 		align = edlibAlign(candidate.c_str(), candidate.length(), ref, ref_len, config);
 
-		if (align.editDistance >= 0){
+		if ((align.editDistance >= 0) && ((static_cast<double>(align.editDistance) / max_len_norm) < best_edit_dist)) {
 
-			if ((static_cast<double>(align.editDistance) / max_len_norm) < best_edit_dist){
-
-				best_edit_dist = static_cast<double>(align.editDistance) / max_len_norm;
-				best_cand_id = i;
-				best_end_loc = align.endLocations[0];
-
-				//for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
-			}
-			/*else if ((static_cast<double>(align.editDistance) / max_len_norm) == best_edit_dist){
-
-				for (size_t j = 0; j < align.numLocations; ++j){
-
-					if (align.endLocations[j] > best_end_loc){
-
-						best_cand_id = i;
-						best_end_loc = align.endLocations[j];
-					}
-				}
-			}*/
+			best_edit_dist = static_cast<double>(align.editDistance) / max_len_norm;
+			best_cand_id = i;
+			best_end_loc = align.endLocations[0];
 		}
 
 		edlibFreeAlignResult(align);
@@ -221,8 +167,6 @@ pair<int, pair<int, int>> selectBestPrefixAlignment2(const char* ref, const size
 	best_edit_dist = static_cast<double>(align.editDistance) / max(candidate.length(), ref_len);
 	best_cand_id = 0;
 	best_end_loc_target = align.endLocations[0];
-	
-	//for (size_t j = 1; j < align.numLocations; ++j) best_end_loc_target = max(best_end_loc_target, align.endLocations[j]);
 
 	edlibFreeAlignResult(align);
 
@@ -236,27 +180,11 @@ pair<int, pair<int, int>> selectBestPrefixAlignment2(const char* ref, const size
 		config = edlibNewAlignConfig(best_edit_dist * max_len_norm + 1, EDLIB_MODE_SHW, EDLIB_TASK_DISTANCE, NULL, 0);
 		align = edlibAlign(candidate.c_str(), candidate.length(), ref, ref_len, config);
 
-		if (align.editDistance >= 0){
+		if ((align.editDistance >= 0) && ((static_cast<double>(align.editDistance) / max_len_norm) < best_edit_dist)) {
 
-			if ((static_cast<double>(align.editDistance) / max_len_norm) < best_edit_dist){
-
-				best_edit_dist = static_cast<double>(align.editDistance) / max_len_norm;
-				best_cand_id = i;
-				best_end_loc_target = align.endLocations[0];
-				
-				//for (size_t j = 1; j < align.numLocations; ++j) best_end_loc_target = max(best_end_loc_target, align.endLocations[j]);
-			}
-			/*else if ((static_cast<double>(align.editDistance) / max_len_norm) == best_edit_dist){
-
-				for (size_t j = 0; j < align.numLocations; ++j){
-
-					if (align.endLocations[j] > best_end_loc_target){
-
-						best_cand_id = i;
-						best_end_loc_target = align.endLocations[j];
-					}
-				}
-			}*/
+			best_edit_dist = static_cast<double>(align.editDistance) / max_len_norm;
+			best_cand_id = i;
+			best_end_loc_target = align.endLocations[0];
 		}
 
 		edlibFreeAlignResult(align);
@@ -315,8 +243,6 @@ pair<int, pair<int, int>> selectBestPrefixAlignment2(const char* ref, const size
 
 pair<string, string> generateConsensus(const ResultCorrection* fw_s, const ResultCorrection* bw_s, const string& ref_seq, const double max_norm_edit_distance){
 
-	const bool haveQual = (!fw_s->getQuality().empty() && !bw_s->getQuality().empty());
-
 	if ((bw_s->getNbCorrectedPosOldSeq() == 0) && (fw_s->getNbCorrectedPosOldSeq() != 0)) return {fw_s->getSequence(), fw_s->getQuality()};
 	else if ((fw_s->getNbCorrectedPosOldSeq() == 0) && (bw_s->getNbCorrectedPosOldSeq() != 0)) return {bw_s->getSequence(), bw_s->getQuality()};
 	else if (fw_s->getNbCorrectedPosOldSeq() + bw_s->getNbCorrectedPosOldSeq() == 0) return {string(), string()};
@@ -348,7 +274,7 @@ pair<string, string> generateConsensus(const ResultCorrection* fw_s, const Resul
 	const size_t cigar_fw_len = strlen(cigar_fw), cigar_bw_len = strlen(cigar_bw);
 
 	size_t cigar_fw_pos = 0, cigar_bw_pos = 0;
-	size_t prev_cigar_fw_pos = 0, prev_cigar_bw_pos = 0;;
+	size_t prev_cigar_fw_pos = 0, prev_cigar_bw_pos = 0;
 	size_t fw_s_pos = 0, bw_s_pos = 0;
 	size_t ref_pos_fw = 0, ref_pos_bw = 0;
 
@@ -424,41 +350,39 @@ pair<string, string> generateConsensus(const ResultCorrection* fw_s, const Resul
 		int64_t len_fw = fw_s->getLengthCorrectedRegion(i);
 		int64_t len_bw = bw_s->getLengthCorrectedRegion(i);
 
-		if ((len_fw == 0) && (len_bw == 0)){
+		pair<pair<size_t, size_t>, size_t> pos_read;
+
+		if ((len_fw + len_bw) == 0){
 
 			len_fw = fw_s->getLengthUncorrectedRegion(i);
 			len_bw = bw_s->getLengthUncorrectedRegion(i);
 
 			if (len_fw > len_bw) len_fw = -1;
-			else if (len_fw < len_bw) len_bw = -1;
+			else len_bw = -1;
 		}
 		
 		if (len_fw >= len_bw){
 
-			const pair<pair<size_t, size_t>, size_t> pos_read = moveIntoCIGAR(i, i + len_fw, cigar_fw_pos, prev_cigar_fw_pos, fw_s_pos, ref_pos_fw, cigar_fw, cigar_fw_len);
+			pos_read = moveIntoCIGAR(i, i + len_fw, cigar_fw_pos, prev_cigar_fw_pos, fw_s_pos, ref_pos_fw, cigar_fw, cigar_fw_len);
 
 			if (pos_read.first.second > pos_read.first.first){
 
 				ss << fw_s->getSequence().substr(pos_read.first.first, pos_read.first.second - pos_read.first.first);
-
-				if (haveQual) sq << fw_s->getQuality().substr(pos_read.first.first, pos_read.first.second - pos_read.first.first);
+				sq << fw_s->getQuality().substr(pos_read.first.first, pos_read.first.second - pos_read.first.first);
 			}
-
-			i = pos_read.second;
 		}
 		else {
 
-			const pair<pair<size_t, size_t>, size_t> pos_read = moveIntoCIGAR(i, i + len_bw, cigar_bw_pos, prev_cigar_bw_pos, bw_s_pos, ref_pos_bw, cigar_bw, cigar_bw_len);
+			pos_read = moveIntoCIGAR(i, i + len_bw, cigar_bw_pos, prev_cigar_bw_pos, bw_s_pos, ref_pos_bw, cigar_bw, cigar_bw_len);
 
 			if (pos_read.first.second > pos_read.first.first){
 
 				ss << bw_s->getSequence().substr(pos_read.first.first, pos_read.first.second - pos_read.first.first);
-
-				if (haveQual) sq << bw_s->getQuality().substr(pos_read.first.first, pos_read.first.second - pos_read.first.first);
+				sq << bw_s->getQuality().substr(pos_read.first.first, pos_read.first.second - pos_read.first.first);
 			}
-
-			i = pos_read.second;
 		}
+
+		i = pos_read.second;
 	}
 
 	free(cigar_fw);
@@ -480,34 +404,139 @@ pair<string, string> generateConsensus(const ResultCorrection* fw_s, const Resul
 	return {ss.str(), sq.str()};
 }
 
-void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg,
+vector<pair<size_t, char>> filterAmbiguity(	const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const WeightsPairID& w_pid,
+											const string& query, const vector<pair<size_t, char>>& v_ambiguity) {
+
+	auto isValidAmb = [&](const string& q_sub, const char c, const size_t pos) {
+
+		bool valid = false;
+		bool found = false;
+
+		string q = q_sub;
+
+		q[pos] = c;
+
+		for (KmerIterator it_km(q.c_str()), it_km_end; (it_km != it_km_end) && !valid; ++it_km) {
+
+			const const_UnitigMap<UnitigData> um = dbg.findUnitig(q.c_str(), it_km->second, q.length());
+
+			if (!um.isEmpty){
+
+				const UnitigData* ud = um.getData();
+				const PairID& p_ids = ud->get_readID();
+
+				valid = hasEnoughSharedPairID(p_ids, w_pid.all_pids, opt.min_cov_vertices);
+				found = true;
+				it_km += um.len - 1;
+			}
+		}
+
+		return (valid || !found);
+	};
+
+	vector<pair<size_t, char>> v_amb_out;
+
+	for (const auto& p_amb : v_ambiguity) {
+
+		const size_t pos_buff = (p_amb.first < (opt.k - 1)) ? 0 : (p_amb.first - opt.k + 1);
+		const size_t len_buff = min(p_amb.first + opt.k, query.length()) - pos_buff;
+		const size_t pos_snp_buff = p_amb.first - pos_buff;
+
+		const string q_sub = query.substr(pos_buff, len_buff);
+
+		bool is_a = false, is_c = false, is_g = false, is_t = false;
+
+		getAmbiguityRev(p_amb.second, is_a, is_c, is_g, is_t);
+
+		if (is_a) is_a = isValidAmb(q_sub, 'A', pos_snp_buff);
+		if (is_c) is_c = isValidAmb(q_sub, 'C', pos_snp_buff);
+		if (is_g) is_g = isValidAmb(q_sub, 'G', pos_snp_buff);
+		if (is_t) is_t = isValidAmb(q_sub, 'T', pos_snp_buff);
+
+		if (static_cast<size_t>(is_a) + static_cast<size_t>(is_c) + static_cast<size_t>(is_g) + static_cast<size_t>(is_t) > 1) v_amb_out.push_back({p_amb.first, getAmbiguity(is_a, is_c, is_g, is_t)});
+	}
+
+	return v_amb_out;
+}
+
+/*void fixHomopolymer(const char* s, const size_t l, const size_t min_len_hompoly) {
+
+	
+}*/
+
+void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const WeightsPairID& w_pid,
 					string& query, string& quality, 
 					const char* ref_seq, const char* ref_qual, const size_t ref_len,
-					const uint64_t hap_id, const vector<pair<size_t, char>>& v_ambiguity,
-					const size_t min_qual, const bool force_fix){
+					const uint64_t hap_id, const vector<pair<size_t, char>>& v_ambiguity){
 
 	if (!v_ambiguity.empty()) {
 
 		const size_t quality_len = quality.length();
 		const size_t query_len = query.length();
 
-		const bool q_hasQual = (quality_len != 0);
 		const bool r_hasQual = (ref_qual != nullptr);
 
-		const size_t min_qs_char = 33 + min_qual;
+		const char q_max_corr = getQual(1.0, opt.out_qual);
+		const char q_min_corr = getQual(0.0, opt.out_qual);
+		const char q_min_uncorr = getQual(0.0);
+
+		const size_t k = dbg.getK();
+
+		const char c_noCorrect = 'X';
 
 		const uint64_t undetermined_hap_id = 0xffffffffffffffffULL;
-		const uint64_t rev_hap_id = (hap_id == undetermined_hap_id) ? undetermined_hap_id : (static_cast<bool>(hap_id & 0x1ULL) ? (hap_id - 1) : (hap_id + 1));
+
+		auto isPairIDconsistent = [&](const size_t pos_km, const char snp) {
+
+			const size_t pos_buff = (pos_km < (k - 1)) ? 0 : (pos_km - k + 1);
+			const size_t len_buff = min(pos_km + k, query_len) - pos_buff;
+			const size_t pos_snp_buff = pos_km - pos_buff;
+
+			string q_sub = query.substr(pos_buff, len_buff);
+
+			q_sub[pos_snp_buff] = snp;
+
+			bool isConsistent = false;
+
+			for (KmerIterator it_km(q_sub.c_str()), it_km_end; (it_km != it_km_end) && !isConsistent; ++it_km) {
+
+				const const_UnitigMap<UnitigData> um = dbg.findUnitig(q_sub.c_str(), it_km->second, q_sub.length());
+
+				if (!um.isEmpty){
+
+					const UnitigData* ud = um.getData();
+
+					const PairID& p_ids = ud->get_readID();
+					const PairID& hap_ids = ud->get_hapID();
+
+					isConsistent = hasEnoughSharedPairID(p_ids, w_pid.all_pids, opt.min_cov_vertices);
+					it_km += um.len - 1;
+				}
+			}
+
+			return isConsistent;
+		};
+
+		struct compare_ambiguity {
+
+			bool operator()(const pair<size_t, char>& a, const pair<size_t, char>& b) const {
+
+				return ((a.first < b.first) || ((a.first == b.first) && (a.second < b.second)));
+			}
+		};
 
 		string query_tmp = query;
 
-		unordered_map<size_t, char> m_ambiguity;
+		unordered_map<size_t, char> m_ambiguity_safe;
+		unordered_map<size_t, char> m_ambiguity_all;
 
 		for (const auto p : v_ambiguity){
 
-			m_ambiguity.insert(p);
+			m_ambiguity_safe.insert(p);
 			query_tmp[p.first] = p.second;
 		}
+
+		m_ambiguity_all = m_ambiguity_safe;
 
 		const EdlibAlignConfig config_ambiguous = edlibNewAlignConfig(-1, EDLIB_MODE_SHW, EDLIB_TASK_PATH, NULL, 0);
 		EdlibAlignResult align = edlibAlign(query.c_str(), query_len, ref_seq, ref_len, config_ambiguous);
@@ -525,34 +554,71 @@ void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg,
 
 			if ((cigar[cigar_pos] < 0x30) || (cigar[cigar_pos] > 0x39)){ // If current char. is not a number
 
+				const size_t cigar_l = atoi(&cigar[prev_cigar_pos]);
+
 				if (cigar[cigar_pos] == 'M') { //match
 
-					const size_t cigar_l = atoi(&cigar[prev_cigar_pos]);
+					for (size_t q_pos = query_pos, t_pos = target_pos; q_pos < query_pos + cigar_l; ++q_pos, ++t_pos){
 
-					for (size_t query_pos_tmp = query_pos, target_pos_tmp = target_pos; query_pos_tmp < query_pos + cigar_l; ++query_pos_tmp, ++target_pos_tmp){
+						if (!isDNA(query_tmp[q_pos])) { // SNP candidate detected from corrected sequence
 
-						if (!isDNA(query_tmp[query_pos_tmp]) && isDNA(ref_seq[target_pos_tmp]) && (!r_hasQual || (ref_qual[target_pos_tmp] >= min_qs_char))){
+							if (!isDNA(ref_seq[t_pos])) { // Ref already has ambiguity char. at that location -> SNP from prev. correction pass.
 
-							bool is_a_q = false, is_c_q = false, is_g_q = false, is_t_q = false;
-							bool is_a_t = false, is_c_t = false, is_g_t = false, is_t_t = false;
+								unordered_map<size_t, char>::iterator it = m_ambiguity_safe.find(q_pos);
 
-							getAmbiguityRev(ref_seq[target_pos_tmp], is_a_t, is_c_t, is_g_t, is_t_t);
-							getAmbiguityRev(query_tmp[query_pos_tmp], is_a_q, is_c_q, is_g_q, is_t_q);
-
-							if ((is_a_q && is_a_t) || (is_c_q && is_c_t) || (is_g_q && is_g_t) || (is_t_q && is_t_t)){
-
-								unordered_map<size_t, char>::iterator it = m_ambiguity.find(query_pos_tmp);
-
-								if (it != m_ambiguity.end()) it->second = ref_seq[target_pos_tmp];
+								if (it != m_ambiguity_safe.end()) it->second = c_noCorrect;
 							}
+							else if (quality[q_pos] > q_min_corr)  {
+
+								bool is_a_q = false, is_c_q = false, is_g_q = false, is_t_q = false;
+								bool is_a_t = false, is_c_t = false, is_g_t = false, is_t_t = false;
+
+								getAmbiguityRev(ref_seq[t_pos], is_a_t, is_c_t, is_g_t, is_t_t);
+								getAmbiguityRev(query_tmp[q_pos], is_a_q, is_c_q, is_g_q, is_t_q);
+
+								if ((is_a_q && is_a_t) || (is_c_q && is_c_t) || (is_g_q && is_g_t) || (is_t_q && is_t_t)){
+
+									unordered_map<size_t, char>::iterator it = m_ambiguity_safe.find(q_pos);
+
+									if (it != m_ambiguity_safe.end()) it->second = ref_seq[t_pos];
+								}
+							}
+
+							unordered_map<size_t, char>::iterator it = m_ambiguity_all.find(q_pos);
+
+							if (it != m_ambiguity_all.end()) it->second = ref_seq[t_pos];
+						}
+						else if (!isDNA(ref_seq[t_pos])) {
+
+							m_ambiguity_safe.insert({q_pos, c_noCorrect});
+							m_ambiguity_all.insert({q_pos, ref_seq[t_pos]});
 						}
 					}
 
 					query_pos += cigar_l;
 					target_pos += cigar_l;
 				}
-				else if ((cigar[cigar_pos] == 'I') || (cigar[cigar_pos] == 'S')) query_pos += atoi(&cigar[prev_cigar_pos]); //insertion or soft-clipping
-				else if (cigar[cigar_pos] == 'D') target_pos += atoi(&cigar[prev_cigar_pos]);  //deletion
+				else if (cigar[cigar_pos] == 'I') { //insertion
+
+					for (size_t q_pos = query_pos; q_pos < query_pos + cigar_l; ++q_pos){
+
+						if (!isDNA(query_tmp[q_pos])) {
+
+							unordered_map<size_t, char>::iterator it_s = m_ambiguity_safe.find(q_pos);
+							unordered_map<size_t, char>::iterator it_a = m_ambiguity_all.find(q_pos);
+
+							if ((it_s != m_ambiguity_safe.end()) && (it_a != m_ambiguity_all.end())){
+
+								it_a->second = it_s->second;
+								it_s->second = c_noCorrect;
+							}
+						}
+					}
+
+					query_pos += cigar_l;
+				}
+				else if (cigar[cigar_pos] == 'S') query_pos += cigar_l; //soft-clipping
+				else if (cigar[cigar_pos] == 'D') target_pos += cigar_l; //deletion
 
 				prev_cigar_pos = cigar_pos + 1;
 			}
@@ -563,291 +629,149 @@ void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg,
 		free(cigar);
 		edlibFreeAlignResult(align);
 
-		const size_t k = dbg.getK();
-
-		struct compare_ambiguity {
-
-			bool operator()(const pair<size_t, char>& a, const pair<size_t, char>& b) const {
-
-				return ((a.first < b.first) || ((a.first == b.first) && (a.second < b.second)));
-			}
-		};
-
 		set<pair<size_t, char>, compare_ambiguity> s_ambiguity;
 
-		for (const auto& p : m_ambiguity){
+		for (auto& p : m_ambiguity_safe){
 
 			if (isDNA(p.second)){
 
-				const size_t pos_buff = (p.first < k) ? 0 : (p.first - k);
-				const size_t len_buff = min(p.first + k, query_len) - pos_buff;
-				const size_t pos_snp_buff = p.first - pos_buff;
+				if (isPairIDconsistent(p.first, p.second)){
 
-				const bool confident_snp = (p.second == query[p.first]);
+					const size_t pos_buff = (p.first < (k - 1)) ? 0 : (p.first - k + 1);
+					const size_t len_buff = min(p.first + k, query_len) - pos_buff;
+					const size_t pos_snp_buff = p.first - pos_buff;
 
-				string q_sub = query.substr(pos_buff, len_buff);
+					string q_sub = query.substr(pos_buff, len_buff);
 
-				q_sub[pos_snp_buff] = p.second;
+					q_sub[pos_snp_buff] = p.second;
 
-				for (KmerIterator it_km(q_sub.c_str()), it_km_end; it_km != it_km_end; ++it_km) {
+					for (KmerIterator it_km(q_sub.c_str()), it_km_end; it_km != it_km_end; ++it_km) {
 
-					const pair<Kmer, int>& p_km = *it_km;
-					const const_UnitigMap<UnitigData> um = dbg.findUnitig(q_sub.c_str(), p_km.second, q_sub.length());
+						const pair<Kmer, int>& p_km = *it_km;
+						const const_UnitigMap<UnitigData> um = dbg.findUnitig(q_sub.c_str(), p_km.second, q_sub.length());
 
-					if (!um.isEmpty) {
+						if (!um.isEmpty) {
 
-						const PairID& hap_um = um.getData()->get_hapID();
+							const PairID& hap_um = um.getData()->get_hapID();
 
-						if ((hap_id == undetermined_hap_id) || hap_um.isEmpty() || hap_um.contains(hap_id) || !hap_um.contains(rev_hap_id)) {
+							if ((hap_id == undetermined_hap_id) || isValidHap(hap_um, hap_id)) {
 
-							const_UnitigMap<UnitigData> um_tmp = um;
+								const_UnitigMap<UnitigData> um_tmp = um;
 
-							um_tmp.dist = 0;
-							um_tmp.len = um_tmp.size - k + 1;
+								um_tmp.dist = 0;
+								um_tmp.len = um_tmp.size - k + 1;
 
-							const string unitig_seq = um_tmp.mappedSequenceToString();
-							const vector<pair<size_t, char>> v_amb = um_tmp.getData()->get_ambiguity_char(um_tmp);
+								const string unitig_seq = um_tmp.mappedSequenceToString();
+								const vector<pair<size_t, char>> v_amb = um_tmp.getData()->get_ambiguity_char(um_tmp);
 
-							size_t pos_snp_unitig = (pos_snp_buff - p_km.second) + um.dist;
+								size_t pos_snp_unitig = (pos_snp_buff - p_km.second) + um.dist;
 
-							if (!um.strand) pos_snp_unitig = um.size - pos_snp_unitig - 1;
+								if (!um.strand) pos_snp_unitig = um.size - pos_snp_unitig - 1;
 
-							for (const auto p_amb : v_amb){
+								for (const auto p_amb : v_amb){
 
-								int64_t pos = static_cast<int64_t>(p_amb.first);
+									int64_t pos = static_cast<int64_t>(p_amb.first);
 
-								if (pos <= pos_snp_unitig) pos = static_cast<int64_t>(p.first) - static_cast<int64_t>(pos_snp_unitig - pos);
-								else pos = static_cast<int64_t>(p.first) + static_cast<int64_t>(pos - pos_snp_unitig);
+									if (pos <= pos_snp_unitig) pos = static_cast<int64_t>(p.first) - static_cast<int64_t>(pos_snp_unitig - pos);
+									else pos = static_cast<int64_t>(p.first) + static_cast<int64_t>(pos - pos_snp_unitig);
 
-								if ((pos >= 0) && (pos < query_len) && (pos != p.first)) {
+									if ((pos >= 0) && (pos < query_len) && (pos != p.first)) {
 
-									const unordered_map<size_t, char>::const_iterator it = m_ambiguity.find(pos);
+										const unordered_map<size_t, char>::const_iterator it = m_ambiguity_safe.find(pos);
 
-									if ((it != m_ambiguity.end()) && (!isDNA(it->second) || confident_snp)) s_ambiguity.insert(pair<size_t, char>(pos, unitig_seq[p_amb.first]));
+										if ((it != m_ambiguity_safe.end()) && !isDNA(it->second)) s_ambiguity.insert(pair<size_t, char>(pos, unitig_seq[p_amb.first]));
+									}
 								}
-							}
-	                	}
+		                	}
 
-		                it_km += um.len - 1;
+			                it_km += um.len - 1;
+						}
+					}
+				}
+				else p.second = query[p.first];
+			}
+		}
+
+		{
+			const vector<pair<size_t, char>> v(s_ambiguity.begin(), s_ambiguity.end());
+
+			for (int64_t i = 0; i < v.size(); ++i){
+
+				if (((i == 0) || (v[i].first != v[i-1].first)) && ((i == v.size()-1) || (v[i].first != v[i+1].first))){
+
+					unordered_map<size_t, char>::iterator it_s = m_ambiguity_safe.find(v[i].first);
+
+					if (it_s != m_ambiguity_safe.end()){
+
+						char c_amb = it_s->second;
+
+						/*if (c_amb == c_noCorrect) {
+
+							const unordered_map<size_t, char>::iterator it_a = m_ambiguity_all.find(v[i].first);
+
+							if ((it_a != m_ambiguity_all.end()) && !isDNA(it_a->second)) c_amb = it_a->second;
+						}*/
+
+						bool is_a_q = false, is_c_q = false, is_g_q = false, is_t_q = false;
+						bool is_a_t = false, is_c_t = false, is_g_t = false, is_t_t = false;
+
+						getAmbiguityRev(c_amb, is_a_t, is_c_t, is_g_t, is_t_t);
+						getAmbiguityRev(v[i].second, is_a_q, is_c_q, is_g_q, is_t_q);
+
+						if ((is_a_q && is_a_t) || (is_c_q && is_c_t) || (is_g_q && is_g_t) || (is_t_q && is_t_t)) it_s->second = v[i].second;
 					}
 				}
 			}
 		}
 
-		const vector<pair<size_t, char>> v(s_ambiguity.begin(), s_ambiguity.end());
+		for (const auto& p : m_ambiguity_safe){
 
-		for (int64_t i = 0; i < v.size(); ++i){
+			if ((p.second == c_noCorrect) || (quality[p.first] <= q_min_corr)) {
 
-			if (((i == 0) || (v[i].first != v[i-1].first)) && ((i == v.size()-1) || (v[i].first != v[i+1].first))){
+				const unordered_map<size_t, char>::const_iterator it_a = m_ambiguity_all.find(p.first);
 
-				unordered_map<size_t, char>::iterator it = m_ambiguity.find(v[i].first);
+				if (it_a != m_ambiguity_all.end()){
 
-				if (it != m_ambiguity.end()){
+					bool validHap = ((hap_id == undetermined_hap_id) || (p.second == c_noCorrect) || !isDNA(it_a->second));
 
-					bool is_a_q = false, is_c_q = false, is_g_q = false, is_t_q = false;
-					bool is_a_t = false, is_c_t = false, is_g_t = false, is_t_t = false;
+					if (!validHap) {
 
-					getAmbiguityRev(it->second, is_a_t, is_c_t, is_g_t, is_t_t);
-					getAmbiguityRev(v[i].second, is_a_q, is_c_q, is_g_q, is_t_q);
+						const size_t pos_buff = (p.first < (k - 1)) ? 0 : (p.first - k + 1);
+						const size_t len_buff = min(p.first + k, query_len) - pos_buff;
+						const size_t pos_snp_buff = p.first - pos_buff;
 
-					if ((is_a_q && is_a_t) || (is_c_q && is_c_t) || (is_g_q && is_g_t) || (is_t_q && is_t_t)) it->second = v[i].second;
+						string q_sub = query.substr(pos_buff, len_buff);
+
+						q_sub[pos_snp_buff] = it_a->second;
+
+						for (KmerIterator it_km(q_sub.c_str()), it_km_end; (it_km != it_km_end) && !validHap; ++it_km) {
+
+							const const_UnitigMap<UnitigData> um = dbg.findUnitig(q_sub.c_str(), it_km->second, q_sub.length());
+
+							if (!um.isEmpty){
+
+								validHap = isValidHap(um.getData()->get_hapID(), hap_id);
+								it_km += um.len - 1;
+							}
+						}
+					}
+
+					if (validHap) {
+
+						query_tmp[p.first] = it_a->second;
+						quality[p.first] = q_max_corr;
+					}
+					else query_tmp[p.first] = query[p.first]; // Replacing the SNP with base from raw sequence lead to incorrect phasing, keep the correction
+					
 				}
 			}
+			else if (!isDNA(p.second)) query_tmp[p.first] = query[p.first];
+			else query_tmp[p.first] = p.second; // HERE -> Why not putting raw sequence base?
 		}
-
-		for (const auto& p : m_ambiguity) query_tmp[p.first] = (force_fix && !isDNA(p.second)) ? query[p.first] : p.second;
 
 		query = move(query_tmp);
 	}
 }
-
-/*void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg,
-					string& query, string& quality, 
-					const char* ref_seq, const char* ref_qual, const size_t ref_len,
-					const vector<pair<size_t, char>>& v_ambiguity, const Roaring& partitions,
-					const size_t min_qual, const bool force_fix){
-
-	if (!v_ambiguity.empty()) {
-
-		const size_t quality_len = quality.length();
-		const size_t query_len = query.length();
-
-		const bool q_hasQual = (quality_len != 0);
-		const bool r_hasQual = (ref_qual != nullptr);
-
-		const bool hasPart = (partitions.cardinality() != 0);
-
-		const size_t min_qs_char = 33 + min_qual;
-
-		string query_tmp = query;
-
-		unordered_map<size_t, char> m_ambiguity, m_ambiguity_tmp;
-
-		for (const auto p : v_ambiguity){
-
-			m_ambiguity.insert(p);
-			query_tmp[p.first] = p.second;
-		}
-
-		m_ambiguity_tmp = m_ambiguity;
-
-		const EdlibAlignConfig config_ambiguous = edlibNewAlignConfig(-1, EDLIB_MODE_SHW, EDLIB_TASK_PATH, NULL, 0);
-		EdlibAlignResult align = edlibAlign(query.c_str(), query_len, ref_seq, ref_len, config_ambiguous);
-
-		char* cigar = edlibAlignmentToCigar(align.alignment, align.alignmentLength, EDLIB_CIGAR_STANDARD);
-
-		const size_t cigar_len = strlen(cigar);
-
-		size_t cigar_pos = 0;
-		size_t prev_cigar_pos = 0;
-		size_t query_pos = 0;
-		size_t target_pos = align.startLocations[0];
-
-		while (cigar_pos != cigar_len){
-
-			if ((cigar[cigar_pos] < 0x30) || (cigar[cigar_pos] > 0x39)){ // If current char. is not a number
-
-				if (cigar[cigar_pos] == 'M') { //match
-
-					const size_t cigar_l = atoi(&cigar[prev_cigar_pos]);
-
-					for (size_t query_pos_tmp = query_pos, target_pos_tmp = target_pos; query_pos_tmp < query_pos + cigar_l; ++query_pos_tmp, ++target_pos_tmp){
-
-						if (!isDNA(query_tmp[query_pos_tmp]) && isDNA(ref_seq[target_pos_tmp]) && (!r_hasQual || (ref_qual[target_pos_tmp] >= min_qs_char))){
-
-							bool is_a_q = false, is_c_q = false, is_g_q = false, is_t_q = false;
-							bool is_a_t = false, is_c_t = false, is_g_t = false, is_t_t = false;
-
-							getAmbiguityRev(ref_seq[target_pos_tmp], is_a_t, is_c_t, is_g_t, is_t_t);
-							getAmbiguityRev(query_tmp[query_pos_tmp], is_a_q, is_c_q, is_g_q, is_t_q);
-
-							if ((is_a_q && is_a_t) || (is_c_q && is_c_t) || (is_g_q && is_g_t) || (is_t_q && is_t_t)){
-
-								unordered_map<size_t, char>::iterator it = m_ambiguity.find(query_pos_tmp);
-
-								if (it != m_ambiguity.end()) it->second = ref_seq[target_pos_tmp];
-							}
-						}
-					}
-
-					query_pos += cigar_l;
-					target_pos += cigar_l;
-				}
-				else if ((cigar[cigar_pos] == 'I') || (cigar[cigar_pos] == 'S')) query_pos += atoi(&cigar[prev_cigar_pos]); //insertion or soft-clipping
-				else if (cigar[cigar_pos] == 'D') target_pos += atoi(&cigar[prev_cigar_pos]);  //deletion
-
-				prev_cigar_pos = cigar_pos + 1;
-			}
-
-			++cigar_pos;
-		}
-
-		free(cigar);
-		edlibFreeAlignResult(align);
-
-		const size_t k = dbg.getK();
-
-		struct compare_ambiguity {
-
-			bool operator()(const pair<size_t, char>& a, const pair<size_t, char>& b) const {
-
-				return ((a.first < b.first) || ((a.first == b.first) && (a.second < b.second)));
-			}
-		};
-
-		set<pair<size_t, char>, compare_ambiguity> s_ambiguity;
-
-		for (auto& p : m_ambiguity){
-
-			if (isDNA(p.second)){
-
-				const size_t pos_buff = (p.first < k) ? 0 : (p.first - k);
-				const size_t len_buff = min(p.first + k, query_len) - pos_buff;
-				const size_t pos_snp_buff = p.first - pos_buff;
-
-				const bool confident_snp = (p.second == query[p.first]);
-
-				bool isValidSNP = false;
-
-				string q_sub = query.substr(pos_buff, len_buff);
-
-				q_sub[pos_snp_buff] = p.second;
-
-				for (KmerIterator it_km(q_sub.c_str()), it_km_end; it_km != it_km_end; ++it_km) {
-
-					const pair<Kmer, int>& p_km = *it_km;
-					const const_UnitigMap<UnitigData> um = dbg.findUnitig(q_sub.c_str(), p_km.second, q_sub.length());
-
-					if (!um.isEmpty && (!hasPart || partitions.contains(um.getData()->getConnectedComp()))) {
-
-						const_UnitigMap<UnitigData> um_tmp = um;
-
-						um_tmp.dist = 0;
-						um_tmp.len = um_tmp.size - k + 1;
-
-						const string unitig_seq = um_tmp.mappedSequenceToString();
-						const vector<pair<size_t, char>> v_amb = um_tmp.getData()->get_ambiguity_char(um_tmp);
-
-						size_t pos_snp_unitig = (pos_snp_buff - p_km.second) + um.dist;
-
-						isValidSNP = true;
-
-						if (!um.strand) pos_snp_unitig = um.size - pos_snp_unitig - 1;
-
-						for (const auto p_amb : v_amb){
-
-							int64_t pos = static_cast<int64_t>(p_amb.first);
-
-							if (pos <= pos_snp_unitig) pos = static_cast<int64_t>(p.first) - static_cast<int64_t>(pos_snp_unitig - pos);
-							else pos = static_cast<int64_t>(p.first) + static_cast<int64_t>(pos - pos_snp_unitig);
-
-							if ((pos >= 0) && (pos < query_len) && (pos != p.first)) {
-
-								const unordered_map<size_t, char>::const_iterator it = m_ambiguity.find(pos);
-
-								if ((it != m_ambiguity.end()) && (!isDNA(it->second) || confident_snp)) s_ambiguity.insert(pair<size_t, char>(pos, unitig_seq[p_amb.first]));
-							}
-						}
-
-	                    it_km += um.len - 1;
-					}
-				}
-
-				if (!isValidSNP){
-
-					const unordered_map<size_t, char>::const_iterator it = m_ambiguity_tmp.find(p.first);
-
-					p.second = it->second;
-				}
-			}
-		}
-
-		const vector<pair<size_t, char>> v(s_ambiguity.begin(), s_ambiguity.end());
-
-		for (int64_t i = 0; i < v.size(); ++i){
-
-			if (((i == 0) || (v[i].first != v[i-1].first)) && ((i == v.size()-1) || (v[i].first != v[i+1].first))){
-
-				unordered_map<size_t, char>::iterator it = m_ambiguity.find(v[i].first);
-
-				if (it != m_ambiguity.end()){
-
-					bool is_a_q = false, is_c_q = false, is_g_q = false, is_t_q = false;
-					bool is_a_t = false, is_c_t = false, is_g_t = false, is_t_t = false;
-
-					getAmbiguityRev(it->second, is_a_t, is_c_t, is_g_t, is_t_t);
-					getAmbiguityRev(v[i].second, is_a_q, is_c_q, is_g_q, is_t_q);
-
-					if ((is_a_q && is_a_t) || (is_c_q && is_c_t) || (is_g_q && is_g_t) || (is_t_q && is_t_t)) it->second = v[i].second;
-				}
-			}
-		}
-
-		for (const auto& p : m_ambiguity) query_tmp[p.first] = (force_fix && !isDNA(p.second)) ? query[p.first] : p.second;
-
-		query = move(query_tmp);
-	}
-}*/
 
 pair<int, int> selectBestSubstringAlignment(const char* ref, const size_t ref_len, const vector<Path<UnitigData>>& candidates, const double cut_threshold_norm_edit){
 
@@ -870,8 +794,6 @@ pair<int, int> selectBestSubstringAlignment(const char* ref, const size_t ref_le
 	best_cand_id = 0;
 	best_end_loc = align.endLocations[0];
 
-	//for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
-
 	edlibFreeAlignResult(align);
 
 	for (int i = 1; i < candidates.size(); ++i){
@@ -884,27 +806,11 @@ pair<int, int> selectBestSubstringAlignment(const char* ref, const size_t ref_le
 		config = edlibNewAlignConfig(best_edit_dist * max_len_norm + 1, EDLIB_MODE_HW, EDLIB_TASK_DISTANCE, NULL, 0);
 		align = edlibAlign(candidate.c_str(), candidate.length(), ref, ref_len, config);
 
-		if (align.editDistance >= 0){
+		if  ((align.editDistance >= 0) && ((static_cast<double>(align.editDistance) / max_len_norm) < best_edit_dist)) {
 
-			if ((static_cast<double>(align.editDistance) / max_len_norm) < best_edit_dist){
-
-				best_edit_dist = static_cast<double>(align.editDistance) / max_len_norm;
-				best_cand_id = i;
-				best_end_loc = align.endLocations[0];
-
-				//for (size_t j = 1; j < align.numLocations; ++j) best_end_loc = max(best_end_loc, align.endLocations[j]);
-			}
-			/*else if ((static_cast<double>(align.editDistance) / max_len_norm) == best_edit_dist){
-
-				for (size_t j = 0; j < align.numLocations; ++j){
-
-					if (align.endLocations[j] > best_end_loc){
-
-						best_cand_id = i;
-						best_end_loc = align.endLocations[j];
-					}
-				}
-			}*/
+			best_edit_dist = static_cast<double>(align.editDistance) / max_len_norm;
+			best_cand_id = i;
+			best_end_loc = align.endLocations[0];
 		}
 
 		edlibFreeAlignResult(align);

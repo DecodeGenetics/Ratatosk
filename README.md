@@ -96,12 +96,11 @@ Usage: Ratatosk [PARAMETERS]
                                    List of input short read files to correct (one file per line)
    -l, --in-long                   Input long read file to correct (FASTA/FASTQ possibly gzipped)
                                    List of input long read files to correct (one file per line)
-   -o, --out-long                  Output corrected long read file
+   -o, --out-long                  Output file prefix
 
    > Optional with required argument:
 
    -c, --cores                     Number of cores (default: 1)
-   -q, --quality                   Output Quality Scores: corrected bases get QS >= t (default: no QS)
    -t, --trim-split                Trim and split bases with quality score < t (default: no trim/split)
                                    Only sub-read with length >= 63 are output if used
    -u, --in-unmapped-short         Input read file of the unmapped short reads (FASTA/FASTQ possibly gzipped)
@@ -124,13 +123,18 @@ Usage: Ratatosk [PARAMETERS]
    -w, --max-len-weak1             Do not correct weak regions >= w bases during 1st pass (default: 1000)
    -W, --max-len-weak2             Do not correct weak regions >= w bases during 2nd pass (default: 10000)
 
+   > Optional with no argument:
+
+   -1, --1st-pass-only             Perform *only* the 1st correction pass (default: false)
+   -2, --2nd-pass-only             Perform *only* the 2nd correction pass (default: false)
+
 [EXPERIMENTAL PARAMETERS]:
 
    > Optional with required argument:
 
-   -p, --in-short-phase            Input short read phasing file (diploid only)
+   -p, --in-short-phase            Input short read phasing file
                                    List of input short read phasing files (one file per line)
-   -P, --in-long-phase             Input long read phasing file (diploid only)
+   -P, --in-long-phase             Input long read phasing file
                                    List of input long read phasing files (one file per line)
 ```
 
@@ -139,21 +143,25 @@ Usage: Ratatosk [PARAMETERS]
 ```
 Ratatosk -v -c 16 -s short_reads.fastq -l long_reads.fastq -o out_long_reads
 ```
-Ratatosk corrects (`Ratatosk`) the long read file (`-l long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-s short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads_corrected* (`-o out_long_reads`).
+Ratatosk corrects (`Ratatosk`) the long read file (`-l long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-s short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads_corrected.fastq* (`-o out_long_reads`).
 
 ### Reference-guided correction
 
 See [reference-guided preprocessing](https://github.com/DecodeGenetics/Ratatosk/tree/master/scripts/reference_guiding).
 
+## Output
+
+Ratatosk outputs a FASTQ file (hence with quality scores) regardless of whether the input was FASTA or FASTQ. Output quality scores use the standard Phred33 notation (base 33 + value from 0 to 40) but do not represent a log scale. Instead, output quality scores reflect how confident is Ratatosk in the correction of a base using a linear scale.
+
 ## Options
+
+- **Phasing** (`-p` and `-P`)
+
+  See [Phasing](https://github.com/DecodeGenetics/Ratatosk/tree/master/phasing.md) (experimental).
 
 - **Insert size** (`-i`)
 
   By default, Ratatosk considers that the input paired-end short reads insert size is roughly 500 (read length * 2 + fragment size). You can set the exact insert size with `-i`. If your input short reads are single end reads, set the insert size to the read length.
-
-- **Quality scores** (`-q`)
-
-  By default, Ratatosk outputs the corrected long reads without quality scores in FASTA format. By using `-q`, corrected reads are output with quality scores in FASTQ format. The output quality score of a base reflects how confident is Ratatosk in the correction of that base. Given a minimum quality score *X* (`-q X`), all corrected bases have a quality score ranging from *X* to 40 while uncorrected bases have a quality score of 0. Note that Ratatosk uses Phred33 with scores ranging from 0 to 40.
 
 - **Trimming/Splitting** (`-t`)
 

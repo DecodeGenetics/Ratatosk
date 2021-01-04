@@ -161,7 +161,7 @@ class Path {
 		}
 
 		inline const const_UnitigMap<U>& front() const { return start; }
-		inline const const_UnitigMap<U>& back() const { return end.isEmpty ? start : end; }
+		inline const const_UnitigMap<U>& back() const { return (end.isEmpty ? start : end); }
 
 		bool replace_back(const const_UnitigMap<U>& um, const double score = -1.0) {
 
@@ -282,6 +282,18 @@ class Path {
 		inline void setQuality(const char c) {
 
 			qual = string(size(), c);
+		}
+
+		inline bool replaceQuality(const size_t pos_start, const size_t length, const char c) {
+
+			if ((pos_start + length) <= qual.length()){
+
+				qual.replace(pos_start, length, length, c);
+
+				return true;
+			}
+
+			return false;
 		}
 
 		inline void rmQualityScore() {

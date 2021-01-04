@@ -511,12 +511,15 @@ void PairID::addSortedVector(const vector<uint32_t>& v) { // Private, assumes ve
             for (TinyBitmap::const_iterator it = t_bmp.begin(), it_end = t_bmp.end(); it != it_end; ++it) values[j++] = *it;
 
             t_bmp.clear();
+
             setPtrBmp->r.addMany(sz_t_bmp, values);
 
             setBits = (reinterpret_cast<uintptr_t>(setPtrBmp) & pointerMask) | ptrBitmap;
             flag = ptrBitmap;
 
             delete[] values;
+
+            --i;
         }
     }
 

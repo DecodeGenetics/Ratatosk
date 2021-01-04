@@ -1,105 +1,8 @@
 #include "Graph.hpp"
 
-/*vector<pair<size_t, const_UnitigMap<UnitigData>>> searchSeeds(const CompactedDBG<UnitigData>& dbg, const string& seq) {
-
-	const size_t k = dbg.getK();
-
-	vector<pair<size_t, const_UnitigMap<UnitigData>>> v_um = dbg.searchSequence(seq, true, true, true, true, true);
-
-	Roaring positions;
-
-	for (const auto& p : v_um) positions.add(p.first);
-
-	if (positions.cardinality() != seq.length()){
-
-	    { // Subsitution
-
-	        for (size_t i = 0; i != k; ++i){
-
-	        	string seq_sub = seq;
-
-	        	for (size_t a = 0; a < 4; ++a){
-
-		            for (size_t j = i; j < seq.length(); j += k) seq_sub[j] = alpha[a];
-
-		        	vector<pair<size_t, const_UnitigMap<UnitigData>>> v_um_sub = dbg.searchSequence(seq_sub, false, true, true, true, false);
-
-		        	for (auto& p : v_um_sub){
-
-		        		if (!positions.contains(p.first)) v_um.push_back(move(p));
-		        	}
-				}
-	        }
-	    }
-
-	    { // Insertion
-
-	        for (size_t i = 0; i != k; ++i){
-
-	            std::stringstream ss;
-
-	            string seq_sub;
-
-	            for (size_t j = 0; j < i; ++j) ss << seq[j];
-
-	            for (size_t j = i, cpt = 0; j < seq.length(); ++j, ++cpt) {
-
-	                if (cpt % (k - 1) == 0) ss << alpha[0];
-
-	                ss << seq[j];
-	            }
-
-	            seq_sub = ss.str();
-
-	            for (size_t a = 0; a < 4; ++a){
-
-	            	for (size_t j = i; j < seq_sub.length(); j += k) seq_sub[j] = alpha[a];
-
-		        	vector<pair<size_t, const_UnitigMap<UnitigData>>> v_um_ins = dbg.searchSequence(seq_sub, false, true, true, true, false);
-
-		            for (auto& p : v_um_ins){
-
-		            	p.first -= (p.first / k) + (p.first % k > i);
-
-		        		if (!positions.contains(p.first)) v_um.push_back(move(p));
-		        	}
-	            }
-	        }
-	    }
-
-	    if (seq.length() >= (k + 1)){ // Deletion
-
-	        for (size_t i = 0; i != (k + 1); ++i){
-
-	            std::stringstream ss;
-
-	            for (size_t j = 0; j < i; ++j) ss << seq[j];
-
-	            for (size_t j = i, cpt = 0; j < seq.length(); ++j, ++cpt) {
-
-	                if (cpt % (k + 1) != 0) ss << seq[j];
-	            }
-
-	            const string seq_sub = ss.str();
-
-		        vector<pair<size_t, const_UnitigMap<UnitigData>>> v_um_del = dbg.searchSequence(seq_sub, false, true, true, true, false);
-
-	            for (auto& p : v_um_del){
-
-	            	p.first += (p.first / k) + (p.first % k > i);
-
-	        		if (!positions.contains(p.first)) v_um.push_back(move(p));
-	        	}
-	        }
-	    }
-	}
-
-	return v_um;
-}*/
-
 pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> getSeeds(const Correct_Opt& opt, const CompactedDBG<UnitigData>& dbg,
-																													const string& s, const bool long_read_correct, const uint64_t hap_id,
-																													const bool filter_non_unique_inexact_kmers) {
+																													const string& s, const string& q, 
+																													const bool long_read_correct, const uint64_t hap_id) {
 
     auto comp_pair = [](const pair<size_t, const_UnitigMap<UnitigData>>& p1, const pair<size_t, const_UnitigMap<UnitigData>>& p2) {
 
@@ -108,20 +11,24 @@ pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, cons
         return (p1.first < p2.first);
     };
 
-    const uint64_t undetermined_hap_id = 0xffffffffffffffffULL;
+    auto removeEmptyUnitigMap = [](vector<pair<size_t, const_UnitigMap<UnitigData>>>& v) {
 
-    size_t i = 0;
-    size_t j_solid = 0, j_all = 0;
-    size_t prev_idx = 0xffffffffffffffffULL;
-    size_t nb_inexact_hits = 0;
+    	vector<pair<size_t, const_UnitigMap<UnitigData>>> v2;
+
+    	for (const auto& p : v){
+
+    		if (!p.second.isEmpty) v2.push_back(p);
+    	}
+
+    	v = move(v2);
+    };
 
     if (s.length() <= opt.k) return {vector<pair<size_t, const_UnitigMap<UnitigData>>>(), vector<pair<size_t, const_UnitigMap<UnitigData>>>()};
 
     // Find all exact or inexact k-mer hits between the query and the graph
-    vector<pair<size_t, const_UnitigMap<UnitigData>>> v_um = dbg.searchSequence(s, true, true, true, true, true);
-    vector<pair<size_t, const_UnitigMap<UnitigData>>> v_um_solid, v_um_weak;
+    vector<pair<size_t, const_UnitigMap<UnitigData>>> v_um, v_um_solid, v_um_weak;
 
-    const size_t v_um_sz = v_um.size();
+    v_um = dbg.searchSequence(s, true, true, true, true, true);
 
     sort(v_um.begin(), v_um.end(), comp_pair); // Sort k-mer hits by query position and mapped k-mer similarity
 
@@ -133,7 +40,12 @@ pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, cons
 
     // Pull out solid matches
     {
+    	const size_t v_um_sz = v_um.size();
+
 	    int64_t exact_match = -1;
+
+	    size_t i = 0;
+    	size_t prev_idx = 0xffffffffffffffffULL;
 
 	    while (i < v_um_sz){ // For every exact or inexact k-mer hit between the query and the graph
 
@@ -148,7 +60,6 @@ pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, cons
 	            if (exact_match != -1) v_um_solid.push_back(v_um[exact_match]);
 
 	            prev_idx = idx;
-
 	            exact_match = -1;
 	        }
 
@@ -162,105 +73,52 @@ pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, cons
 	    if (exact_match != -1) v_um_solid.push_back(v_um[exact_match]);
 	}
 
-	// Remove solid matches that don't match the haploblock
-	if (hap_id != undetermined_hap_id) {
-
-		vector<pair<size_t, const_UnitigMap<UnitigData>>> v_um_solid_tmp;
-
-		const uint64_t rev_hap_id = static_cast<bool>(hap_id & 0x1ULL) ? (hap_id - 1) : (hap_id + 1);
-
-    	for (const auto& p : v_um_solid){
-
-    		const PairID& hap_ids = p.second.getData()->get_hapID();
-
-    		if (hap_ids.isEmpty() || hap_ids.contains(hap_id) || !hap_ids.contains(rev_hap_id)) v_um_solid_tmp.push_back(p);
-    	}
-
-    	v_um_solid = move(v_um_solid_tmp);
-	}
-
 	// Make sure solid matches overlap by k-1
-	{
-		vector<pair<size_t, const_UnitigMap<UnitigData>>> v_um_solid_tmp;
+	if (v_um_solid.size() >= 2) {
 
-		i = 1;
-
-    	while (i < v_um_solid.size()){
+    	for (size_t i = 1; i < v_um_solid.size(); ++i){
 
     		if ((v_um_solid[i].first != (v_um_solid[i-1].first + 1)) && (v_um_solid[i].first < (v_um_solid[i-1].first + opt.k))) {
 
-    			int64_t left_solid_pos = i-1;
+    			v_um_solid[i-1].second.isEmpty = true;
 
-    			while ((left_solid_pos >= 0) && (v_um_solid[i].first < (v_um_solid[left_solid_pos].first + opt.k))) v_um_solid[left_solid_pos--].second.isEmpty = true;
-    		}
-			
-			++i;
-    	}
+    			int64_t j = i-2;
 
-    	for (const auto& p : v_um_solid){
+    			while ((j >= 0) && (v_um_solid[j].first == (v_um_solid[j+1].first - 1)) && (v_um_solid[i].first < (v_um_solid[j].first + opt.k))){
 
-    		if (p.second.isEmpty == false) v_um_solid_tmp.push_back(p);
-    	}
-
-    	v_um_solid = move(v_um_solid_tmp);
-	}
-
-	// If second pass of correction, make sure solid regions are at least of length opt.large_k
-    if (long_read_correct) {
-
-    	vector<pair<size_t, const_UnitigMap<UnitigData>>> v_um_solid_tmp;
-
-    	const size_t min_len_run = (opt.k * opt.large_k_factor) - opt.k + 1;
-
-    	size_t len_run = 1;
-    	size_t pos_start_run = 0;
-
-    	i = 1;
-
-    	while (i < v_um_solid.size()){
-
-    		if ((v_um_solid[i].first != (v_um_solid[i-1].first + 1)) || (i == v_um_solid.size() - 1)) {
-
-    			if (len_run >= min_len_run){
-
-    				for (size_t j = pos_start_run; j < i; ++j) v_um_solid_tmp.push_back(v_um_solid[j]);
+    				v_um_solid[j--].second.isEmpty = true;
     			}
-
-    			len_run = 1;
-    			pos_start_run = i;
     		}
-    		else ++len_run;
-
-    		++i;
     	}
 
-		v_um_solid = move(v_um_solid_tmp);
+    	removeEmptyUnitigMap(v_um_solid);
 	}
 
     // Build the list of semi-weak k-mers
     {
-	    j_solid = 0;
+	    size_t i = 0, j = 0;
 
+    	const size_t v_um_sz = v_um.size();
 	    const size_t v_um_solid_sz = v_um_solid.size();
 
-	    while ((j_all != v_um_sz) && (j_solid != v_um_solid_sz)) {
+	    while ((i != v_um_sz) && (j != v_um_solid_sz)) {
 
-	     	if (v_um[j_all].first < v_um_solid[j_solid].first){
+	     	if (v_um[i].first < v_um_solid[j].first){
 
-	     		if (v_um_weak.empty() || (v_um[j_all] != v_um_weak.back())) v_um_weak.push_back(v_um[j_all]);
+	     		if (v_um_weak.empty() || (v_um[i] != v_um_weak.back())) v_um_weak.push_back(v_um[i]);
 		     	
-		     	++j_all;
+		     	++i;
 	     	}
-	     	else if (v_um[j_all].first > v_um_solid[j_solid].first) ++j_solid;
-	     	else ++j_all;
+	     	else if (v_um[i].first > v_um_solid[j].first) ++j;
+	     	else ++i;
 	    }
 
-	    if (j_solid == v_um_solid.size()){
+	    if (j == v_um_solid.size()){
 
-	    	while (j_all != v_um_sz){
+	    	while (i != v_um_sz){
 
-	     		v_um_weak.push_back(v_um[j_all]);
-	     		++j_all;
+	     		v_um_weak.push_back(v_um[i]);
+	     		++i;
 	    	}
 	    }
 	}
@@ -280,26 +138,103 @@ pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, cons
 		v_um_weak = move(v_um_weak_tmp);
 	}
 
-	// Remove non-unique semi-weak k-mers (2+ matches at the same position)
-	if (filter_non_unique_inexact_kmers && !v_um_weak.empty()){
+	// Runs of solid anchors must be consistent:
+	// - Anchor i+1 must be on same unitig as anchor i or on a successor unitig
+	// - In the latter case, both unitigs must share a minimum number of colors
+	{
+    	for (size_t i = 1; i < v_um_solid.size(); ++i){ // Make sure solid regions are color-consistent
 
-		vector<pair<size_t, const_UnitigMap<UnitigData>>> v_um_weak_tmp;
+    		if ((v_um_solid[i].first - v_um_solid[i-1].first) == 1) {
 
-		const size_t v_um_weak_sz = v_um_weak.size();
+    			const_UnitigMap<UnitigData>& um_left = v_um_solid[i-1].second;
+    			const_UnitigMap<UnitigData>& um_right = v_um_solid[i].second;
 
-		for (int64_t i = 0; i < v_um_weak_sz; ++i){
+    			if (!um_left.isEmpty && !um_right.isEmpty && !um_left.isSameReferenceUnitig(um_right)){
 
-			if ((i != 0) && (v_um_weak[i].first == v_um_weak[i-1].first)) v_um_weak[i].second.isEmpty = true;
-			else if ((i != v_um_weak_sz-1) && (v_um_weak[i].first == v_um_weak[i+1].first)) v_um_weak[i].second.isEmpty = true;
-		}
+    				const string s_tail_left = (um_left.strand ? um_left.getUnitigTail() : um_left.getUnitigHead().twin()).toString();
+    				const string s_head_right = (um_right.strand ? um_right.getUnitigHead() : um_right.getUnitigTail().twin()).toString();
 
-		for (auto& p : v_um_weak){
+    				if ((s_tail_left.substr(1, opt.k-1) != s_head_right.substr(0, opt.k-1)) || 
+    					!hasEnoughSharedPairID(um_left.getData()->get_readID(), um_right.getData()->get_readID(), opt.min_cov_vertices)) {
 
-			if (!p.second.isEmpty) v_um_weak_tmp.push_back(move(p));
-		}
+		    			size_t i_l = i-1;
+		    			size_t i_r = i+1;
 
-		v_um_weak = move(v_um_weak_tmp);
-	}
+		    			i_l -= (i_l != 0);
+
+		    			while ((i_l > 0) && (v_um_solid[i_l].first == (v_um_solid[i_l+1].first - 1)) && v_um_solid[i_l].second.isSameReferenceUnitig(um_left)){
+
+		    				v_um_solid[i_l].second.isEmpty = true;
+		    				--i_l;
+		    			}
+
+		    			while ((i_r < v_um_solid.size()) && (v_um_solid[i_r].first == (v_um_solid[i_r-1].first + 1)) && v_um_solid[i_r].second.isSameReferenceUnitig(um_right)){
+
+		    				v_um_solid[i_r].second.isEmpty = true;
+		    				++i_r;
+		    			}
+
+		    			um_left.isEmpty = true;
+		    			um_right.isEmpty = true;
+    				}
+    			}
+    		}
+    	}
+
+    	removeEmptyUnitigMap(v_um_solid);
+    }
+
+    {
+    	for (size_t i = 1; i < v_um_solid.size(); ++i){ // Make sure solid regions are color-consistent
+
+    		const size_t diff_pos = v_um_solid[i].first - v_um_solid[i-1].first;
+
+    		if ((diff_pos > 1) && (diff_pos < (opt.insert_sz/2))) {
+
+    			size_t i_l = i-1;
+    			size_t i_r = i+1;
+
+    			PairID pid_left = v_um_solid[i-1].second.getData()->get_readID();
+    			PairID pid_right = v_um_solid[i].second.getData()->get_readID();
+
+    			const_UnitigMap<UnitigData> prev_um_left = v_um_solid[i-1].second;
+    			const_UnitigMap<UnitigData> prev_um_right = v_um_solid[i].second;
+
+    			i_l -= (i_l != 0);
+
+    			while ((i_l > 0) && (v_um_solid[i_l].first == (v_um_solid[i_l+1].first - 1))){
+
+    				if (!v_um_solid[i_l].second.isSameReferenceUnitig(prev_um_left)) {
+
+	    				pid_left |= v_um_solid[i_l].second.getData()->get_readID();
+	    				prev_um_left = v_um_solid[i_l].second;
+    				}
+
+    				--i_l;
+    			}
+
+    			while ((i_r < v_um_solid.size()) && (v_um_solid[i_r].first == (v_um_solid[i_r-1].first + 1))){
+
+    				if (!v_um_solid[i_r].second.isSameReferenceUnitig(prev_um_right)) {
+
+	    				pid_right |= v_um_solid[i_r].second.getData()->get_readID();
+	    				prev_um_right = v_um_solid[i_r].second;
+    				}
+
+    				++i_r;
+    			}
+
+    			if (!hasEnoughSharedPairID(pid_left, pid_right, opt.min_cov_vertices)){
+
+    				for (++i_l; i_l < i_r; ++i_l) v_um_solid[i_l].second.isEmpty = true;
+
+    				i = i_r;
+    			}
+    		}
+    	}
+
+    	removeEmptyUnitigMap(v_um_solid);
+    }
 
     pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> p = {move(v_um_solid), move(v_um_weak)};
 
@@ -313,14 +248,18 @@ void detectSNPs(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const Roa
 	const size_t k = dbg.getK();
 	const bool no_neighbor = (part_neighbors == nullptr);
 
-	if (opt.nb_threads == 1){
+    auto comp_pair = [](const pair<size_t, const_UnitigMap<UnitigData>>& p1, const pair<size_t, const_UnitigMap<UnitigData>>& p2) {
 
-		size_t nb_fp_avoided = 0;
+        return (p1.first < p2.first);
+    };
+
+	if (opt.nb_threads == 1){
 
 	    for (auto& um : dbg){
 
 			const string seq_ref = um.referenceUnitigToString();
-			const vector<pair<size_t, UnitigMap<UnitigData>>> v_um = dbg.searchSequence(seq_ref, false, false, false, true, false);
+
+			vector<pair<size_t, UnitigMap<UnitigData>>> v_um = dbg.searchSequence(seq_ref, false, false, false, true, false);
 
 			if (!v_um.empty()){
 
@@ -328,11 +267,14 @@ void detectSNPs(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const Roa
 
 				string seq_um = seq_ref;
 
+				local_graph_traversal lgt;
+
 				size_t prev_pos_ref = 0;
 
 				const size_t id_part = ud->getConnectedComp();
 				const PairID& hap_ids = ud->get_hapID();
-				const bool hap_id_empty = hap_ids.isEmpty();
+
+				sort(v_um.begin(), v_um.end(), comp_pair);
 
 		    	for (size_t i = 0; i < v_um.size(); ++i){
 
@@ -340,27 +282,13 @@ void detectSNPs(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const Roa
 
 		    		if (!p.second.isSameReferenceUnitig(um) && ((i == 0) || (p.first != prev_pos_ref) || !p.second.isSameReferenceUnitig(v_um[i-1].second))) {
 
-		    			const size_t id_part_snp_cand = p.second.getData()->getConnectedComp();
+		    			//const size_t id_part_snp_cand = p.second.getData()->getConnectedComp();
 
-		    			if (no_neighbor || part_neighbors[id_part].contains(id_part_snp_cand)) {
+		    			//if (no_neighbor || part_neighbors[id_part].contains(id_part_snp_cand)) {
 
 		    				const PairID& p_hap_ids = p.second.getData()->get_hapID();
 
-		    				bool isHapCompatible = (hap_id_empty || p_hap_ids.isEmpty());
-
-		    				if (!isHapCompatible) {
-
-		    					for (const uint32_t p_hap_id : p_hap_ids){
-
-		    						if (hap_ids.contains(static_cast<bool>(p_hap_id & 0x1ULL) ? (p_hap_id - 1) : (p_hap_id + 1))){
-
-		    							isHapCompatible = true;
-		    							break;
-		    						}
-		    					}
-		    				}
-
-		    				if (isHapCompatible){
+		    				if (/*!hasEnoughSharedPairID(p_hap_ids, hap_ids, 1) &&*/ isValidSNPcandidate(lgt, um, p.second)) {
 
 					    		const string km_snp = p.second.mappedSequenceToString();
 					    		const size_t pos_snp = cstrMatch(km_snp.c_str(), seq_ref.c_str() + p.first);
@@ -376,9 +304,7 @@ void detectSNPs(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const Roa
 						    		seq_um[p.first + pos_snp] = getAmbiguity(nuc_a_s || nuc_a_k, nuc_c_s || nuc_c_k, nuc_g_s || nuc_g_k, nuc_t_s || nuc_t_k);
 					    		}
 				    		}
-				    		else ++nb_fp_avoided;
-			    		}
-			    		else ++nb_fp_avoided;
+			    		//}
 		    		}
 
 		    		prev_pos_ref = p.first;
@@ -392,12 +318,10 @@ void detectSNPs(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const Roa
 			    ud->runOptimizeAmbiguityChar();
 			}
 		}
-
-		if (opt.verbose) cout << "Ratatosk::detectSNPs(): Number of filtered false positive candidates: " << nb_fp_avoided << endl;
 	}
 	else {
 
-		std::atomic<size_t> nb_fp_avoided;
+		SpinLock splck;
 
 		auto worker_function = [&](CompactedDBG<UnitigData>::iterator it_c, CompactedDBG<UnitigData>::iterator it_e) {
 
@@ -407,7 +331,8 @@ void detectSNPs(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const Roa
 
 				const UnitigMap<UnitigData>& um = *it_c;
 				const string seq_ref = um.referenceUnitigToString();
-				const vector<pair<size_t, UnitigMap<UnitigData>>> v_um = dbg.searchSequence(seq_ref, false, false, false, true, false);
+
+				vector<pair<size_t, UnitigMap<UnitigData>>> v_um = dbg.searchSequence(seq_ref, false, false, false, true, false);
 
 				if (!v_um.empty()){
 
@@ -415,11 +340,14 @@ void detectSNPs(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const Roa
 
 					string seq_um = seq_ref;
 
+					local_graph_traversal lgt;
+
 					size_t prev_pos_ref = 0;
 
 					const size_t id_part = ud->getConnectedComp();
 					const PairID& hap_ids = ud->get_hapID();
-					const bool hap_id_empty = hap_ids.isEmpty();
+
+					sort(v_um.begin(), v_um.end(), comp_pair);
 
 			    	for (size_t i = 0; i < v_um.size(); ++i){
 
@@ -427,45 +355,29 @@ void detectSNPs(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const Roa
 
 			    		if (!p.second.isSameReferenceUnitig(um) && ((i == 0) || (p.first != prev_pos_ref) || !p.second.isSameReferenceUnitig(v_um[i-1].second))) {
 
-			    			const size_t id_part_snp_cand = p.second.getData()->getConnectedComp();
+			    			//const size_t id_part_snp_cand = p.second.getData()->getConnectedComp();
 
-			    			if (no_neighbor || part_neighbors[id_part].contains(id_part_snp_cand)) {
+			    			//if (no_neighbor || part_neighbors[id_part].contains(id_part_snp_cand)) {
 
 			    				const PairID& p_hap_ids = p.second.getData()->get_hapID();
 
-			    				bool isHapCompatible = (hap_id_empty || p_hap_ids.isEmpty());
-
-			    				if (!isHapCompatible) {
-
-			    					for (const uint32_t p_hap_id : p_hap_ids){
-
-			    						if (hap_ids.contains(static_cast<bool>(p_hap_id & 0x1ULL) ? (p_hap_id - 1) : (p_hap_id + 1))){
-
-			    							isHapCompatible = true;
-			    							break;
-			    						}
-			    					}
-			    				}
-
-			    				if (isHapCompatible){
+			    				if (/*!hasEnoughSharedPairID(p_hap_ids, hap_ids, 1) &&*/ isValidSNPcandidate(lgt, um, p.second)) {
 
 						    		const string km_snp = p.second.mappedSequenceToString();
-						    		const size_t pos_snp = cstrMatch(km_snp.c_str(), seq_ref.c_str() + p.first);
+						    		const size_t pos_snp_km = cstrMatch(km_snp.c_str(), seq_ref.c_str() + p.first);
 
-						    		if (pos_snp < k){
+						    		if (pos_snp_km < k){
 
 							    		bool nuc_a_s = false, nuc_c_s = false, nuc_g_s = false, nuc_t_s = false;
 							    		bool nuc_a_k = false, nuc_c_k = false, nuc_g_k = false, nuc_t_k = false;
 
-							    		getAmbiguityRev(seq_um[p.first + pos_snp], nuc_a_s, nuc_c_s, nuc_g_s, nuc_t_s);
-							    		getAmbiguityRev(km_snp[pos_snp], nuc_a_k, nuc_c_k, nuc_g_k, nuc_t_k);
+							    		getAmbiguityRev(seq_um[p.first + pos_snp_km], nuc_a_s, nuc_c_s, nuc_g_s, nuc_t_s);
+							    		getAmbiguityRev(km_snp[pos_snp_km], nuc_a_k, nuc_c_k, nuc_g_k, nuc_t_k);
 
-							    		seq_um[p.first + pos_snp] = getAmbiguity(nuc_a_s || nuc_a_k, nuc_c_s || nuc_c_k, nuc_g_s || nuc_g_k, nuc_t_s || nuc_t_k);
-						    		}
+							    		seq_um[p.first + pos_snp_km] = getAmbiguity(nuc_a_s || nuc_a_k, nuc_c_s || nuc_c_k, nuc_g_s || nuc_g_k, nuc_t_s || nuc_t_k);
+							    	}
 					    		}
-					    		else ++l_nb_fp_avoided;
-					    	}
-					    	else ++l_nb_fp_avoided;
+					    	//}
 			    		}
 
 			    		prev_pos_ref = p.first;
@@ -481,8 +393,6 @@ void detectSNPs(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const Roa
 
 				++it_c;
 			}
-
-			nb_fp_avoided += l_nb_fp_avoided;
 		};
 
 		{
@@ -494,8 +404,6 @@ void detectSNPs(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const Roa
 
 	        CompactedDBG<UnitigData>::iterator it_c = dbg.begin();
 	        CompactedDBG<UnitigData>::iterator it_e = dbg.end();
-
-	        nb_fp_avoided = 0;
 
 	        for (size_t t = 0; t < opt.nb_threads; ++t){
 
@@ -534,8 +442,6 @@ void detectSNPs(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const Roa
 	        }
 
 	        for (auto& t : workers) t.join();
-
-	        if (opt.verbose) cout << "Ratatosk::detectSNPs(): Number of filtered false positive candidates: " << nb_fp_avoided << endl;
 	    }	
 	}
 }
@@ -597,7 +503,7 @@ bool readGraphData(const string& input_filename, CompactedDBG<UnitigData>& dbg, 
     return true;
 }
 
-size_t detectSTRs(CompactedDBG<UnitigData>& dbg, const size_t max_len_cycle, const size_t max_cov_km, const size_t nb_threads, const bool verbose){
+/*size_t detectSTRs(CompactedDBG<UnitigData>& dbg, const size_t max_len_cycle, const size_t max_cov_km, const size_t nb_threads, const bool verbose){
 
 	const size_t k = dbg.getK();
 
@@ -791,9 +697,9 @@ size_t detectSTRs(CompactedDBG<UnitigData>& dbg, const size_t max_len_cycle, con
 
         return nb_repeats;
 	}
-}
+}*/
 
-vector<Kmer> addCoverage(	CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const unordered_map<uint64_t, uint64_t, CustomHashUint64_t>& read2hap, 
+vector<Kmer> addCoverage(	CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads& hap_reads, 
 							const bool long_read_correct, const bool map_reads, const size_t id_read_start){
 
 	if (dbg.isInvalid() || (dbg.length() == 0)) vector<Kmer>();
@@ -932,7 +838,7 @@ vector<Kmer> addCoverage(	CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt,
 
             	lck_h.unlock_unitig(id);
             	lck_h.release_reader();
-        }
+        	}
 
             seq_buf += len + 1;
             ++it_ID_buf;
@@ -951,17 +857,27 @@ vector<Kmer> addCoverage(	CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt,
 
         while (seq_buf < str_end) { // for each input
 
-	        const int len = strlen(seq_buf);
+	        const size_t len = strlen(seq_buf);
 
 	        const unordered_map<uint64_t, uint64_t, CustomHashUint64_t>::const_iterator it_name_hmap = name_hmap.find(ID_buf[it_ID_buf]);
-	        const unordered_map<uint64_t, uint64_t, CustomHashUint64_t>::const_iterator it_read2hap = read2hap.empty() ? read2hap.end() : read2hap.find(ID_buf[it_ID_buf]);
+	        const unordered_map<uint64_t, uint64_t, CustomHashUint64_t>::const_iterator it_read2hap = hap_reads.read2hap.find(ID_buf[it_ID_buf]);
 
 	    	const uint64_t readNameID = (it_name_hmap == name_hmap.end()) ? 0 : it_name_hmap->second;
-	    	const uint64_t hapNameID = (it_read2hap == read2hap.end()) ? off_limit_id : it_read2hap->second;
+	    	const uint64_t hapNameID = (it_read2hap == hap_reads.read2hap.end()) ? off_limit_id : it_read2hap->second;
 
 	    	toUpperCase(seq_buf, len);
 
             KmerHashIterator<RepHash> it_kmer_h(seq_buf, len, k), it_kmer_h_end;
+
+            if ((readNameID != 0) && (readNameID != off_limit_id)) {
+
+	            lck_h.lock_unitig(hapNameID + 1);
+
+	            if (hapNameID == off_limit_id) hap_reads.hap2unphasedReads.add(readNameID - 1);
+	            else hap_reads.hap2phasedReads[hapNameID].add(readNameID - 1);
+
+	            lck_h.unlock_unitig(hapNameID + 1);
+        	}
 
             for (; it_kmer_h != it_kmer_h_end; ++it_kmer_h) {
 
@@ -975,23 +891,16 @@ vector<Kmer> addCoverage(	CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt,
 	            	UnitigData* ud = um.getData();
 
 	            	lck_g.lock_unitig(h);
-
-	            	ud->increaseCoverage(um.len);
-
-	            	if (hapNameID != off_limit_id) ud->get_hapID().add(hapNameID);
-
+	            		
 	            	if ((readNameID != 0) && (readNameID != off_limit_id)) {
 
-	            		PairID& r = ud->get_readID();
+		            	ud->get_readID().add(readNameID - 1);
 
-		            	const size_t card_before = r.cardinality();
-		            	const double km_cov_before = ud->getKmerCoverage(um);
+		            	if (hapNameID == off_limit_id) ud->increaseUnphasedCoverage(um.len);
+		            	else {
 
-		            	if ((card_before <= ((um.size - k + 1) * opt.max_cov_vertices)) && (km_cov_before <= opt.max_cov_vertices)){
-
-		            		r.add(readNameID - 1);
-
-		            		if ((card_before + 1) % opt.max_cov_vertices == 0) r.runOptimize();
+		            		ud->increasePhasedCoverage(um.len);
+		            		ud->get_hapID().add(hapNameID);
 		            	}
 	            	}
 
@@ -1038,6 +947,20 @@ vector<Kmer> addCoverage(	CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt,
 			        	last_id = ((p.second ? nextID : p.first->second) | (static_cast<size_t>(p.second) << 63));
 
 			        	nextID += static_cast<size_t>(p.second);
+
+	                	if (fp.getQualityScoreString() != nullptr){ 
+
+	                		const char* q = fp.getQualityScoreString();
+	                		const char q_low = getQual(0.0, opt.out_qual) + 1;
+	                		const char c_low = 'N';
+
+	                		for (size_t i = 0; i < len_read; ++i){
+
+	                			if (q[i] < q_low) s[i] = c_low;
+	                		}
+
+	                		s_str = s.c_str();
+	                	}
                 	}
                 	
                 	name_hash_buf[it_name_hash_buf++] = last_id;
@@ -1094,6 +1017,20 @@ vector<Kmer> addCoverage(	CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt,
                 s_str = s.c_str();
 
                 if (len_read >= k){
+
+                	if (fp.getQualityScoreString() != nullptr){ 
+
+                		const char* q = fp.getQualityScoreString();
+                		const char q_low = getQual(0.0, opt.out_qual) + 1;
+                		const char c_low = 'N';
+
+                		for (size_t i = 0; i < len_read; ++i){
+
+                			if (q[i] < q_low) s[i] = c_low;
+                		}
+
+                		s_str = s.c_str();
+                	}
 
                 	name_hash_buf[it_name_hash_buf++] = XXH64(fp.getNameString(), strlen(fp.getNameString()), opt.h_seed);
 
@@ -1285,7 +1222,7 @@ vector<Kmer> addCoverage(	CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt,
 	}
 
     {
-    	if (opt.verbose) cout << "Ratatosk::addCoverage(): Coloring graph with reads (1/2)." << endl;
+    	if (opt.verbose) cout << "Ratatosk::addCoverage(): Coloring graph with reads." << endl;
 
         char** buffer_seq = new char*[opt.nb_threads];
         size_t* buffer_seq_sz = new size_t[opt.nb_threads];
@@ -1354,7 +1291,7 @@ vector<Kmer> addCoverage(	CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt,
         fp.close();
 	}
 
-	size_t over_represented = 0;
+	/*size_t over_represented = 0;
 
 	vector<Kmer> to_delete;
 
@@ -1394,14 +1331,56 @@ vector<Kmer> addCoverage(	CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt,
 
 			if ((ud->getKmerCoverage(um) < opt.min_cov_vertices) || (!long_read_correct && (ud->get_readID().cardinality() < opt.min_cov_vertices))) dbg.remove(um);
 		}
+	}*/
+
+	for (auto& um : dbg){
+
+		UnitigData* ud = um.getData();
+
+		PairID& p_ids = ud->get_readID();
+		PairID& hap_ids = ud->get_hapID();
+
+		ud->setBranching((um.getPredecessors().cardinality() > 1) || (um.getSuccessors().cardinality() > 1));
+
+		if (ud->getPhasedKmerCoverage(um) < opt.min_cov_vertices) hap_ids.clear(); // Not enough k-mer coverage for the phased reads -> delete
+		else hap_ids.runOptimize();
+
+		if (p_ids.cardinality() > opt.max_cov_vertices){ // Too many colors, random subsampling of phased and unphased
+
+			vector<size_t> v_pids_phased, v_pids_unphased;
+
+			v_pids_phased.reserve(p_ids.cardinality());
+			v_pids_unphased.reserve(p_ids.cardinality());
+
+			for (const auto pid : p_ids){
+
+				if (hap_reads.hap2unphasedReads.contains(pid)) v_pids_unphased.push_back(pid);
+				else v_pids_phased.push_back(pid);
+			}
+
+			std::random_shuffle(v_pids_phased.begin(), v_pids_phased.end());
+			std::random_shuffle(v_pids_unphased.begin(), v_pids_unphased.end());
+
+			p_ids.clear();
+
+			size_t nb_phased_pid;
+
+			if (v_pids_phased.size() < opt.max_cov_vertices) nb_phased_pid = v_pids_phased.size();
+			else nb_phased_pid = opt.max_cov_vertices;
+
+			const size_t nb_unphased_pid = opt.max_cov_vertices - nb_phased_pid;
+
+			for (size_t i = 0; i < nb_phased_pid; ++i) p_ids.add(v_pids_phased[i]);
+			for (size_t i = 0; i < nb_unphased_pid; ++i) p_ids.add(v_pids_unphased[i]);
+		}
+
+		p_ids.runOptimize();
 	}
 
 	return v_km_cent;
 }
 
-void addPhasing(CompactedDBG<UnitigData>& dbg, HapReads& hap_r, const Correct_Opt& opt,
-				const vector<string>& v_phase_filenames, const vector<string>& v_read_filenames,
-				const bool long_read_phasing, const bool mapHapReads) {
+void addPhasing(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads& hap_r, const bool long_read_phasing, const bool mapHapReads) {
 
 	const size_t k = dbg.getK();
 	const uint64_t off_limit_id = 0xffffffffffffffffULL;
@@ -1417,6 +1396,12 @@ void addPhasing(CompactedDBG<UnitigData>& dbg, HapReads& hap_r, const Correct_Op
 
     const size_t thread_seq_buf_sz = opt.buffer_sz;
     const size_t thread_name_buf_sz = (thread_seq_buf_sz / (k + 1)) + 1;
+
+    const vector<string>& v_phase_filenames = long_read_phasing ? opt.filenames_long_phase : opt.filenames_short_phase;
+
+    vector<string> v_read_filenames = long_read_phasing ? opt.filenames_long_in : opt.filename_seq_in;
+
+    if (long_read_phasing) v_read_filenames.insert(v_read_filenames.end(), opt.filenames_helper_long_in.begin(), opt.filenames_helper_long_in.end());
 
     auto reading_function1 = [&](FileParser& fp, char* seq_buf, size_t& seq_buf_sz, uint64_t* hap_hash_buf) {
 
@@ -1512,6 +1497,7 @@ void addPhasing(CompactedDBG<UnitigData>& dbg, HapReads& hap_r, const Correct_Op
 	            	lck_g.lock_unitig(h);
 
 	            	ud->get_hapID().add(hap_buf[it_hap_buf]);
+		            //ud->increasePhasedCoverage(um.len);
 
 	            	lck_g.unlock_unitig(h);
 
@@ -1531,6 +1517,8 @@ void addPhasing(CompactedDBG<UnitigData>& dbg, HapReads& hap_r, const Correct_Op
     	char buffer[sz_buffer];
 
     	int buffer_occupancy = 0;
+
+    	uint64_t hap2read_sz = 0;
 
     	if (opt.verbose) cout << "Ratatosk::addPhasing(): Associating " << (long_read_phasing ? "long" : "short") << " reads to their haploblocks" << endl;
 
@@ -1565,14 +1553,16 @@ void addPhasing(CompactedDBG<UnitigData>& dbg, HapReads& hap_r, const Correct_Op
 
 						    	if ((haploblock_str != "none") && (haplotype_str != "none")) {
 
-							    	const pair<unordered_map<string, uint64_t, CustomHashString>::const_iterator, bool> p_block = hap_r.block2id.insert({haploblock_str, hap_r.block_id});
-							    	const pair<unordered_map<string, uint64_t, CustomHashString>::const_iterator, bool> p_type = hap_r.type2id.insert({haplotype_str, hap_r.type_id});
+							    	const pair<unordered_map<string, uint64_t, CustomHashString>::const_iterator, bool> p_block = hap_r.hapBlock2id.insert({haploblock_str, hap_r.block_id});
+							    	const pair<unordered_map<string, uint64_t, CustomHashString>::const_iterator, bool> p_type = hap_r.hapType2id.insert({haplotype_str, hap_r.type_id});
 
 							    	const uint64_t hap_block_type = (p_block.first->second << 1) + p_type.first->second;
 							    	const uint64_t h_record = XXH64(l_buffer, haplotype_cstr - l_buffer, opt.h_seed);
 
 							    	hap_r.block_id += static_cast<size_t>(p_block.second);
 							    	hap_r.type_id += static_cast<size_t>(p_type.second);
+
+							    	hap2read_sz = max(hap2read_sz, hap_block_type);
 
 					        		pair<unordered_map<uint64_t, uint64_t, CustomHashUint64_t>::iterator, bool> p_read2hap = hap_r.read2hap.insert({h_record, hap_block_type});
 
@@ -1597,12 +1587,14 @@ void addPhasing(CompactedDBG<UnitigData>& dbg, HapReads& hap_r, const Correct_Op
 	            }
 
 	            gzclose(gfp);
+
+	            hap_r.hap2phasedReads = vector<PairID>(hap2read_sz + 1);
         	}
         	else cerr << "Ratatosk::addPhasing(): Could not open file " << filename << " for phasing. File is discarded." << endl;
     	}
 
     	if (opt.verbose) cout << "Ratatosk::addPhasing(): " << hap_r.read2hap.size() << " phased reads added." << endl;
-    	if (opt.verbose) cout << "Ratatosk::addPhasing(): " << hap_r.block2id.size() << " haploblocks with " << hap_r.type2id.size() << " haplotypes compacted." << endl;
+    	if (opt.verbose) cout << "Ratatosk::addPhasing(): " << hap_r.hapBlock2id.size() << " haploblocks with " << hap_r.hapType2id.size() << " haplotypes compacted." << endl;
 	};
 
     auto runHapMapping = [&](const vector<string>& filenames) {
@@ -1661,7 +1653,16 @@ void addPhasing(CompactedDBG<UnitigData>& dbg, HapReads& hap_r, const Correct_Op
 	        for (auto& t : workers) t.join();
     	}
 
-    	for (auto& um : dbg) um.getData()->get_hapID().runOptimize();
+    	for (auto& um : dbg){
+
+    		UnitigData* ud = um.getData();
+    		PairID& hap_ids = ud->get_hapID();
+
+			/*if (ud->getPhasedKmerCoverage(um) < opt.min_cov_vertices) hap_ids.clear(); // Not enough k-mer coverage for the phased reads -> delete
+			else*/ hap_ids.runOptimize();
+
+			//ud->resetCoverage();
+		}
 
         for (size_t t = 0; t < opt.nb_threads; ++t){
 
@@ -2107,7 +2108,7 @@ Roaring* createPartitions(CompactedDBG<UnitigData>& dbg, const vector<Kmer>& v_c
 	return adjacency;
 }
 
-pair<BlockedBloomFilter, size_t> buildBFF(const vector<string>& v_filenames_in, const Correct_Opt& opt, const size_t k, const size_t g, const bool long_reads) {
+pair<BlockedBloomFilter, unordered_set<uint64_t, CustomHashUint64_t>> buildBFF(const vector<string>& v_filenames_in, const Correct_Opt& opt, const size_t k, const size_t g, const bool long_reads) {
 
 	size_t nb_unique_kmers = 0;
 	size_t nb_non_unique_kmers = 0;
@@ -2133,6 +2134,8 @@ pair<BlockedBloomFilter, size_t> buildBFF(const vector<string>& v_filenames_in, 
 
 	BlockedBloomFilter bf_uniq(nb_unique_kmers, opt.nb_bits_unique_kmers_bf);
 	BlockedBloomFilter bf_non_uniq(nb_non_unique_kmers, opt.nb_bits_non_unique_kmers_bf);
+
+	unordered_set<uint64_t, CustomHashUint64_t> name_hset;
 
 	FileParser fp(v_filenames_in);
 
@@ -2194,6 +2197,8 @@ pair<BlockedBloomFilter, size_t> buildBFF(const vector<string>& v_filenames_in, 
                 s_str = s.c_str();
 
                 if (len_read >= k){
+
+                	//if (pos_read == 0) name_hset.insert(XXH64(fp.getNameString(), strlen(fp.getNameString()), opt.h_seed));
 
                     if ((opt.buffer_sz - seq_buf_sz - 1) < (len_read - pos_read)){
 
@@ -2262,7 +2267,7 @@ pair<BlockedBloomFilter, size_t> buildBFF(const vector<string>& v_filenames_in, 
 
     fp.close();
 
-	return pair<BlockedBloomFilter, size_t>(bf_non_uniq, nb_non_unique_kmers);
+	return pair<BlockedBloomFilter, unordered_set<uint64_t, CustomHashUint64_t>>(bf_non_uniq, name_hset);
 }
 
 string retrieveMissingReads(const Correct_Opt& opt){
@@ -2280,11 +2285,15 @@ string retrieveMissingReads(const Correct_Opt& opt){
 	const size_t k = dbg_lr.getK();
 	const size_t g = dbg_lr.getG();
 
-	const string filename_out_extra_sr = opt.filename_long_out + "_extra_sr.fasta";
+    std::atomic<size_t> nb_reads_added;
+
+    nb_reads_added = 0;
+
+	string filename_out_extra_sr = opt.filename_long_out + "_extra_sr.fasta";
 
 	if (opt.verbose) cout << "Ratatosk::retrieveMissingReads(): Creating index of short reads" << endl;
 
-	const pair<BlockedBloomFilter, size_t> p_bf_sr = buildBFF(opt.filename_seq_in, opt, k, g, false);
+	const pair<BlockedBloomFilter, unordered_set<uint64_t, CustomHashUint64_t>> p_bf_sr = buildBFF(opt.filename_seq_in, opt, k, g, false);
 
 	if (opt.verbose) cout << "Ratatosk::retrieveMissingReads(): Creating index of long reads" << endl;
 
@@ -2292,45 +2301,7 @@ string retrieveMissingReads(const Correct_Opt& opt){
 
     if (opt.verbose) cout << "Ratatosk::retrieveMissingReads(): Adding coverage to long read graph" << endl;
 
-    addCoverage(dbg_lr, opt_pass_lr, unordered_map<uint64_t, uint64_t, CustomHashUint64_t>(), true, false);
-
-    size_t min_cov_vertices = opt.min_cov_vertices;
-    size_t nb_km_lr = dbg_lr.nbKmers();
-
-    const size_t nb_km_sr = p_bf_sr.second * 1.05;
-
-    // Prune graph based mean k-mer coverage of unitigs in LR graph
-    while (nb_km_lr > nb_km_sr){
-
-        vector<Kmer> to_delete;
-
-        ++min_cov_vertices;
-
-        size_t nb_km_deleted = 0;
-
-        if (opt.verbose) cout << "Ratatosk::retrieveMissingReads(): Pruning long read graph based on k-mer coverage (min. " << min_cov_vertices << ")" << endl;
-
-        for (const auto& um : dbg_lr){
-
-            if (um.getData()->getKmerCoverage(um) < min_cov_vertices){
-
-            	to_delete.push_back(um.getUnitigHead());
-
-            	nb_km_deleted += um.size - k + 1;
-            }
-        }
-
-        if (nb_km_lr - nb_km_deleted < nb_km_sr) break;
-
-        for (const auto km : to_delete){
-
-            const UnitigMap<UnitigData> um = dbg_lr.find(km);
-
-            if (!um.isEmpty && (um.getData()->getKmerCoverage(um) < min_cov_vertices)) dbg_lr.remove(um);
-        }
-
-        nb_km_lr = dbg_lr.nbKmers();
-    }
+    const size_t nb_km_lr = dbg_lr.nbKmers();
 
     if (nb_km_lr != 0){
 
@@ -2417,16 +2388,12 @@ string retrieveMissingReads(const Correct_Opt& opt){
 	    string s;
 	    string n;
 
-	    std::atomic<size_t> nb_reads_added;
-
 	    mutex mutex_file_in, mutex_file_out;
 
 		FileParser fp(opt.filenames_short_all);
 
 	    outfile.open(filename_out_extra_sr.c_str());
 	    out.rdbuf(outfile.rdbuf());
-
-	    nb_reads_added = 0;
 
 	    // Main worker thread
 	    auto worker_function = [&](char* seq_buf, const size_t seq_buf_sz, const vector<string>& v_read_names) {
@@ -2441,34 +2408,77 @@ string retrieveMissingReads(const Correct_Opt& opt){
 	            const int len = strlen(seq_buf);
 	            const int len_km = len - k + 1;
 
+	            //const uint64_t name_h = XXH64(v_read_names[i].c_str(), v_read_names[i].length(), opt.h_seed);
+
 	            size_t nb_km = 0;
 	            size_t remaining_len_km = len_km;
 
 	            toUpperCase(seq_buf, len); // Put characters in upper case
 
-	            KmerHashIterator<RepHash> it_kmer_h(seq_buf, len, k), it_kmer_h_end;
-	        	minHashIterator<RepHash> it_min(seq_buf, len, k, g, RepHash(), true);
-
-	            for (; (it_kmer_h != it_kmer_h_end) && (nb_km < opt.min_nb_km_unmapped) && (nb_km + remaining_len_km >= opt.min_nb_km_unmapped); ++it_kmer_h) {
-
-	                const pair<uint64_t, int> p = *it_kmer_h; // <k-mer hash, k-mer position in sequence>
-
-	                it_min += (p.second - it_min.getKmerPosition()); //If one or more k-mer were jumped because contained non-ACGT char.
-
-	                const uint64_t min_hr = it_min.getHash();
-
-	                nb_km += static_cast<size_t>(!p_bf_sr.first.contains(p.first, min_hr) && bf_lr.contains(p.first, min_hr));
-	                remaining_len_km = len_km - p.second;
-	            }
-
-	            if (nb_km >= opt.min_nb_km_unmapped) {
+				/*if (p_bf_sr.second.find(name_h) != p_bf_sr.second.end()) {
 
 	        		++l_nb_reads_added;
 
 	        		unique_lock<mutex> lock(mutex_file_out);
 
 	        		out << '>' << v_read_names[i] << '\n' << string(seq_buf) << '\n';
-	            }
+				}
+				else {*/
+
+		            KmerHashIterator<RepHash> it_kmer_h(seq_buf, len, k), it_kmer_h_end;
+		        	minHashIterator<RepHash> it_min(seq_buf, len, k, g, RepHash(), true);
+
+		            for (; (it_kmer_h != it_kmer_h_end) && (nb_km < opt.min_nb_km_unmapped) && (nb_km + remaining_len_km >= opt.min_nb_km_unmapped); ++it_kmer_h) {
+
+		                const pair<uint64_t, int> p = *it_kmer_h; // <k-mer hash, k-mer position in sequence>
+
+		                it_min += (p.second - it_min.getKmerPosition()); //If one or more k-mer were jumped because contained non-ACGT char.
+
+		                const uint64_t min_hr = it_min.getHash();
+
+		                nb_km += static_cast<size_t>(!p_bf_sr.first.contains(p.first, min_hr) && bf_lr.contains(p.first, min_hr));
+		                remaining_len_km = len_km - p.second;
+		            }
+
+		            if (nb_km >= opt.min_nb_km_unmapped) {
+
+		        		++l_nb_reads_added;
+
+		        		unique_lock<mutex> lock(mutex_file_out);
+
+		        		out << '>' << v_read_names[i] << '\n' << string(seq_buf) << '\n';
+		            }
+
+					/*KmerHashIterator<RepHash> it_kmer_h(seq_buf, len, k), it_kmer_h_end;
+		        	minHashIterator<RepHash> it_min(seq_buf, len, k, g, RepHash(), true);
+
+		        	size_t max_len_run = 0;
+
+		            for (; (it_kmer_h != it_kmer_h_end); ++it_kmer_h) {
+
+		                const pair<uint64_t, int> p = *it_kmer_h; // <k-mer hash, k-mer position in sequence>
+
+		                it_min += (p.second - it_min.getKmerPosition()); //If one or more k-mer were jumped because contained non-ACGT char.
+
+		                const uint64_t min_hr = it_min.getHash();
+
+	                	if (p_bf_sr.first.contains(p.first, min_hr) || bf_lr.contains(p.first, min_hr)) ++nb_km;
+	                	else {
+
+	                		max_len_run = max(max_len_run, nb_km);
+	                		nb_km = 0;
+	                	}
+		            }
+
+		            if (max_len_run >= opt.min_nb_km_unmapped) {
+
+		        		++l_nb_reads_added;
+
+		        		unique_lock<mutex> lock(mutex_file_out);
+
+		        		out << '>' << v_read_names[i] << '\n' << string(seq_buf) << '\n';
+		            }*/
+	        	//}
 
 	            seq_buf += len + 1;
 	            ++i;
@@ -2568,9 +2578,13 @@ string retrieveMissingReads(const Correct_Opt& opt){
 
 	    fp.close();
 	    outfile.close();
-
-    	if (nb_reads_added == 0) remove(filename_out_extra_sr.c_str());
 	}
+
+	if (nb_reads_added == 0){
+
+		remove(filename_out_extra_sr.c_str());
+		filename_out_extra_sr = "";
+	} 
 
     return filename_out_extra_sr;
 }

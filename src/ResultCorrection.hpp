@@ -7,13 +7,13 @@ class ResultCorrection {
 
 	public: 
 
-		ResultCorrection(const size_t seq_len) : old_seq_len(seq_len), min_cov_vertex(0), is_corrected(false) {}
+		ResultCorrection(const size_t seq_len) : old_seq_len(seq_len), is_corrected(false) {}
 
 		ResultCorrection(const ResultCorrection& o) : 	pos_corrected_old_seq(o.pos_corrected_old_seq), seq(o.seq), qual(o.qual), old_seq_len(o.old_seq_len),
-														min_cov_vertex(o.min_cov_vertex), r_s(o.r_s), r_w(o.r_w), r_t(o.r_t), is_corrected(o.is_corrected) {}
+														is_corrected(o.is_corrected), w_pids(o.w_pids) {}
 
 		ResultCorrection(ResultCorrection&& o) :	pos_corrected_old_seq(move(o.pos_corrected_old_seq)), seq(move(o.seq)), qual(move(o.qual)), old_seq_len(o.old_seq_len),
-													min_cov_vertex(o.min_cov_vertex), r_s(move(o.r_s)), r_w(move(o.r_w)), r_t(move(o.r_t)), is_corrected(o.is_corrected) { o.clear(); }
+													is_corrected(o.is_corrected), w_pids(move(o.w_pids)) { o.clear(); }
 
 		ResultCorrection operator=(const ResultCorrection& o){
 
@@ -21,16 +21,12 @@ class ResultCorrection {
 
 				pos_corrected_old_seq = o.pos_corrected_old_seq;
 				old_seq_len = o.old_seq_len;
-				min_cov_vertex = o.min_cov_vertex;
 
 				is_corrected = o.is_corrected;
 
 				seq = o.seq;
 				qual = o.qual;
-
-				r_s = o.r_s;
-				r_w = o.r_w;
-				r_t = o.r_t;
+				w_pids = o.w_pids;
 			}
 
 			return *this;
@@ -42,16 +38,12 @@ class ResultCorrection {
 
 				pos_corrected_old_seq = move(o.pos_corrected_old_seq);
 				old_seq_len = o.old_seq_len;
-				min_cov_vertex = o.min_cov_vertex;
 
 				is_corrected = o.is_corrected;
 
 				seq = move(o.seq);
 				qual = move(o.qual);
-
-				r_s = move(o.r_s);
-				r_w = move(o.r_w);
-				r_t = move(o.r_t);
+				w_pids = move(o.w_pids);
 
 				o.clear();
 			}
@@ -70,13 +62,9 @@ class ResultCorrection {
 
 			seq.clear();
 			qual.clear();
-
-			r_s.clear();
-			r_w.clear();
-			r_t.clear();
+			w_pids.clear();
 
 			old_seq_len = 0;
-			min_cov_vertex = 0;
 
 			is_corrected = false;
 		}
@@ -118,7 +106,7 @@ class ResultCorrection {
 
 		inline size_t getNbCorrectedPosOldSeq() const { return pos_corrected_old_seq.cardinality(); }
 
-		inline bool isCorrected() const { return /*(pos_corrected_old_seq.cardinality() == old_seq_len)*/ is_corrected; }
+		inline bool isCorrected() const { return is_corrected; }
 
 		inline void setCorrected() { is_corrected = true; }
 
@@ -152,17 +140,24 @@ class ResultCorrection {
 			return sum;
 		}
 
-		inline void setSourcePairID(const PairID& p_id) { r_s = p_id; }
-		inline void setTargetPairID(const PairID& p_id) { r_t = p_id; }
-		inline void setWeakPairID(const PairID& p_id) { r_w = p_id; }
-		inline void setCovVertex(const size_t v){ min_cov_vertex = v; }
-		inline void setPartitions(const Roaring& r_part){ partitions = r_part; }
+		inline double getMeanQualityScore(const size_t start, const size_t end) const {
 
-		inline const PairID& getSourcePairID() const { return r_s; }
-		inline const PairID& getTargetPairID() const { return r_t; }
-		inline const PairID& getWeakPairID() const { return r_w; }
-		inline size_t getCovVertex() const { return min_cov_vertex; }
+			double score = 0.0;
+
+			if (start < end) {
+
+				for (size_t pos = start; pos < end; ++pos) score += getScore(qual[pos]);
+
+				score /= static_cast<double>(end - start);
+			}
+
+			return score;
+		}
+
 		inline const Roaring& getPartitions() const { return partitions; }
+
+		inline void setWeightsPairID(const WeightsPairID& w_pids_) { w_pids = w_pids_; }
+		inline const WeightsPairID& getWeightsPairID() const { return w_pids; }
 
 	//private:
 
@@ -171,14 +166,11 @@ class ResultCorrection {
 		string seq;
 		string qual;
 
-		PairID r_s;
-		PairID r_w;
-		PairID r_t;
+		WeightsPairID w_pids;
 
 		Roaring partitions;
 
 		size_t old_seq_len;
-		size_t min_cov_vertex;
 
 		bool is_corrected;
 };

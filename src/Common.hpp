@@ -8,21 +8,20 @@
 #include "PairID.hpp"
 #include "TinyBloomFilter.hpp"
 
-#define RATATOSK_VERSION "0.3.0"
+#define RATATOSK_VERSION "0.4"
 
 struct Correct_Opt : CDBG_Build_opt {
 
-	vector<string> filenames_long_in;
-	vector<string> filenames_helper_long_in;
+	vector<string> filenames_long_in; // Long reads to correct
+	vector<string> filenames_helper_long_in; // Accurate long reads helping with coloring on the 2nd round
+	vector<string> filenames_short_all; // Unmapped short reads
+	vector<string> filenames_long_phase; // Phasing files long reads
+	vector<string> filenames_short_phase; // Phasing files short reads
 
-	vector<string> filenames_short_all;
+	string filename_long_out; // Output filename prefix for long reads
 
-	vector<string> filenames_long_phase;
-	vector<string> filenames_short_phase;
-
-	string filename_long_out;
-
-	size_t min_qv;
+	bool pass1_only;
+	bool pass2_only;
 
 	int out_qual;
     int trim_qual;
@@ -32,7 +31,6 @@ struct Correct_Opt : CDBG_Build_opt {
     size_t insert_sz;
 
     size_t min_cov_vertices;
-    size_t min_cov_edges;
     size_t max_cov_vertices;
     size_t min_nb_km_unmapped;
 
@@ -48,18 +46,19 @@ struct Correct_Opt : CDBG_Build_opt {
     double weak_region_len_factor;
     double large_k_factor;
 
-	Correct_Opt() : out_qual(0), trim_qual(0), min_qv(6), small_k(31), insert_sz(500),
-					nb_partitions(1000), min_bases_partition(100000), buffer_sz(1048576), min_cov_vertices(2),
-					min_nb_km_unmapped(31), min_cov_edges(2), max_cov_vertices(512),
+	Correct_Opt() : out_qual(1), trim_qual(0), small_k(31), insert_sz(500),
+					nb_partitions(1000), min_bases_partition(100000), buffer_sz(1048576),
+					min_nb_km_unmapped(small_k), min_cov_vertices(2), max_cov_vertices(128),
 					weak_region_len_factor(1.25), large_k_factor(1.5), h_seed(0),
-					max_len_weak_region1(1000), max_len_weak_region2(10000) {
+					max_len_weak_region1(1000), max_len_weak_region2(10000),
+					pass1_only(false), pass2_only(false) {
 
-						k = 63;
+		k = 63;
 
-						clipTips = false;
-						deleteIsolated = true;
-						useMercyKmers = false;
-					}
+		clipTips = false;
+		deleteIsolated = false;
+		useMercyKmers = false;
+	}
 };
 
 struct CustomHashUint64_t {
@@ -82,8 +81,11 @@ struct HapReads {
 
 	unordered_map<uint64_t, uint64_t, CustomHashUint64_t> read2hap;
 
-	unordered_map<string, uint64_t, CustomHashString> block2id;
-	unordered_map<string, uint64_t, CustomHashString> type2id;
+	unordered_map<string, uint64_t, CustomHashString> hapBlock2id;
+	unordered_map<string, uint64_t, CustomHashString> hapType2id;
+
+	vector<PairID> hap2phasedReads;
+	PairID hap2unphasedReads;
 
     size_t block_id;
     size_t type_id;
@@ -96,12 +98,41 @@ struct HapReads {
     void clear() {
 
     	read2hap.clear();
-    	block2id.clear();
-    	type2id.clear();
+
+    	hapBlock2id.clear();
+    	hapType2id.clear();
+
+    	hap2phasedReads.clear();
+    	hap2unphasedReads.clear();
 
     	block_id = 0;
     	type_id = 0;
     }
+};
+
+struct WeightsPairID {
+
+	PairID noWeight_pids;
+	PairID weighted_pids;
+	PairID all_pids;
+
+	double weight;
+	double sum_pids_weights;
+
+	WeightsPairID() {
+
+		clear();
+	};
+
+	void clear() {
+
+		noWeight_pids.clear();
+		weighted_pids.clear();
+		all_pids.clear();
+
+		weight = 2.0;
+		sum_pids_weights = 0.0;
+	}
 };
 
 // returns maximal entropy score for random sequences which is log2|A| where A is the alphabet
@@ -248,6 +279,16 @@ inline double getScore(const char c, const size_t qv_min = 0) {
 	const double qv_score = static_cast<double>(c - phred_base_std - qv_min);
 
 	return (qv_score / static_cast<double>(phred_scale_std - qv_min));
+}
+
+inline bool isValidHap(const PairID& hap_ids, const uint64_t hap_id) {
+
+	return (hap_ids.isEmpty() || hap_ids.contains(hap_id));
+}
+
+inline pair<size_t, size_t> getMinMaxLength(const size_t l, const double len_factor) {
+
+	return {static_cast<size_t>(max(l / len_factor, 1.0)), static_cast<size_t>(max(l * len_factor, 1.0))};
 }
 
 size_t approximate_log2(size_t v);
