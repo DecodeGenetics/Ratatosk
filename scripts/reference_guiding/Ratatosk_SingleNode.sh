@@ -78,7 +78,6 @@ if [ "${REF_GENOME}" == "" ]
 then
 	1>&2 echo "Missing input reference genome (-r). Abort."
 	exit 5
-fi
 
 elif [ ! -f "${REF_GENOME}" ]
 then
@@ -105,7 +104,6 @@ if [ "${SHORT_READS_PHASING}" != "" ] && [ ! -f "${SHORT_READS_PHASING}" ]
 then
 	1>&2 echo "Short reads phasing file not found. Abort."
 	exit 9
-fi
 
 # Check long reads phasing exists if provided
 elif [ "${LONG_READS_PHASING}" != "" ] && [ ! -f "${LONG_READS_PHASING}" ]
