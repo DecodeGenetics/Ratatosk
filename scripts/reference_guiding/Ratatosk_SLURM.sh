@@ -75,6 +75,7 @@ elif [ "${MAX_NB_THREADS}" -eq 0 ]
 then
 	1>&2 echo "Maximum number of threads cannot be 0. Abort."
 	exit 4
+fi
 
 # Check min number of threads is not greater than max number of threads
 if [ "${MIN_NB_THREADS}" -gt "${MAX_NB_THREADS}" ]
@@ -176,6 +177,8 @@ PREFIX_PATH_CORRECTED="${OUT_PREFIX}/ratatosk"
 
 PREFIX_FILE_BIN="${OUT_PREFIX}/bin.sh"
 NAME_SR_UNMAPPED_IN_FILE="${PREFIX_PATH_SEG}/sample_sr_unmapped"
+
+BIN_SZ=5000000
 
 # Creating folders
 mkdir -p "${OUT_PREFIX}"
