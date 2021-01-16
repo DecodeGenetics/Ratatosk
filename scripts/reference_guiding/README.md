@@ -62,18 +62,19 @@ Script `Ratatosk_SLURM.sh` is a bash script submitting sbatch commands. It perfo
 ```
 Usage:
 
-bash Ratatosk_SLURM.sh -c <MIN_NB_THREADS> -C <MAX_NB_THREADS> -r <REFRENCE_GENOME> -s <SHORT_READS_BAM> -l <LONG_READS_BAM> -o <OUTPUT_PATH> -p [SHORT_READS_PHASING] -P [LONG_READS_PHASING] -n [SLURM_PARTITION]
+bash Ratatosk_SLURM.sh -c <MIN_NB_THREADS> -C <MAX_NB_THREADS> -n <MAX_NB_NODES> -r <REFRENCE_GENOME> -s <SHORT_READS_BAM> -l <LONG_READS_BAM> -o <OUTPUT_PATH> -p [SHORT_READS_PHASING] -P [LONG_READS_PHASING] -m [SLURM_PARTITION]
 
 <Mandatory>: 
 -c <MIN_NB_THREADS>: Minimum number of threads that can be given to a job.
 -C <MAX_NB_THREADS>: Maximum number of threads that can be given to a job.
+-n <MAX_NB_NODES>: Maximum number of nodes that can be used at a given time.
 -r <REFRENCE_GENOME>: Reference genome in FASTA
 -s <SHORT_READS_BAM>: Input BAM file of the short reads. Short reads from the same pair must have the same name.
 -l <LONG_READS_BAM>: Input BAM file of the long reads.
 -o <OUTPUT_PATH>: Output path.
 
 [Optional]: 
--n [SLURM_PARTITION]: Slurm partition (default: nomosix).
+-m [SLURM_PARTITION]: Slurm partition (default: nomosix).
 -p [SHORT_READS_PHASING]: Short reads phasing (default: None)
 -P [LONG_READS_PHASING]: Long reads phasing (default: None)
 ```
@@ -82,7 +83,7 @@ Corrected long reads are available in `<output_prefix>/ratatosk/sample_corrected
 ```
 squeue -u <username>
 ```
-After executing `Ratatosk_SLURM.sh`, this command should show 3 jobs with prefix name `Ratatosk_`. After correction, folder `<output_prefix>/segments` contains temporary files that can be deleted.
+After correction, folder `<output_prefix>/segments` contains temporary files that can be deleted.
 
 
 **Important**
