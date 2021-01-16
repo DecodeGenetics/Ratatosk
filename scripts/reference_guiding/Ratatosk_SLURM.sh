@@ -166,6 +166,7 @@ OUT_PREFIX=$(mkdir -p ${OUT_PREFIX}; cd ${OUT_PREFIX}; pwd)
 
 echo "Minimum number of threads: ${MIN_NB_THREADS}"
 echo "Maximum number of threads: ${MAX_NB_THREADS}"
+echo "Maximum number of nodes: ${MAX_NB_NODES}"
 echo "Input reference genome file: ${REF_GENOME}"
 echo "Input short read file: ${SHORT_READS_BAM}"
 echo "Input long read file: ${LONG_READS_BAM}"
@@ -186,7 +187,7 @@ PREFIX_PATH_SEG="${OUT_PREFIX}/segments"
 PREFIX_PATH_CORRECTED="${OUT_PREFIX}/ratatosk"
 PREFIX_PATH_LOG="${OUT_PREFIX}/slurm_log"
 
-PREFIX_FILE_BIN="${PREFIX_PATH_LOG}/binCorrectionarray.sbatch"
+PREFIX_FILE_BIN="${PREFIX_PATH_LOG}/binCorrectionArray.sbatch"
 NAME_SR_UNMAPPED_IN_FILE="${PREFIX_PATH_SEG}/sample_sr_unmapped"
 
 BIN_SZ=5000000
