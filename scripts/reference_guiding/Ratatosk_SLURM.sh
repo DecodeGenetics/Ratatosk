@@ -233,7 +233,7 @@ do
 
 			NAME_LR_OUT_FILE="${NAME_LR_IN_FILE}_corrected"
 
-			RATATOSK_CMD="Ratatosk -v -c ${MIN_NB_THREADS} -s ${NAME_SR_IN_FILE}.fa -l ${NAME_LR_IN_FILE}.fq -u ${NAME_SR_UNMAPPED_IN_FILE} -o ${NAME_LR_OUT_FILE}"
+			RATATOSK_CMD="Ratatosk -v -c ${MIN_NB_THREADS} -s ${NAME_SR_IN_FILE}.fa -l ${NAME_LR_IN_FILE}.fq -u ${NAME_SR_UNMAPPED_IN_FILE}.fa -o ${NAME_LR_OUT_FILE}"
 
 			if [ "${SHORT_READS_PHASING}" != "" ] && [ "${LONG_READS_PHASING}" != "" ]
 			then
