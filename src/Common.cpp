@@ -48,14 +48,17 @@ size_t getMaxBranch(const double seq_entropy, const size_t max_len_path, const s
 	return (base_nb_nodes + 1) * entropy_factor;
 }
 
-bool hasEnoughSharedPairID(const PairID& a, const PairID& b, const size_t min_shared_ids) {
+size_t getNumberSharedPairID(const PairID& a, const PairID& b, const size_t min_shared_ids) {
 
 	size_t nb_shared = 0;
 
-	const size_t a_card = a.cardinality();
-	const size_t b_card = b.cardinality();
+	const size_t max_a = a.maximum(), min_a = a.minimum();
+	const size_t max_b = b.maximum(), min_b = b.minimum();
 
-	if ((a_card >= min_shared_ids) && (b_card >= min_shared_ids)) {
+	if ((min_a <= max_b) && (min_b <= max_a)) { // Check that range overlaps (both bitmaps must be non empty!)
+
+		const size_t a_card = a.cardinality();
+		const size_t b_card = b.cardinality();
 
 		const size_t log2_a = b_card * approximate_log2(a_card);
 		const size_t log2_b = a_card * approximate_log2(b_card);
@@ -86,7 +89,9 @@ bool hasEnoughSharedPairID(const PairID& a, const PairID& b, const size_t min_sh
 
 			PairID::const_iterator b_it_s = b.begin(), b_it_e = b.end();
 
-			while ((b_it_s != b_it_e) && (nb_shared < min_shared_ids)){
+			while ((b_it_s != b_it_e) && (*b_it_s < min_a)) ++b_it_s;
+
+			while ((b_it_s != b_it_e) && (*b_it_s <= max_a) && (nb_shared < min_shared_ids)){
 
 				nb_shared += static_cast<size_t>(a.contains(*b_it_s));
 				++b_it_s;
@@ -96,7 +101,9 @@ bool hasEnoughSharedPairID(const PairID& a, const PairID& b, const size_t min_sh
 
 			PairID::const_iterator a_it_s = a.begin(), a_it_e = a.end();
 
-			while ((a_it_s != a_it_e) && (nb_shared < min_shared_ids)){
+			while ((a_it_s != a_it_e) && (*a_it_s < min_b)) ++a_it_s;
+
+			while ((a_it_s != a_it_e) && (*a_it_s <= max_b) && (nb_shared < min_shared_ids)){
 
 				nb_shared += static_cast<size_t>(b.contains(*a_it_s));
 				++a_it_s;
@@ -104,128 +111,232 @@ bool hasEnoughSharedPairID(const PairID& a, const PairID& b, const size_t min_sh
 		}
 	}
 
-	return (nb_shared == min_shared_ids);
+	return nb_shared;
 }
 
-bool hasEnoughSharedPairID(const TinyBloomFilter<uint32_t>& tbf_a, const PairID& a, const PairID& b, const size_t min_shared_ids) {
+size_t getNumberSharedPairID(const SharedPairID& a, const SharedPairID& b, const size_t min_shared_ids) {
 
 	size_t nb_shared = 0;
 
-	const size_t a_card = a.cardinality();
-	const size_t b_card = b.cardinality();
+	const pair<const PairID*, const PairID*> pa = a.getPairIDs();
+	const pair<const PairID*, const PairID*> pb = b.getPairIDs();
 
-	if ((a_card >= min_shared_ids) && (b_card >= min_shared_ids)) {
+	if ((pa.first != nullptr) && (pa.first == pb.first)) {
 
-		const size_t log2_a = b_card * (approximate_log2(a_card) + tbf_a.getNumberHashFunctions());
-		const size_t log2_b = a_card * approximate_log2(b_card);
+		nb_shared = pa.first->cardinality();
 
-		const size_t min_a_b = min(a_card + b_card, min(log2_a, log2_b));
+		if (nb_shared < min_shared_ids) nb_shared += getNumberSharedPairID(*(pa.second), *(pb.second), min_shared_ids - nb_shared);
+	}
+	else {
 
-		if (min_a_b == log2_a) {
-
-			PairID::const_iterator b_it_s = b.begin(), b_it_e = b.end();
-
-			while ((b_it_s != b_it_e) && (nb_shared < min_shared_ids)){
-
-				const uint32_t val_b = *b_it_s;
-
-				nb_shared += static_cast<size_t>(tbf_a.query(val_b) && a.contains(val_b));
-				++b_it_s;
-			}
-		}
-		else return hasEnoughSharedPairID(a, b, min_shared_ids);
+		if (pb.first != nullptr) nb_shared = getNumberSharedPairID(a, *pb.first, min_shared_ids);
+		if ((pb.second != nullptr) && (nb_shared < min_shared_ids)) nb_shared += getNumberSharedPairID(a, *pb.second, min_shared_ids - nb_shared);
 	}
 
-	return (nb_shared == min_shared_ids);
+	return nb_shared;
+}
+
+size_t getNumberSharedPairID(const SharedPairID& a, const PairID& b, const size_t min_shared_ids) {
+
+	size_t nb_shared = 0;
+
+	const pair<const PairID*, const PairID*> p_pid = a.getPairIDs();
+
+	if (p_pid.first != nullptr) nb_shared = getNumberSharedPairID(*p_pid.first, b, min_shared_ids);
+	if ((p_pid.second != nullptr) && (nb_shared < min_shared_ids)) nb_shared += getNumberSharedPairID(*p_pid.second, b, min_shared_ids - nb_shared);
+
+	return nb_shared;
 }
 
 size_t getNumberSharedPairID(const PairID& a, const PairID& b) {
 
-	if (a.isEmpty() || b.isEmpty()) return 0;
-
 	size_t nb_shared = 0;
 
-	const size_t a_card = a.cardinality();
-	const size_t b_card = b.cardinality();
+	if (!a.isEmpty() && !b.isEmpty()) {
 
-	const size_t log2_a = b_card * approximate_log2(a_card);
-	const size_t log2_b = a_card * approximate_log2(b_card);
+		const size_t max_a = a.maximum(), min_a = a.minimum();
+		const size_t max_b = b.maximum(), min_b = b.minimum();
 
-	const size_t min_a_b = min(a_card + b_card, min(log2_a, log2_b));
+		if ((min_a <= max_b) && (min_b <= max_a)) { // Check that range overlaps (both bitmaps must be non empty!)
 
-	if (min_a_b == (a_card + b_card)) {
+			const size_t a_card = a.cardinality();
+			const size_t b_card = b.cardinality();
 
-		PairID::const_iterator a_it_s = a.begin(), a_it_e = a.end();
-		PairID::const_iterator b_it_s = b.begin(), b_it_e = b.end();
+			const size_t log2_a = b_card * approximate_log2(a_card);
+			const size_t log2_b = a_card * approximate_log2(b_card);
 
-		while ((a_it_s != a_it_e) && (b_it_s != b_it_e)){
+			const size_t min_a_b = min(a_card + b_card, min(log2_a, log2_b));
 
-			const uint32_t val_a = *a_it_s;
-			const uint32_t val_b = *b_it_s;
+			if (min_a_b == (a_card + b_card)) {
 
-			if (val_a == val_b){
+				PairID::const_iterator a_it_s = a.begin(), a_it_e = a.end();
+				PairID::const_iterator b_it_s = b.begin(), b_it_e = b.end();
 
-				++nb_shared;
-				++a_it_s;
-				++b_it_s;
+				while ((a_it_s != a_it_e) && (b_it_s != b_it_e)){
+
+					const uint32_t val_a = *a_it_s;
+					const uint32_t val_b = *b_it_s;
+
+					if (val_a == val_b){
+
+						++nb_shared;
+						++a_it_s;
+						++b_it_s;
+					}
+					else if (val_a < val_b) ++a_it_s;
+					else ++b_it_s;
+				}
 			}
-			else if (val_a < val_b) ++a_it_s;
-			else ++b_it_s;
-		}
-	}
-	else if (min_a_b == log2_a){
+			else if (min_a_b == log2_a){
 
-		PairID::const_iterator b_it_s = b.begin(), b_it_e = b.end();
+				PairID::const_iterator b_it_s = b.begin(), b_it_e = b.end();
 
-		while (b_it_s != b_it_e){
+				while ((b_it_s != b_it_e) && (*b_it_s < min_a)) ++b_it_s;
 
-			nb_shared += static_cast<size_t>(a.contains(*b_it_s));
-			++b_it_s;
-		}
-	}
-	else {
+				while ((b_it_s != b_it_e) && (*b_it_s <= max_a)){
 
-		PairID::const_iterator a_it_s = a.begin(), a_it_e = a.end();
+					nb_shared += static_cast<size_t>(a.contains(*b_it_s));
+					++b_it_s;
+				}
+			}
+			else {
 
-		while (a_it_s != a_it_e){
+				PairID::const_iterator a_it_s = a.begin(), a_it_e = a.end();
 
-			nb_shared += static_cast<size_t>(b.contains(*a_it_s));
-			++a_it_s;
+				while ((a_it_s != a_it_e) && (*a_it_s < min_b)) ++a_it_s;
+
+				while ((a_it_s != a_it_e) && (*a_it_s <= max_b)){
+
+					nb_shared += static_cast<size_t>(b.contains(*a_it_s));
+					++a_it_s;
+				}
+			}
 		}
 	}
 
 	return nb_shared;
 }
 
-size_t getNumberSharedPairID(const TinyBloomFilter<uint32_t>& tbf_a, const PairID& a, const PairID& b) {
-
-	if (a.isEmpty() || b.isEmpty()) return 0;
+size_t getNumberSharedPairID(const SharedPairID& a, const PairID& b) {
 
 	size_t nb_shared = 0;
 
-	const size_t a_card = a.cardinality();
-	const size_t b_card = b.cardinality();
+	const pair<const PairID*, const PairID*> p_pid = a.getPairIDs();
 
-	const size_t log2_a = b_card * (approximate_log2(a_card) + tbf_a.getNumberHashFunctions());
-	const size_t log2_b = a_card * approximate_log2(b_card);
-
-	const size_t min_a_b = min(a_card + b_card, min(log2_a, log2_b));
-
-	if (min_a_b == log2_a) {
-
-		PairID::const_iterator b_it_s = b.begin(), b_it_e = b.end();
-
-		while (b_it_s != b_it_e){
-
-			const uint32_t val_b = *b_it_s;
-
-			nb_shared += static_cast<size_t>(tbf_a.query(val_b) && a.contains(val_b));
-			++b_it_s;
-		}
-	}
-	else return getNumberSharedPairID(a, b);
+	if (p_pid.first != nullptr) nb_shared += getNumberSharedPairID(*p_pid.first, b);
+	if (p_pid.second != nullptr) nb_shared += getNumberSharedPairID(*p_pid.second, b);
 
 	return nb_shared;
+}
+
+size_t getNumberSharedPairID(const SharedPairID& a, const SharedPairID& b) {
+
+	size_t nb_shared = 0;
+
+	const pair<const PairID*, const PairID*> pa = a.getPairIDs();
+	const pair<const PairID*, const PairID*> pb = b.getPairIDs();
+
+	if ((pa.first != nullptr) && (pa.first == pb.first)) nb_shared = pa.first->cardinality() + getNumberSharedPairID(*(pa.second), *(pb.second));
+	else {
+
+		if (pb.first != nullptr) nb_shared += getNumberSharedPairID(a, *pb.first);
+		if (pb.second != nullptr) nb_shared += getNumberSharedPairID(a, *pb.second);
+	}
+
+	return nb_shared;
+}
+
+PairID getSharedPairID(const SharedPairID& a, const SharedPairID& b, const size_t min_shared) {
+
+	PairID pid;
+
+	const pair<const PairID*, const PairID*> pa = a.getPairIDs();
+	const pair<const PairID*, const PairID*> pb = b.getPairIDs();
+
+	if ((pa.first != nullptr) && (pb.first != nullptr) && (pa.first == pb.first)) {
+
+		pid = *(pa.first);
+
+		if (pa.first->cardinality() < min_shared) pid |= getSharedPairID(*(pa.second), *(pb.second), min_shared - pid.cardinality());
+	}
+	else {
+
+		const size_t a_card = a.cardinality();
+		const size_t b_card = b.cardinality();
+
+		if ((a_card >= min_shared) && (b_card >= min_shared)) {
+
+			const size_t max_a = a.maximum(), min_a = a.minimum();
+			const size_t max_b = b.maximum(), min_b = b.minimum();
+
+			if ((min_a <= max_b) && (min_b <= max_a)) { // Check that range overlaps (both bitmaps must be non empty!)
+
+				const size_t log2_a = b_card * approximate_log2(a_card);
+				const size_t log2_b = a_card * approximate_log2(b_card);
+
+				const size_t min_a_b = min(a_card + b_card, min(log2_a, log2_b));
+
+				size_t nb_shared = 0;
+
+				if (min_a_b == (a_card + b_card)) {
+
+					SharedPairID::const_iterator a_it_s = a.begin(), a_it_e = a.end();
+					SharedPairID::const_iterator b_it_s = b.begin(), b_it_e = b.end();
+
+					while ((a_it_s != a_it_e) && (b_it_s != b_it_e) && (nb_shared < min_shared)){
+
+						const uint32_t val_a = *a_it_s;
+						const uint32_t val_b = *b_it_s;
+
+						if (val_a == val_b){
+
+							pid.add(val_a);
+
+							++nb_shared;
+							++a_it_s;
+							++b_it_s;
+						}
+						else if (val_a < val_b) ++a_it_s;
+						else ++b_it_s;
+					}
+				}
+				else if (min_a_b == log2_a){
+
+					SharedPairID::const_iterator b_it_s = b.begin(), b_it_e = b.end();
+
+					while ((b_it_s != b_it_e) && (nb_shared < min_shared)) {
+
+						if (a.contains(*b_it_s)) {
+
+							pid.add(*b_it_s);
+							++nb_shared;
+						}
+
+						++b_it_s;
+					}
+				}
+				else {
+
+					SharedPairID::const_iterator a_it_s = a.begin(), a_it_e = a.end();
+
+					while ((a_it_s != a_it_e)  && (nb_shared < min_shared)){
+
+						if (b.contains(*a_it_s)) {
+
+							pid.add(*a_it_s);
+							++nb_shared;
+						}
+
+						++a_it_s;
+					}
+				}
+			}
+		}
+	}
+
+	if (pid.cardinality() < min_shared) pid.clear();
+
+	return pid;
 }
 
 size_t approximate_log2(size_t v) {
@@ -248,5 +359,147 @@ size_t approximate_log2(size_t v) {
     v |= v >> 16;
     v |= v >> 32;
 
-    return tab64[(static_cast<size_t>((v - (v >> 1))*0x07EDD5E59A4E28C2)) >> 58];
+    return tab64[(static_cast<size_t>((v - (v >> 1)) * 0x07EDD5E59A4E28C2)) >> 58];
+}
+
+bool check_files(const string& fn, const bool check_files_format, const bool verbose) {
+
+	vector<string> v_fn(1, fn);
+
+	return check_files(v_fn, check_files_format, verbose);
+}
+
+bool check_files(vector<string>& v_fn, const bool check_files_format, const bool verbose) {
+
+    vector<string> v_fn_tmp;
+
+    char* buffer = new char[4096]();
+
+    for (const auto& file : v_fn) {
+
+        if (!check_file_exists(file)) {
+
+            if (verbose) cerr << "Ratatosk::Ratatosk():: File " << file << " not found." << endl;
+            
+            return false;
+        }
+        else if (check_files_format) {
+
+            const int format = FileParser::getFileFormat(file.c_str());
+
+            if (format >= 0) v_fn_tmp.push_back(file); // File is FASTA/FASTQ/GFA
+            else {
+
+                FILE* fp = fopen(file.c_str(), "r");
+
+                if (fp != NULL){
+
+                    fclose(fp);
+
+                    ifstream ifs_file_txt(file);
+                    istream i_file_txt(ifs_file_txt.rdbuf());
+
+                    size_t i = 0;
+
+                    while (i_file_txt.getline(buffer, 4096).good()){
+
+                        fp = fopen(buffer, "r");
+
+                        if (fp == NULL) {
+
+                            if (verbose) cerr << "Ratatosk::Ratatosk():: Could not open file at line " << i << " in file " << file << " for reading." << endl;
+
+                            return false;
+                        }
+                        else {
+
+                            fclose(fp);
+
+                            v_fn_tmp.push_back(string(buffer));
+                        }
+
+                        ++i;
+                    }
+
+                    if (i_file_txt.fail() && (i == 0)) {
+
+                        if (verbose) {
+
+                        	cerr << "Ratatosk::Ratatosk():: File " << file << " is neither FASTA, FASTQ nor GFA." << endl;
+                        	cerr << "If it is a list of files, it is either empty or has a line with >4096 characters." << endl;
+                        }
+
+                        return false;
+                    }
+
+                    ifs_file_txt.close();
+                }
+                else {
+
+                    if (verbose) cerr << "Ratatosk::Ratatosk():: Could not open file " << file << " for reading." << endl;
+
+                    return false;
+                }
+            }
+        }
+        else {
+
+            FILE* fp = fopen(file.c_str(), "r");
+
+            if (fp == NULL){
+
+                if (verbose)  cerr << "Ratatosk::Ratatosk(): Could not open file " << file << " for reading." << endl;
+
+                return false;
+            }
+            else {
+
+                fclose(fp);
+
+                v_fn_tmp.push_back(file);
+            }
+        }
+    }
+
+    v_fn = move(v_fn_tmp);
+
+    delete[] buffer;
+
+    return true;
+}
+
+PairID subsample(const SharedPairID& spid, const size_t nb_id_out) {
+
+	PairID pid;
+
+	if ((nb_id_out != 0) && !spid.isEmpty()) {
+
+		vector<uint32_t> v_ids = spid.toVector();
+
+		std::random_shuffle(v_ids.begin(), v_ids.end());
+
+		const size_t sz = min(nb_id_out, v_ids.size());
+
+		for (size_t i = 0; i < sz; ++i) pid.add(v_ids[i]);
+	}
+
+	return pid;
+}
+
+PairID subsample(const PairID& spid, const size_t nb_id_out) {
+
+	PairID pid;
+
+	if ((nb_id_out != 0) && !spid.isEmpty()) {
+
+		vector<uint32_t> v_ids = spid.toVector();
+
+		std::random_shuffle(v_ids.begin(), v_ids.end());
+
+		const size_t sz = min(nb_id_out, v_ids.size());
+
+		for (size_t i = 0; i < sz; ++i) pid.add(v_ids[i]);
+	}
+
+	return pid;
 }

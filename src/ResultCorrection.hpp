@@ -116,28 +116,26 @@ class ResultCorrection {
 
 		inline size_t getLengthCorrectedRegion(const size_t pos) const {
 
-			size_t sum = 0;
+			size_t next = pos;
 
-			for (size_t i = pos; i < old_seq_len; ++i){
+			Roaring::const_iterator it_s = pos_corrected_old_seq.begin(), it_e = pos_corrected_old_seq.end();
 
-				if (pos_corrected_old_seq.contains(i)) ++sum;
-				else break;
-			}
+			it_s.equalorlarger(pos);
 
-			return sum;
+			for (; (it_s != it_e) && (*it_s < old_seq_len) && (*it_s == next); ++it_s) ++next;
+
+			return (next - pos);
 		}
 
 		inline size_t getLengthUncorrectedRegion(const size_t pos) const {
 
-			size_t sum = 0;
+			Roaring::const_iterator it = pos_corrected_old_seq.begin();
 
-			for (size_t i = pos; i < old_seq_len; ++i){
+			it.equalorlarger(pos);
 
-				if (!pos_corrected_old_seq.contains(i)) ++sum;
-				else break;
-			}
+			if ((pos >= old_seq_len) || (it == pos_corrected_old_seq.end())) return 0;
 
-			return sum;
+			return (min(static_cast<size_t>(*it), old_seq_len) - pos);
 		}
 
 		inline double getMeanQualityScore(const size_t start, const size_t end) const {

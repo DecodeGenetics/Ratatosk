@@ -10,44 +10,52 @@ class TinyBloomFilter {
 
 	public:
 
-		TinyBloomFilter() : table(nullptr), sz_table_bits(0), h(0), r_1(0), r_2(0), nb_elem_tot(0), nb_elem_curr(0) {}
+		TinyBloomFilter() : table(nullptr), sz_h(0) {}
 
-		TinyBloomFilter(const size_t nb_elem, const size_t bits_per_elem) : table(nullptr), sz_table_bits(0), h(0), r_1(0), r_2(0), nb_elem_tot(0), nb_elem_curr(0) {
+		TinyBloomFilter(const size_t nb_elem, const size_t bits_per_elem) : table(nullptr), sz_h(0) {
 
 		    if ((nb_elem != 0) && (bits_per_elem != 0)){
 
-			    /*std::random_device rd; //Seed
-			    std::default_random_engine generator(rd()); //Random number generator
-			    std::uniform_int_distribution<long long unsigned> distribution(0, 0xFFFFFFFFFFFFFFFF); //Distribution on which to apply the generator
+		        uint64_t nb_h = static_cast<uint64_t>((bits_per_elem * log(2)));
 
-			    r_1 = distribution(generator);
-			    r_2 = distribution(generator);*/
+		        nb_h += static_cast<uint64_t>(fpp(bits_per_elem, nb_h) >= fpp(bits_per_elem, nb_h+1));
 
-			    r_1 = 49157;
-			    r_2 = 1610612741;
+		        if (nb_h > 255){
 
-		        sz_table_bits = max(rndup(bits_per_elem * nb_elem), static_cast<size_t>(64));
+		        	cerr << "TinyBloomFilter::TinyBloomFilter(): This class does not support using > 255 hash functions" << endl;
+		        	clear();
 
-		        h = (int) (bits_per_elem * log(2));
-		        h += (fpp(bits_per_elem, h) >= fpp(bits_per_elem, h+1));
+		        	exit(1);
+		        }
 
-		        table = new uint64_t[sz_table_bits / 64]();
+		        nb_h &= 0x00000000000000ffULL;
+		        sz_h = static_cast<uint64_t>(max(rndup(bits_per_elem * nb_elem), static_cast<size_t>(64)));
 
-			    nb_elem_tot = nb_elem;
+		        if (sz_h > 0x0000ffffffffffff){
+
+		        	cerr << "TinyBloomFilter::TinyBloomFilter(): Required size of " << sz_h << " bits cannot be handled by this class." << endl;
+		        	clear();
+
+		        	exit(1);
+		        }
+
+		        table = new uint64_t[sz_h / 64]();
+
+		        sz_h = (sz_h << 8) | nb_h;
 		    }
 		}
 
-		TinyBloomFilter(const TinyBloomFilter& o, const bool reset_bits = false) : table(nullptr), sz_table_bits(o.sz_table_bits), h(o.h), r_1(o.r_1), r_2(o.r_2), nb_elem_tot(o.nb_elem_tot), nb_elem_curr(o.nb_elem_curr){
+		TinyBloomFilter(const TinyBloomFilter& o, const bool reset_bits = false) : table(nullptr), sz_h(o.sz_h) {
 
 			if (o.table != nullptr){
 
-				table = new uint64_t[sz_table_bits / 64]();
+				table = new uint64_t[(sz_h >> 8)/ 64]();
 
-				if (!reset_bits) memcpy(table, o.table, (sz_table_bits / 64) * sizeof(uint64_t));
+				if (!reset_bits) memcpy(table, o.table, ((sz_h >> 8) / 64) * sizeof(uint64_t));
 			}
 		}
 
-		TinyBloomFilter(TinyBloomFilter&& o) : table(o.table), sz_table_bits(o.sz_table_bits), h(o.h), r_1(o.r_1), r_2(o.r_2), nb_elem_tot(o.nb_elem_tot), nb_elem_curr(o.nb_elem_curr){
+		TinyBloomFilter(TinyBloomFilter&& o) : table(o.table), sz_h(o.sz_h) {
 
 			o.table = nullptr;
 
@@ -65,18 +73,13 @@ class TinyBloomFilter {
 
 				clear();
 
-				sz_table_bits = o.sz_table_bits;
-				h = o.h;
-				r_1 = o.r_1;
-				r_2 = o.r_2;
-				nb_elem_tot = o.nb_elem_tot;
-				nb_elem_curr = o.nb_elem_curr;
+				sz_h = o.sz_h;
 
 				if (o.table != nullptr){
 
-					table = new uint64_t[sz_table_bits / 64];
+					table = new uint64_t[(sz_h >> 8) / 64];
 
-					memcpy(table, o.table, (sz_table_bits / 64) * sizeof(uint64_t));
+					memcpy(table, o.table, ((sz_h >> 8) / 64) * sizeof(uint64_t));
 				}
 			}
 
@@ -89,13 +92,8 @@ class TinyBloomFilter {
 
 				clear();
 
-				sz_table_bits = o.sz_table_bits;
-				h = o.h;
-				r_1 = o.r_1;
-				r_2 = o.r_2;
 				table = o.table;
-				nb_elem_tot = o.nb_elem_tot;
-				nb_elem_curr = o.nb_elem_curr;
+				sz_h = o.sz_h;
 
 				o.table = nullptr;
 
@@ -110,40 +108,30 @@ class TinyBloomFilter {
 			if (table != nullptr) delete[] table;
 
 			table = nullptr;
-
-			r_1 = 0;
-			r_2 = 0;
-			h = 0;
-			sz_table_bits = 0;
-			nb_elem_tot = 0;
-			nb_elem_curr = 0;
+			sz_h = 0;
 		}
 
 		inline void reset(){
 
-			nb_elem_curr = 0;
-
-			if (table != nullptr) memset(table, 0, (sz_table_bits / 64) * sizeof(uint64_t));
+			if (table != nullptr) memset(table, 0, ((sz_h >> 8) / 64) * sizeof(uint64_t));
 		}
 
 		void insert(const T& elem) {
 
-			int i = 0;
-
-			uint64_t hv_1 = XXH64(&elem, sizeof(T), r_1);
-			
+			const uint64_t nb_h = sz_h & 0x00000000000000ffULL;
+			const uint64_t mask = (sz_h >> 8) - 1;
 			const uint64_t hv_2 = XXH64(&elem, sizeof(T), r_2);
-			const uint64_t mask = sz_table_bits - 1;
 
-			for (; i != h; ++i){
+			uint64_t i = 0;
+			uint64_t hv_1 = XXH64(&elem, sizeof(T), r_1);
+
+			for (; i != nb_h; ++i){
 
 				if ((table[(hv_1 & mask) >> 6] & (1ULL << (hv_1 & 0x3fULL))) == 0) break;
 				hv_1 += hv_2;
 			}
 
-			nb_elem_curr += (i != h);
-
-			for (; i != h; ++i){
+			for (; i != nb_h; ++i){
 
 				table[(hv_1 & mask) >> 6] |= 1ULL << (hv_1 & 0x3FULL);
 				hv_1 += hv_2;
@@ -152,45 +140,31 @@ class TinyBloomFilter {
 
 		bool query(const T& elem) const {
 
-			int i = 0;
-
-			uint64_t hv_1 = XXH64(&elem, sizeof(T), r_1);
-			
+			const uint64_t nb_h = sz_h & 0x00000000000000ffULL;
+			const uint64_t mask = (sz_h >> 8) - 1;
 			const uint64_t hv_2 = XXH64(&elem, sizeof(T), r_2);
-			const uint64_t mask = sz_table_bits - 1;
 
-			for (; i != h; ++i){
+			uint64_t i = 0;
+			uint64_t hv_1 = XXH64(&elem, sizeof(T), r_1);
+
+			for (; i != nb_h; ++i){
 
 				if ((table[(hv_1 & mask) >> 6] & (1ULL << (hv_1 & 0x3fULL))) == 0) break;
 				hv_1 += hv_2;
 			}
 
-			return (i == h);
+			return (i == nb_h);
 		}
 
-		/*TinyBloomFilter union_bf(const TinyBloomFilter& o){
+		uint64_t or_cardinality_bits(const TinyBloomFilter& o) const {
 
-			if ((o.sz_table_bits != sz_table_bits) || (o.r_1 != r_1) || (o.r2 != r_2) || (o.h != h)) return TinyBloomFilter();
+			if ((o.sz_h != sz_h) || (table == nullptr) || (o.table == nullptr))  return 0;
 
-			const size_t sz_table = sz_table_bits / 64;
+			const uint64_t sz_table = (sz_h >>  8) / 64;
 
-			for (size_t i = 0; i != sz_table; ++i) table[i] |= o.table[i];
+			uint64_t pop = 0;
 
-			const size_t popcnt = popcount(table, sz_table * sizeof(uint64_t));
-
-			nb_elem_curr = -sz_table_bits * log(1 - popcnt/sz_table_bits) / h;
-		}*/
-
-		size_t or_cardinality_bits(const TinyBloomFilter& o) const {
-
-			if ((o.sz_table_bits != sz_table_bits) || (o.r_1 != r_1) || (o.r_2 != r_2) || (o.h != h)) return 0;
-			if ((table == nullptr) || (o.table == nullptr))  return 0;
-
-			const size_t sz_table = sz_table_bits / 64;
-
-			size_t pop = 0;
-
-			for (size_t i = 0; i != sz_table; ++i){
+			for (uint64_t i = 0; i != sz_table; ++i){
 
 				const uint64_t word = table[i] | o.table[i];
 
@@ -202,14 +176,13 @@ class TinyBloomFilter {
 
 		size_t and_cardinality_bits(const TinyBloomFilter& o) const {
 
-			if ((o.sz_table_bits != sz_table_bits) || (o.r_1 != r_1) || (o.r_2 != r_2) || (o.h != h)) return 0;
-			if ((table == nullptr) || (o.table == nullptr))  return 0;
+			if ((o.sz_h != sz_h) || (table == nullptr) || (o.table == nullptr))  return 0;
 
-			const size_t sz_table = sz_table_bits / 64;
+			const uint64_t sz_table = (sz_h >> 8) / 64;
 
-			size_t pop = 0;
+			uint64_t pop = 0;
 
-			for (size_t i = 0; i != sz_table; ++i){
+			for (uint64_t i = 0; i != sz_table; ++i){
 
 				const uint64_t word = table[i] & o.table[i];
 
@@ -219,48 +192,78 @@ class TinyBloomFilter {
 			return pop;
 		}
 
-		inline bool isFull() const {
-
-			return ((table != nullptr) && (nb_elem_curr >= nb_elem_tot));
-		}
-
 		inline bool isEmpty() const {
 
-			return ((table == nullptr) || (nb_elem_curr == 0));
-		}
+			bool isEmpty = (table != nullptr);
 
-		inline size_t cardinality() const {
+			for (uint64_t i = 0; (i < sz_h) && isEmpty; ++i) isEmpty = (table[i] != 0);
 
-			return nb_elem_curr;
+			return isEmpty;
 		}
 
 		inline size_t cardinality_bits() const {
 
-			return popcnt(table, (sz_table_bits / 64) * sizeof(uint64_t));
+			if (table == nullptr) return 0;
+
+			return popcnt(table, ((sz_h >> 8) / 64) * sizeof(uint64_t));
 		}
 
 		inline size_t getNumberHashFunctions() const {
 
-			return h;
+			return (sz_h >> 8);
+		}
+
+		size_t getSizeInBytes() const {
+
+			return sizeof(uint64_t*) + sizeof(uint64_t) + (sz_h >> 8);
+		}
+
+		bool write(ostream& stream_out) const {
+
+		    if (stream_out.good()) stream_out.write(reinterpret_cast<const char*>(&sz_h), sizeof(uint64_t));
+		    if (stream_out.good() && ((sz_h >> 8) != 0)) stream_out.write(reinterpret_cast<const char*>(table), (sz_h >> 8) * sizeof(uint64_t));
+
+		    return stream_out.good();
+		}
+
+		bool read(istream& stream_in) {
+
+		    if (stream_in.good()){
+
+		        clear();
+
+		        if (stream_in.good()) stream_in.read(reinterpret_cast<char*>(&sz_h), sizeof(uint64_t));
+
+		        if (stream_in.good() && ((sz_h >> 8) != 0)) {
+
+		        	table = new uint64_t[(sz_h >> 8)];
+
+		        	stream_in.read(reinterpret_cast<char*>(table), (sz_h >> 8) * sizeof(uint64_t));
+		        }
+		    }
+
+		    return stream_in.good();
 		}
 
 	private:
 
-        inline double fpp(const size_t bits, const int h) const {
+        inline double fpp(const uint64_t bits, const uint64_t h) const {
 
-            return pow(1-exp(-((double)h)/((double)bits)),(double)h);
+        	const double bits_d = static_cast<double>(bits);
+        	const double h_d = static_cast<double>(h);
+
+            return pow(1 - exp(-(h_d / bits_d)), h_d);
         }
 
         uint64_t* table;
 
-        uint64_t sz_table_bits;
-        uint64_t r_1;
-        uint64_t r_2;
+        uint64_t sz_h;
 
-        size_t nb_elem_tot;
-        size_t nb_elem_curr;
-
-        int h;
+        static const uint64_t r_1;
+        static const uint64_t r_2;
 };
+
+template<typename T> const uint64_t TinyBloomFilter<T>::r_1 = 49157;
+template<typename T> const uint64_t TinyBloomFilter<T>::r_2 = 1610612741;
 
 #endif

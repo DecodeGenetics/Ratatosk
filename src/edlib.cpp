@@ -11,7 +11,7 @@ using namespace std;
 
 typedef uint64_t Word;
 static const int WORD_SIZE = sizeof(Word) * 8; // Size of Word in bits
-static const Word WORD_1 = (Word)1;
+static const Word WORD_1 = static_cast<Word>(1);
 static const Word HIGH_BIT_MASK = WORD_1 << (WORD_SIZE - 1);  // 100..00
 static const int MAX_UCHAR = 255;
 
@@ -49,7 +49,7 @@ struct Block {
     int score; // score of last cell in block;
 
     Block() {}
-    Block(Word P, Word M, int score) :P(P), M(M), score(score) {}
+    Block(Word p, Word m, int s) :P(p), M(m), score(s) {}
 };
 
 
@@ -64,8 +64,8 @@ public:
     EqualityDefinition(const string& alphabet,
                        const EdlibEqualityPair* additionalEqualities = NULL,
                        const int additionalEqualitiesLength = 0) {
-        for (int i = 0; i < (int) alphabet.size(); i++) {
-            for (int j = 0; j < (int) alphabet.size(); j++) {
+        for (int i = 0; i < static_cast<int>(alphabet.size()); i++) {
+            for (int j = 0; j < static_cast<int>(alphabet.size()); j++) {
                 matrix[i][j] = (i == j);
             }
         }
@@ -154,14 +154,35 @@ extern "C" EdlibAlignResult edlibAlign(const char* const queryOriginal, const in
     unsigned char* query, * target;
     string alphabet = transformSequences(queryOriginal, queryLength, targetOriginal, targetLength,
                                          &query, &target);
-    result.alphabetLength = (int) alphabet.size();
+    result.alphabetLength = static_cast<int>(alphabet.size());
     /*-------------------------------------------------------*/
+
+    // Handle special situation when at least one of the sequences has length 0.
+    if (queryLength == 0 || targetLength == 0) {
+        if (config.mode == EDLIB_MODE_NW) {
+            result.editDistance = std::max(queryLength, targetLength);
+            result.endLocations = static_cast<int *>(malloc(sizeof(int) * 1));
+            result.endLocations[0] = targetLength - 1;
+            result.numLocations = 1;
+        } else if (config.mode == EDLIB_MODE_SHW || config.mode == EDLIB_MODE_HW) {
+            result.editDistance = queryLength;
+            result.endLocations = static_cast<int *>(malloc(sizeof(int) * 1));
+            result.endLocations[0] = -1;
+            result.numLocations = 1;
+        } else {
+            result.status = EDLIB_STATUS_ERROR;
+        }
+
+        free(query);
+        free(target);
+        return result;
+    }
 
     /*--------------------- INITIALIZATION ------------------*/
     int maxNumBlocks = ceilDiv(queryLength, WORD_SIZE); // bmax in Myers
     int W = maxNumBlocks * WORD_SIZE - queryLength; // number of redundant cells in last level blocks
     EqualityDefinition equalityDefinition(alphabet, config.additionalEqualities, config.additionalEqualitiesLength);
-    Word* Peq = buildPeq((int) alphabet.size(), query, queryLength, equalityDefinition);
+    Word* Peq = buildPeq(static_cast<int>(alphabet.size()), query, queryLength, equalityDefinition);
     /*-------------------------------------------------------*/
 
     /*------------------ MAIN CALCULATION -------------------*/
@@ -193,19 +214,19 @@ extern "C" EdlibAlignResult edlibAlign(const char* const queryOriginal, const in
     if (result.editDistance >= 0) {  // If there is solution.
         // If NW mode, set end location explicitly.
         if (config.mode == EDLIB_MODE_NW) {
-            result.endLocations = (int *) malloc(sizeof(int) * 1);
+            result.endLocations = static_cast<int *>(malloc(sizeof(int) * 1));
             result.endLocations[0] = targetLength - 1;
             result.numLocations = 1;
         }
 
         // Find starting locations.
         if (config.task == EDLIB_TASK_LOC || config.task == EDLIB_TASK_PATH) {
-            result.startLocations = (int*) malloc(result.numLocations * sizeof(int));
+            result.startLocations = static_cast<int *>(malloc(result.numLocations * sizeof(int)));
             if (config.mode == EDLIB_MODE_HW) {  // If HW, I need to calculate start locations.
                 const unsigned char* rTarget = createReverseCopy(target, targetLength);
                 const unsigned char* rQuery  = createReverseCopy(query, queryLength);
                 // Peq for reversed query.
-                Word* rPeq = buildPeq((int) alphabet.size(), rQuery, queryLength, equalityDefinition);
+                Word* rPeq = buildPeq(static_cast<int>(alphabet.size()), rQuery, queryLength, equalityDefinition);
                 for (int i = 0; i < result.numLocations; i++) {
                     int endLocation = result.endLocations[i];
                     if (endLocation == -1) {
@@ -256,7 +277,7 @@ extern "C" EdlibAlignResult edlibAlign(const char* const queryOriginal, const in
             const unsigned char* rQuery  = createReverseCopy(query, queryLength);
             obtainAlignment(query, rQuery, queryLength,
                             alnTarget, rAlnTarget, alnTargetLength,
-                            equalityDefinition, (int) alphabet.size(), result.editDistance,
+                            equalityDefinition, static_cast<int>(alphabet.size()), result.editDistance,
                             &(result.alignment), &(result.alignmentLength));
             delete[] rAlnTarget;
             delete[] rQuery;
@@ -318,7 +339,7 @@ extern "C" char* edlibAlignmentToCigar(const unsigned char* const alignment, con
         }
     }
     cigar->push_back(0);  // Null character termination.
-    char* cigar_ = (char*) malloc(cigar->size() * sizeof(char));
+    char* cigar_ = static_cast<char *>(malloc(cigar->size() * sizeof(char)));
     memcpy(cigar_, &(*cigar)[0], cigar->size() * sizeof(char));
     delete cigar;
 
@@ -351,7 +372,7 @@ static inline Word* buildPeq(const int alphabetLength,
                         Peq[symbol * maxNumBlocks + b] += 1;
                 }
             } else { // Last symbol is wildcard, so it is all 1s
-                Peq[symbol * maxNumBlocks + b] = (Word)-1;
+                Peq[symbol * maxNumBlocks + b] = static_cast<Word>(-1);
             }
         }
     }
@@ -392,7 +413,7 @@ static inline int calculateBlock(Word Pv, Word Mv, Word Eq, const int hin,
     // 0  -> 00...00
     // -1 -> 11...11 (2-complement)
 
-    Word hinIsNeg = (Word)(hin >> 2) & WORD_1; // 00...001 if hin is -1, 00...000 if 0 or 1
+    Word hinIsNeg = static_cast<Word>(hin >> 2) & WORD_1; // 00...001 if hin is -1, 00...000 if 0 or 1
 
     Word Xv = Eq | Mv;
     // This is instruction below written using 'if': if (hin < 0) Eq |= (Word)1;
@@ -414,7 +435,7 @@ static inline int calculateBlock(Word Pv, Word Mv, Word Eq, const int hin,
     // This is instruction below written using 'if': if (hin < 0) Mh |= (Word)1;
     Mh |= hinIsNeg;
     // This is instruction below written using 'if': if (hin > 0) Ph |= (Word)1;
-    Ph |= (Word)((hin + 1) >> 1);
+    Ph |= static_cast<Word>((hin + 1) >> 1);
 
     PvOut = Mh | ~(Xv | Ph);
     MvOut = Ph & Xv;
@@ -553,8 +574,8 @@ static int myersCalcEditDistanceSemiGlobal(
     bl = blocks;
     for (int b = 0; b <= lastBlock; b++) {
         bl->score = (b + 1) * WORD_SIZE;
-        bl->P = (Word)-1; // All 1s
-        bl->M = (Word)0;
+        bl->P = static_cast<Word>(-1); // All 1s
+        bl->M = static_cast<Word>(0);
         bl++;
     }
 
@@ -582,8 +603,8 @@ static int myersCalcEditDistanceSemiGlobal(
             && ((*(Peq_c + 1) & WORD_1) || hout < 0)) { // Peq_c is pointing to last block
             // If score of left block is not too big, calculate one more block
             lastBlock++; bl++; Peq_c++;
-            bl->P = (Word)-1; // All 1s
-            bl->M = (Word)0;
+            bl->P = static_cast<Word>(-1); // All 1s
+            bl->M = static_cast<Word>(0);
             bl->score = (bl - 1)->score - hout + WORD_SIZE + calculateBlock(bl->P, bl->M, *Peq_c, hout, bl->P, bl->M);
         } else {
             while (lastBlock >= firstBlock && bl->score >= k + WORD_SIZE) {
@@ -624,8 +645,8 @@ static int myersCalcEditDistanceSemiGlobal(
         if (lastBlock < firstBlock) {
             *bestScore_ = bestScore;
             if (bestScore != -1) {
-                *positions_ = (int *) malloc(sizeof(int) * (int) positions.size());
-                *numPositions_ = (int) positions.size();
+                *positions_ = static_cast<int *>(malloc(sizeof(int) * static_cast<int>(positions.size())));
+                *numPositions_ = static_cast<int>(positions.size());
                 copy(positions.begin(), positions.end(), *positions_);
             }
             delete[] blocks;
@@ -673,8 +694,8 @@ static int myersCalcEditDistanceSemiGlobal(
 
     *bestScore_ = bestScore;
     if (bestScore != -1) {
-        *positions_ = (int *) malloc(sizeof(int) * (int) positions.size());
-        *numPositions_ = (int) positions.size();
+        *positions_ = static_cast<int *>(malloc(sizeof(int) * static_cast<int>(positions.size())));
+        *numPositions_ = static_cast<int>(positions.size());
         copy(positions.begin(), positions.end(), *positions_);
     }
 
@@ -740,8 +761,8 @@ static int myersCalcEditDistanceNW(const Word* const Peq, const int W, const int
     bl = blocks;
     for (int b = 0; b <= lastBlock; b++) {
         bl->score = (b + 1) * WORD_SIZE;
-        bl->P = (Word)-1; // All 1s
-        bl->M = (Word)0;
+        bl->P = static_cast<Word>(-1); // All 1s
+        bl->M = static_cast<Word>(0);
         bl++;
     }
 
@@ -783,8 +804,8 @@ static int myersCalcEditDistanceNW(const Word* const Peq, const int W, const int
                  ((lastBlock + 1) * WORD_SIZE - 1
                   > k - bl->score + 2 * WORD_SIZE - 2 - targetLength + c + queryLength))) {
             lastBlock++; bl++;
-            bl->P = (Word)-1; // All 1s
-            bl->M = (Word)0;
+            bl->P = static_cast<Word>(-1); // All 1s
+            bl->M = static_cast<Word>(0);
             int newHout = calculateBlock(bl->P, bl->M, Peq_c[lastBlock], hout, bl->P, bl->M);
             bl->score = (bl - 1)->score - hout + WORD_SIZE + newHout;
             hout = newHout;
@@ -927,7 +948,7 @@ static int obtainAlignmentTraceback(const int queryLength, const int targetLengt
     const int maxNumBlocks = ceilDiv(queryLength, WORD_SIZE);
     const int W = maxNumBlocks * WORD_SIZE - queryLength;
 
-    *alignment = (unsigned char*) malloc((queryLength + targetLength - 1) * sizeof(unsigned char));
+    *alignment = static_cast<unsigned char*>(malloc((queryLength + targetLength - 1) * sizeof(unsigned char)));
     *alignmentLength = 0;
     int c = targetLength - 1; // index of column
     int b = maxNumBlocks - 1; // index of block in column
@@ -1117,7 +1138,7 @@ static int obtainAlignmentTraceback(const int queryLength, const int targetLengt
         //----------------------------------//
     }
 
-    *alignment = (unsigned char*) realloc(*alignment, (*alignmentLength) * sizeof(unsigned char));
+    *alignment = static_cast<unsigned char*>(realloc(*alignment, (*alignmentLength) * sizeof(unsigned char)));
     reverse(*alignment, *alignment + (*alignmentLength));
     return EDLIB_STATUS_OK;
 }
@@ -1149,7 +1170,7 @@ static int obtainAlignment(
     // Handle special case when one of sequences has length of 0.
     if (queryLength == 0 || targetLength == 0) {
         *alignmentLength = targetLength + queryLength;
-        *alignment = (unsigned char*) malloc((*alignmentLength) * sizeof(unsigned char));
+        *alignment = static_cast<unsigned char*>(malloc((*alignmentLength) * sizeof(unsigned char)));
         for (int i = 0; i < *alignmentLength; i++) {
             (*alignment)[i] = queryLength == 0 ? EDLIB_EDOP_DELETE : EDLIB_EDOP_INSERT;
         }
@@ -1167,8 +1188,8 @@ static int obtainAlignment(
 
     // If estimated memory consumption for traceback algorithm is smaller than 1MB use it,
     // otherwise use Hirschberg's algorithm. By running few tests I choose boundary of 1MB as optimal.
-    long long alignmentDataSize = (long long) (2 * sizeof(Word) + sizeof(int)) * maxNumBlocks * targetLength
-        + (long long) 2 * sizeof(int) * targetLength;
+    long long alignmentDataSize = (2ll * sizeof(Word) + sizeof(int)) * maxNumBlocks * targetLength
+        + 2ll * sizeof(int) * targetLength;
     if (alignmentDataSize < 1024 * 1024) {
         int score_, endLocation_;  // Used only to call function.
         AlignmentData* alignData = NULL;
@@ -1303,8 +1324,8 @@ static int obtainAlignmentHirschberg(
     int queryIdxLeftStart = max(scoresLeftStartIdx, scoresRightStartIdx - 1);
     int queryIdxLeftEnd = min(scoresLeftStartIdx + scoresLeftLength - 1,
                           scoresRightStartIdx + scoresRightLength - 2);
-    int leftScore, rightScore;
-    int queryIdxLeftAlignment;  // Query/row index of cell in left column where alignment is passing through.
+    int leftScore = -1, rightScore = -1;
+    int queryIdxLeftAlignment = -1;  // Query/row index of cell in left column where alignment is passing through.
     bool queryIdxLeftAlignmentFound = false;
     for (int queryIdx = queryIdxLeftStart; queryIdx <= queryIdxLeftEnd; queryIdx++) {
         leftScore = scoresLeft[queryIdx - scoresLeftStartIdx];
@@ -1368,7 +1389,7 @@ static int obtainAlignmentHirschberg(
 
     // Build alignment by concatenating upper left alignment with lower right alignment.
     *alignmentLength = ulAlignmentLength + lrAlignmentLength;
-    *alignment = (unsigned char*) malloc((*alignmentLength) * sizeof(unsigned char));
+    *alignment = static_cast<unsigned char*>(malloc((*alignmentLength) * sizeof(unsigned char)));
     memcpy(*alignment, ulAlignment, ulAlignmentLength);
     memcpy(*alignment + ulAlignmentLength, lrAlignment, lrAlignmentLength);
 
@@ -1404,8 +1425,8 @@ static string transformSequences(const char* const queryOriginal, const int quer
     // Each letter is assigned an ordinal number, starting from 0 up to alphabetLength - 1,
     // and new query and target are created in which letters are replaced with their ordinal numbers.
     // This query and target are used in all the calculations later.
-    *queryTransformed = (unsigned char *) malloc(sizeof(unsigned char) * queryLength);
-    *targetTransformed = (unsigned char *) malloc(sizeof(unsigned char) * targetLength);
+    *queryTransformed = static_cast<unsigned char *>(malloc(sizeof(unsigned char) * queryLength));
+    *targetTransformed = static_cast<unsigned char *>(malloc(sizeof(unsigned char) * targetLength));
 
     string alphabet = "";
 
@@ -1419,7 +1440,7 @@ static string transformSequences(const char* const queryOriginal, const int quer
         unsigned char c = static_cast<unsigned char>(queryOriginal[i]);
         if (!inAlphabet[c]) {
             inAlphabet[c] = true;
-            letterIdx[c] = (unsigned char) alphabet.size();
+            letterIdx[c] = static_cast<unsigned char>(alphabet.size());
             alphabet += queryOriginal[i];
         }
         (*queryTransformed)[i] = letterIdx[c];
@@ -1428,7 +1449,7 @@ static string transformSequences(const char* const queryOriginal, const int quer
         unsigned char c = static_cast<unsigned char>(targetOriginal[i]);
         if (!inAlphabet[c]) {
             inAlphabet[c] = true;
-            letterIdx[c] = (unsigned char) alphabet.size();
+            letterIdx[c] = static_cast<unsigned char>(alphabet.size());
             alphabet += targetOriginal[i];
         }
         (*targetTransformed)[i] = letterIdx[c];
@@ -1439,7 +1460,7 @@ static string transformSequences(const char* const queryOriginal, const int quer
 
 
 extern "C" EdlibAlignConfig edlibNewAlignConfig(int k, EdlibAlignMode mode, EdlibAlignTask task,
-                                                EdlibEqualityPair* additionalEqualities,
+                                                const EdlibEqualityPair* additionalEqualities,
                                                 int additionalEqualitiesLength) {
     EdlibAlignConfig config;
     config.k = k;

@@ -27,7 +27,11 @@ void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
 
 pair<int, int> selectBestSubstringAlignment(const char* ref, const size_t ref_len, const vector<Path<UnitigData>>& candidates, const double cut_threshold_norm_edit = -1.0);
 
-vector<pair<size_t, char>> filterAmbiguity(	const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const WeightsPairID& w_pid,
-											const string& query, const vector<pair<size_t, char>>& v_ambiguity);
+/*vector<pair<size_t, char>> filterAmbiguity(	const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const WeightsPairID& w_pid,
+											const string& query, const vector<pair<size_t, char>>& v_ambiguity);*/
+
+string fixSNPs(const Correct_Opt& opt, const CompactedDBG<UnitigData>& dbg, const string& s);
+
+vector<pair<size_t, const_UnitigMap<UnitigData>>> keep_non_overlap(const char* ref, const size_t k, const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v);
 
 #endif

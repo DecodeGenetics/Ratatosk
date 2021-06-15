@@ -17,9 +17,11 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
             clear();
         }
 
-        UnitigData(const UnitigData& o) : kmCov_cardBranches(o.kmCov_cardBranches), connected_comp_id(o.connected_comp_id), read_ids(o.read_ids), ambiguity_ids(o.ambiguity_ids), hap_ids(o.hap_ids) {}
+        UnitigData(const UnitigData& o) :   kmCov_cardBranches(o.kmCov_cardBranches), shared_pids(o.shared_pids),
+                                            read_ids(o.read_ids), ambiguity_ids(o.ambiguity_ids), hap_ids(o.hap_ids) {}
 
-        UnitigData(UnitigData&& o) : kmCov_cardBranches(o.kmCov_cardBranches), connected_comp_id(o.connected_comp_id), read_ids(move(o.read_ids)), ambiguity_ids(move(o.ambiguity_ids)), hap_ids(move(o.hap_ids)) {
+        UnitigData(UnitigData&& o) :    kmCov_cardBranches(o.kmCov_cardBranches), shared_pids(o.shared_pids),
+                                        read_ids(move(o.read_ids)), ambiguity_ids(move(o.ambiguity_ids)), hap_ids(move(o.hap_ids)) {
 
             o.clear();
         }
@@ -29,7 +31,8 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
             if (this != &o){
 
                 kmCov_cardBranches = o.kmCov_cardBranches;
-                connected_comp_id = o.connected_comp_id;
+                shared_pids = o.shared_pids;
+
                 read_ids = o.read_ids;
                 ambiguity_ids = o.ambiguity_ids;
                 hap_ids = o.hap_ids;
@@ -43,7 +46,8 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
             if (this != &o){
 
                 kmCov_cardBranches = o.kmCov_cardBranches;
-                connected_comp_id = o.connected_comp_id;
+                shared_pids = o.shared_pids;
+
                 read_ids = move(o.read_ids);
                 ambiguity_ids = move(o.ambiguity_ids);
                 hap_ids = move(o.hap_ids);
@@ -54,14 +58,17 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
             return *this;
         }
 
-        void clear(){
+        void clear(const bool cov = true, const bool visit = true, const bool branching = true, const bool shared = true, const bool pids = true, const bool amb = true, const bool hap = true){
 
-            connected_comp_id = 0;
-            kmCov_cardBranches = 0;
+            if (cov) resetCoverage();
+            if (visit) setVisitStatus(false);
+            if (branching) setBranching(false);
+            if (shared) resetSharedPids();
 
-            read_ids.clear();
-            ambiguity_ids.clear();
-            hap_ids.clear();
+            if (pids) read_ids.clear();
+
+            if (amb) ambiguity_ids.clear();
+            if (hap) hap_ids.clear();
         }
 
         void clear(const UnitigMap<UnitigData>& um_dest){
@@ -83,17 +90,16 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
 
             for (const auto& p : v_src) v_dest.push_back({um_dest.size - k + 1 + p.first, p.second});
 
-            read_ids = pli_dest->get_readID() | pli_src->get_readID();
             hap_ids = pli_dest->get_hapID() | pli_src->get_hapID();
 
-            read_ids.runOptimize();
             hap_ids.runOptimize();
 
-            kmCov_cardBranches = 0;
-            connected_comp_id = max(pli_src->getConnectedComp(), pli_dest->getConnectedComp());
+            read_ids.setLocalPairID(pli_dest->getPairID().getLocalPairID() | pli_src->getPairID().getLocalPairID());
+            read_ids.runOptimize();
 
-            //increaseCoverage(pli_dest->getCoverage());
-            //increaseCoverage(pli_src->getCoverage());
+            kmCov_cardBranches = 0;
+            shared_pids = 0;
+
             increasePhasedCoverage(pli_dest->getPhasedCoverage() + pli_src->getPhasedCoverage());
             increaseUnphasedCoverage(pli_dest->getUnphasedCoverage() + pli_src->getUnphasedCoverage());
 
@@ -129,15 +135,12 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
             const UnitigData* pli_dest = um_dest.getData();
             const UnitigData* pli_src = um_src.getData();
 
-            read_ids |= pli_src->get_readID();
+            read_ids |= pli_src->getPairID().getLocalPairID();
             hap_ids |= pli_src->get_hapID();
 
             read_ids.runOptimize();
             hap_ids.runOptimize();
 
-            connected_comp_id = max(pli_src->getConnectedComp(), pli_dest->getConnectedComp());
-
-            //increaseCoverage(pli_src->getKmerCoverage(um_src) * um_src.len);
             increasePhasedCoverage(pli_src->getPhasedKmerCoverage(um_src) * um_src.len);
             increaseUnphasedCoverage(pli_src->getUnphasedKmerCoverage(um_src) * um_src.len);
         }
@@ -149,49 +152,21 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
 
             for (const auto p : v_amb) add_ambiguity_char(p.first, p.second);
 
-            connected_comp_id = pli_src->getConnectedComp();
-            read_ids = pli_src->get_readID();
+            read_ids.setLocalPairID(pli_src->getPairID().getLocalPairID());
+
             hap_ids = pli_src->get_hapID();
 
             read_ids.runOptimize();
             ambiguity_ids.runOptimize();
             hap_ids.runOptimize();
 
-            //increaseCoverage(pli_src->getKmerCoverage(um_src) * um_src.len);
             increasePhasedCoverage(pli_src->getPhasedKmerCoverage(um_src) * um_src.len);
             increaseUnphasedCoverage(pli_src->getUnphasedKmerCoverage(um_src) * um_src.len);
         }
 
         string serialize(const const_UnitigMap<UnitigData, void>& um_src) const {
 
-            return string(  "KC:Z:" + std::to_string(um_src.getData()->getKmerCoverage(um_src)) + '\t' + 
-                            "RC:Z:" + std::to_string(um_src.getData()->get_readID().cardinality()) + '\t' +
-                            "PU:Z:" + std::to_string(um_src.getData()->getConnectedComp())
-                            );
-        }
-
-        inline bool write(ostream& stream_out) const {
-
-            if (stream_out.good()) stream_out.write(reinterpret_cast<const char*>(&kmCov_cardBranches), sizeof(size_t));
-            if (stream_out.good()) stream_out.write(reinterpret_cast<const char*>(&connected_comp_id), sizeof(size_t));
-
-            if (stream_out.good()) read_ids.write(stream_out);
-            if (stream_out.good()) ambiguity_ids.write(stream_out);
-            if (stream_out.good()) hap_ids.write(stream_out);
-
-            return stream_out.good();
-        }
-
-        inline bool read(istream& stream_in){
-
-            if (stream_in.good()) stream_in.read(reinterpret_cast<char*>(&kmCov_cardBranches), sizeof(size_t));
-            if (stream_in.good()) stream_in.read(reinterpret_cast<char*>(&connected_comp_id), sizeof(size_t));
-
-            if (stream_in.good()) read_ids.read(stream_in);
-            if (stream_in.good()) ambiguity_ids.read(stream_in);
-            if (stream_in.good()) hap_ids.read(stream_in);
-
-            return stream_in.good();
+            return string();
         }
 
         inline void print(const const_UnitigMap<UnitigData>& um) const {
@@ -210,7 +185,7 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
             cout << "- Predecessors: " << l_um.getPredecessors().cardinality() << endl;
             cout << "- Coverage: " << getPhasedCoverage() << " (phased) + " << getUnphasedCoverage() << " (unphased) = " << getCoverage() << endl;
             cout << "- Kmer coverage: " << getPhasedKmerCoverage(l_um) << " (phased) + " << getUnphasedKmerCoverage(l_um) << " (unphased) = " << getKmerCoverage(l_um) << endl;
-            cout << "- Read mapping: " << get_readID().cardinality() << endl;
+            cout << "- Read mapping: " << getPairID().cardinality() << endl;
 
             if (v.empty()) cout << "- SNPs: None" << endl;
             else {
@@ -233,6 +208,46 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
                 cout << " " << endl;
         }
 
+        inline void resetSharedPids() {
+
+            shared_pids = 0;
+        }
+
+        inline bool setSharedPids(const bool strand, const char c) {
+
+            if (!isDNA(c)) return false;
+
+            const size_t idx = static_cast<size_t>(getAmbiguityIndex(c));
+
+            if (strand) shared_pids |= idx << 4;
+            else shared_pids |= idx;
+
+            return true;
+        }
+
+        inline bool unsetSharedPids(const bool strand, const char c) {
+
+            if (!isDNA(c)) return false;
+
+            const size_t idx = static_cast<size_t>(getAmbiguityIndex(c));
+
+            if (strand) shared_pids &= ~(idx << 4);
+            else shared_pids &= ~idx;
+
+            return true;
+        }
+
+        inline bool getSharedPids(const bool strand, const char c) const {
+
+            if (!isDNA(c)) return false;
+
+            const size_t idx = static_cast<size_t>(getAmbiguityIndex(c));
+
+            if (strand) return static_cast<bool>(shared_pids & (idx << 4));
+            
+            return static_cast<bool>(shared_pids & idx);
+        }
+
         inline void resetCoverage() {
 
             kmCov_cardBranches &= 0xc000000000000000ULL;
@@ -240,7 +255,7 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
 
         inline void increasePhasedCoverage(const size_t count){
 
-            const size_t no_change = kmCov_cardBranches & 0x7fffffff80000000ULL;
+            const size_t no_change = kmCov_cardBranches & 0xffffffff80000000ULL;
             const size_t phased_count = kmCov_cardBranches & 0x000000007fffffffULL;
 
             if ((phased_count + count) <= 0x000000007fffffffULL) kmCov_cardBranches = no_change | (phased_count + count);
@@ -258,7 +273,7 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
 
         inline void decreasePhasedCoverage(const size_t count){
 
-            const size_t no_change = kmCov_cardBranches & 0x7fffffff80000000ULL;
+            const size_t no_change = kmCov_cardBranches & 0xffffffff80000000ULL;
             const size_t phased_count = kmCov_cardBranches & 0x000000007fffffffULL;
 
             if (phased_count < count) kmCov_cardBranches = no_change;
@@ -312,15 +327,26 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
 
         inline bool isBranching() const {
 
-            return static_cast<bool>(kmCov_cardBranches >> 63);
+            return static_cast<bool>((kmCov_cardBranches >> 63 & 0x1ULL));
         }
 
-        inline const PairID& get_readID() const {
+        inline void setVisitStatus(const bool isVisited) {
+
+            kmCov_cardBranches &= 0xbfffffffffffffffULL;
+            kmCov_cardBranches |= static_cast<size_t>(isVisited) << 62;
+        }
+
+        inline bool getVisitStatus() const {
+
+            return static_cast<bool>((kmCov_cardBranches >> 62) & 0x1ULL);
+        }
+
+        inline const SharedPairID& getPairID() const {
 
             return read_ids;
         }   
 
-        inline PairID& get_readID() {
+        inline SharedPairID& getPairID() {
 
             return read_ids;
         }
@@ -335,16 +361,6 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
             return hap_ids;
         }
 
-        inline size_t getConnectedComp() const {
-
-            return connected_comp_id;
-        }
-
-        inline void setConnectedComp(const size_t id) {
-
-            connected_comp_id = id;
-        }
-
         inline void clear_ambiguity_char(){
 
             ambiguity_ids.clear();     
@@ -353,6 +369,11 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
         inline void add_ambiguity_char(const size_t pos, const char c){
 
             ambiguity_ids.add((pos << 4) + getAmbiguityIndex(c));
+        }
+
+        inline void rm_ambiguity_char(const size_t pos, const char c){
+
+            ambiguity_ids.remove((pos << 4) + getAmbiguityIndex(c));
         }
 
         vector<pair<size_t, char>> get_ambiguity_char(const const_UnitigMap<UnitigData>& um) const {
@@ -390,6 +411,53 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
             ambiguity_ids.runOptimize();
         }
 
+        inline bool write(ostream& stream_out, const bool pids_only = false) const {
+
+            if (pids_only) {
+
+                if (stream_out.good()) read_ids.write(stream_out);
+            }
+            else {
+
+                if (stream_out.good()) stream_out.write(reinterpret_cast<const char*>(&kmCov_cardBranches), sizeof(size_t));
+                if (stream_out.good()) stream_out.write(reinterpret_cast<const char*>(&shared_pids), sizeof(size_t));
+
+                if (stream_out.good()) read_ids.write(stream_out);
+
+                if (stream_out.good()) ambiguity_ids.write(stream_out);
+                if (stream_out.good()) hap_ids.write(stream_out);
+            }
+
+            return stream_out.good();
+        }
+
+        inline bool read(istream& stream_in, const bool pids_only = false){
+
+            if (stream_in.good()) {
+
+                if (pids_only) {
+
+                    clear(false, false, false, false, true, false, false);
+
+                    if (stream_in.good()) read_ids.read(stream_in);
+                }
+                else {
+
+                    clear();
+
+                    if (stream_in.good()) stream_in.read(reinterpret_cast<char*>(&kmCov_cardBranches), sizeof(size_t));
+                    if (stream_in.good()) stream_in.read(reinterpret_cast<char*>(&shared_pids), sizeof(size_t));
+
+                    if (stream_in.good()) read_ids.read(stream_in);
+
+                    if (stream_in.good()) ambiguity_ids.read(stream_in);
+                    if (stream_in.good()) hap_ids.read(stream_in);
+                }
+            }
+
+            return stream_in.good();
+        }
+
     private:
 
         struct compare_ambiguity {
@@ -412,9 +480,10 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
         }
 
         size_t kmCov_cardBranches;
-        size_t connected_comp_id;
+        size_t shared_pids;
 
-        PairID read_ids;
+        SharedPairID read_ids;
+
         PairID ambiguity_ids;
         PairID hap_ids;
 };

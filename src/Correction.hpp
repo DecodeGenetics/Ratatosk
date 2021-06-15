@@ -16,8 +16,7 @@
 #include "TinyBloomFilter.hpp"
 #include "UnitigData.hpp"
 
-pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	const Correct_Opt& opt, const string& s,
-																				const TinyBloomFilter<uint32_t>& bf, const PairID& r, const WeightsPairID& w_pid,
+pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	const Correct_Opt& opt, const string& s, const WeightsPairID& w_pid,
 																				const pair<size_t, const_UnitigMap<UnitigData>>& um_solid_start,
 																				const pair<size_t, const_UnitigMap<UnitigData>>& um_solid_end, 
 																				const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_um_weak, size_t i_weak,

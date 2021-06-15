@@ -134,7 +134,7 @@ size_t PairID::getSizeInBytes() const {
         return ret;
     }
 
-    return sizeof(PairID); // if (flag == ptrSharedPairID), we do not own the pointed UnitigCors so its size is not considered
+    return sizeof(PairID); 
 }
 
 PairID PairID::operator|(const PairID& rhs) const {
@@ -162,33 +162,40 @@ PairID& PairID::operator|=(const PairID& rhs) {
             }
             else {
 
+                const size_t max_a = maximum(), min_a = minimum();
+                const size_t max_b = rhs.maximum(), min_b = rhs.minimum();
+
                 const_iterator it = begin(), it_end = end();
                 const_iterator r_it = rhs.begin(), r_it_end = rhs.end();
 
                 vector<uint32_t> new_ids;
 
-                new_ids.reserve(cardinality() + rhs.cardinality());
+                if ((min_a <= max_b) && (min_b <= max_a)) { // Check that range overlaps (both bitmaps must be non empty!)
 
-                while ((it != it_end) && (r_it != r_it_end)){
+                    new_ids.reserve(cardinality() + rhs.cardinality());
 
-                    if (*it > *r_it){
+                    while ((it != it_end) && (r_it != r_it_end)){
+
+                        if (*it > *r_it){
+
+                            new_ids.push_back(*r_it);
+                            ++r_it;
+                        }
+                        else if (*it < *r_it) ++it;
+                        else {
+
+                            ++it;
+                            ++r_it;
+                        }
+                    }
+
+                    while (r_it != r_it_end){
 
                         new_ids.push_back(*r_it);
                         ++r_it;
                     }
-                    else if (*it < *r_it) ++it;
-                    else {
-
-                        ++it;
-                        ++r_it;
-                    }
                 }
-
-                while (r_it != r_it_end){
-
-                    new_ids.push_back(*r_it);
-                    ++r_it;
-                }
+                else new_ids = rhs.toVector();
 
                 addSortedVector(new_ids);
             }
@@ -248,36 +255,86 @@ PairID& PairID::operator&=(const PairID& rhs) {
     
     if (&rhs != this){
 
-        if ((cardinality() == 0) || (rhs.cardinality() == 0)) clear();
+        const size_t a_card = cardinality();
+        const size_t b_card = rhs.cardinality();
+
+        if ((a_card == 0) || (b_card == 0)) clear();
         else {
 
-            const_iterator it = begin(), it_end = end();
-            const_iterator r_it = rhs.begin(), r_it_end = rhs.end();
+            const uintptr_t flag = setBits & flagMask;
+            const uintptr_t r_flag = rhs.setBits & flagMask;
 
-            vector<uint32_t> old_ids;
+            if ((flag == r_flag) && ((flag == ptrBitmap) || (flag == localBitVector))) {
 
-            old_ids.reserve(min(cardinality(), rhs.cardinality()));
+                if (flag == ptrBitmap) getPtrBitmap()->r &= rhs.getConstPtrBitmap()->r;
+                if (flag == localBitVector) setBits &= rhs.setBits;
+            }
+            else {
 
-            while (r_it != r_it_end){
+                const size_t max_a = maximum(), min_a = minimum();
+                const size_t max_b = rhs.maximum(), min_b = rhs.minimum();
 
-                while ((it != it_end) && (*it < *r_it)){
+                if ((min_a <= max_b) && (min_b <= max_a)) { // Check that range overlaps (both bitmaps must be non empty!)
 
-                    old_ids.push_back(*it);
-                    ++it;
+                    const size_t log2_a = b_card * l_approximate_log2(a_card);
+                    const size_t log2_b = a_card * l_approximate_log2(b_card);
+
+                    const size_t min_a_b = min(a_card + b_card, min(log2_a, log2_b));
+
+                    PairID out_pid;
+
+                    if (min_a_b == (a_card + b_card)) {
+
+                        PairID::const_iterator a_it_s = begin(), a_it_e = end();
+                        PairID::const_iterator b_it_s = rhs.begin(), b_it_e = rhs.end();
+
+                        while ((a_it_s != a_it_e) && (b_it_s != b_it_e)){
+
+                            const uint32_t val_a = *a_it_s;
+                            const uint32_t val_b = *b_it_s;
+
+                            if (val_a == val_b){
+
+                                out_pid.add(val_a);
+
+                                ++a_it_s;
+                                ++b_it_s;
+                            }
+                            else if (val_a < val_b) ++a_it_s;
+                            else ++b_it_s;
+                        }
+                    }
+                    else if (min_a_b == log2_a){
+
+                        PairID::const_iterator b_it_s = rhs.begin(), b_it_e = rhs.end();
+
+                        while ((b_it_s != b_it_e) && (*b_it_s < min_a)) ++b_it_s;
+
+                        while ((b_it_s != b_it_e) && (*b_it_s <= max_a)){
+
+                            if (contains(*b_it_s)) out_pid.add(*b_it_s);
+
+                            ++b_it_s;
+                        }
+                    }
+                    else {
+
+                        PairID::const_iterator a_it_s = begin(), a_it_e = end();
+
+                        while ((a_it_s != a_it_e) && (*a_it_s < min_b)) ++a_it_s;
+
+                        while ((a_it_s != a_it_e) && (*a_it_s <= max_b)){
+
+                            if (rhs.contains(*a_it_s)) out_pid.add(*a_it_s);
+
+                            ++a_it_s;
+                        }
+                    }
+
+                    *this = move(out_pid);
                 }
-
-                if ((it != it_end) && (*it == *r_it)) ++it;
-
-                ++r_it;
+                else clear();
             }
-
-            while (it != it_end){
-
-                old_ids.push_back(*it);
-                ++it;
-            }
-
-            removeSortedVector(old_ids);
         }
     }
 
@@ -286,7 +343,7 @@ PairID& PairID::operator&=(const PairID& rhs) {
 
 Roaring PairID::toRoaring() const {
 
-    uintptr_t flag = setBits & flagMask;
+    const uintptr_t flag = setBits & flagMask;
 
     if (flag == ptrBitmap) return getPtrBitmap()->r;
     else {
@@ -306,7 +363,18 @@ Roaring PairID::toRoaring() const {
     }
 }
 
-void PairID::add(const size_t pair_id) {
+vector<uint32_t> PairID::toVector() const {
+
+    vector<uint32_t> v;
+
+    v.reserve(cardinality());
+
+    for (const uint32_t id : *this) v.push_back(id);
+
+    return v;
+}
+
+void PairID::add(const size_t id) {
 
     uintptr_t flag = setBits & flagMask;
 
@@ -314,9 +382,9 @@ void PairID::add(const size_t pair_id) {
 
         const uintptr_t setBits_tmp = setBits >> shiftMaskBits;
 
-        if (setBits_tmp != pair_id){
+        if (setBits_tmp != id){
 
-            if ((setBits_tmp < maxBitVectorIDs) && (pair_id < maxBitVectorIDs)){
+            if ((setBits_tmp < maxBitVectorIDs) && (id < maxBitVectorIDs)){
 
                 setBits = (1ULL << (setBits_tmp + shiftMaskBits)) | localBitVector;
             }
@@ -344,8 +412,8 @@ void PairID::add(const size_t pair_id) {
 
     if (flag == localBitVector){
 
-        if (setBits == localBitVector) setBits = (pair_id << shiftMaskBits) | localSingleInt;
-        else if (pair_id < maxBitVectorIDs) setBits |= 1ULL << (pair_id + shiftMaskBits);
+        if (setBits == localBitVector) setBits = (id << shiftMaskBits) | localSingleInt;
+        else if (id < maxBitVectorIDs) setBits |= 1ULL << (id + shiftMaskBits);
         else {
 
             uintptr_t setBits_tmp_tb = setBits >> shiftMaskBits;
@@ -385,7 +453,7 @@ void PairID::add(const size_t pair_id) {
 
         TinyBitmap t_bmp(&setPtrTinyBmp);
 
-        if (t_bmp.add(pair_id)) setBits = (reinterpret_cast<uintptr_t>(t_bmp.detach()) & pointerMask) | localTinyBitmap;
+        if (t_bmp.add(id)) setBits = (reinterpret_cast<uintptr_t>(t_bmp.detach()) & pointerMask) | localTinyBitmap;
         else {
 
             const size_t sz_t_bmp = t_bmp.size();
@@ -408,7 +476,7 @@ void PairID::add(const size_t pair_id) {
         }
     }
 
-    if (flag == ptrBitmap) getPtrBitmap()->r.add(pair_id); // flag == ptrBitmap
+    if (flag == ptrBitmap) getPtrBitmap()->r.add(id); // flag == ptrBitmap
 }
 
 void PairID::addSortedVector(const vector<uint32_t>& v) { // Private, assumes vector is sorted
@@ -489,37 +557,40 @@ void PairID::addSortedVector(const vector<uint32_t>& v) { // Private, assumes ve
 
     if (flag == localTinyBitmap) {
 
-        bool add_ok = true;
-
         uint16_t* setPtrTinyBmp = getPtrTinyBitmap();
 
         TinyBitmap t_bmp(&setPtrTinyBmp);
+
+        bool add_ok = (v.size() < 65536) && ((t_bmp.size() == 0) || ((v[v.size() - 1] >> 16) == (*(t_bmp.begin()) >> 16)));
 
         for (i = 0; (i < v.size()) && add_ok; ++i) add_ok = t_bmp.add(v[i]);
 
         if (add_ok) setBits = (reinterpret_cast<uintptr_t>(t_bmp.detach()) & pointerMask) | localTinyBitmap;
         else {
 
-            const size_t sz_t_bmp = t_bmp.size();
-
-            uint32_t* values = new uint32_t[sz_t_bmp];
-
-            size_t j = 0;
-
             Bitmap* setPtrBmp = new Bitmap;
 
-            for (TinyBitmap::const_iterator it = t_bmp.begin(), it_end = t_bmp.end(); it != it_end; ++it) values[j++] = *it;
+            const size_t sz_t_bmp = t_bmp.size();
 
-            t_bmp.clear();
+            if (sz_t_bmp != 0) {
 
-            setPtrBmp->r.addMany(sz_t_bmp, values);
+                uint32_t* values = new uint32_t[sz_t_bmp];
+
+                size_t j = 0;
+
+                for (TinyBitmap::const_iterator it = t_bmp.begin(), it_end = t_bmp.end(); it != it_end; ++it) values[j++] = *it;
+
+                t_bmp.clear();
+
+                setPtrBmp->r.addMany(sz_t_bmp, values);
+
+                delete[] values;
+            }
 
             setBits = (reinterpret_cast<uintptr_t>(setPtrBmp) & pointerMask) | ptrBitmap;
             flag = ptrBitmap;
 
-            delete[] values;
-
-            --i;
+            i -= static_cast<size_t>(i != 0);
         }
     }
 
@@ -570,7 +641,7 @@ void PairID::remove(const size_t pair_id) {
                 clear();
                 add(l_pair_id);
             }
-            else if (/*(card <= maxBitVectorIDs) && */(t_bmp.maximum() < maxBitVectorIDs)){
+            else if (t_bmp.maximum() < maxBitVectorIDs){
 
                 PairID new_uc;
 
@@ -620,7 +691,7 @@ void PairID::remove(const size_t pair_id) {
             clear();
             add(l_pair_id);
         }
-        else if (/*(card <= maxBitVectorIDs) &&*/ (bitmap->r.maximum() < maxBitVectorIDs)){
+        else if (bitmap->r.maximum() < maxBitVectorIDs){
 
             PairID new_uc;
 
@@ -694,7 +765,7 @@ void PairID::removeSortedVector(const vector<uint32_t>& v) {
                 clear();
                 add(id);
             }
-            else if (/*(card <= maxBitVectorIDs) &&*/ (t_bmp.maximum() < maxBitVectorIDs)){
+            else if (t_bmp.maximum() < maxBitVectorIDs){
 
                 PairID new_uc;
 
@@ -744,7 +815,7 @@ void PairID::removeSortedVector(const vector<uint32_t>& v) {
             clear();
             add(id);
         }
-        else if (/*(card <= maxBitVectorIDs) &&*/ (bitmap->r.maximum() < maxBitVectorIDs)){
+        else if (bitmap->r.maximum() < maxBitVectorIDs){
 
             PairID new_uc;
 
@@ -951,8 +1022,10 @@ PairID::const_iterator PairID::end() const {
     return const_iterator(this, false);
 }
 
-PairID::PairID_const_iterator::PairID_const_iterator() :    cs(nullptr), flag(localBitVector), it_setBits(0), it_roar(empty_roar.end()),
-                                                            ck_id(0xffffffffffffffff), cs_sz(0) {}
+PairID::PairID_const_iterator::PairID_const_iterator() : it_roar(empty_roar.end()) {
+
+    clear();
+}
 
 PairID::PairID_const_iterator::PairID_const_iterator( const PairID* cs_, const bool beg) :  cs(cs_), ck_id(0xffffffffffffffff), it_setBits(0xffffffffffffffff),
                                                                                             it_roar(empty_roar.end()) {
@@ -988,6 +1061,18 @@ PairID::PairID_const_iterator::PairID_const_iterator(const PairID_const_iterator
 }
 
 PairID::PairID_const_iterator::~PairID_const_iterator() {
+
+    t_bmp.detach();
+}
+
+void PairID::PairID_const_iterator::clear() {
+
+    cs = nullptr;
+    flag = localBitVector;
+    it_setBits = 0;
+    it_roar = empty_roar.end();
+    ck_id = 0xffffffffffffffff;
+    cs_sz = 0;
 
     t_bmp.detach();
 }

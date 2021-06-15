@@ -163,17 +163,11 @@ class Path {
 		inline const const_UnitigMap<U>& front() const { return start; }
 		inline const const_UnitigMap<U>& back() const { return (end.isEmpty ? start : end); }
 
-		bool replace_back(const const_UnitigMap<U>& um, const double score = -1.0) {
+		bool replace_back(const const_UnitigMap<U>& um) {
 
-			if (um.isEmpty) return false;
+			if (um.isEmpty || start.isEmpty) return false;
 
 			if (end.isEmpty){
-
-				if ((score >= 0.0) && (score <= 1.0)){
-
-					if (start.isEmpty) qual = string(1, getQual(score));
-					else if (!qual.empty()) qual[0] = getQual(score);
-				}
 
 				l = um.len + um.getGraph()->getK() - 1;
 				start = um;
@@ -184,14 +178,36 @@ class Path {
 				l += um.len;
 
 				end = um;
-
-				if ((score >= 0.0) && (score <= 1.0) && !qual.empty()) qual[qual.length()-1] = getQual(score);
 			}
 
 			return true;
 		}
 
-		bool extend(const const_UnitigMap<U>& um, const double score = -1.0) {
+		bool replace_back(const const_UnitigMap<U>& um, const double score) {
+
+			if (um.isEmpty || start.isEmpty) return false;
+
+			if (end.isEmpty){
+
+				l = um.len + um.getGraph()->getK() - 1;
+				start = um;
+
+				qual[0] = getQual(score);
+			}
+			else {
+
+				l -= end.len;
+				l += um.len;
+
+				end = um;
+
+				qual[qual.length()-1] = getQual(score);
+			}
+
+			return true;
+		}
+
+		bool extend(const const_UnitigMap<U>& um, const double score) {
 
 			if (um.isEmpty) return false;
 
@@ -199,8 +215,6 @@ class Path {
 
 				start = um;
 				l = um.len + um.getGraph()->getK() - 1;
-
-				if ((score >= 0.0) && (score <= 1.0)) qual += getQual(score);
 			}
 			else {
 
@@ -212,9 +226,9 @@ class Path {
 
 				end = um;
 				l += um.len;
-
-				if ((score >= 0.0) && (score <= 1.0) && !qual.empty()) qual += getQual(score);
 			}
+
+			qual += getQual(score);
 
 			return true;
 		}
@@ -264,14 +278,14 @@ class Path {
 
 			l += o.l - k;
 
-			if (!qual.empty() && !o.qual.empty()) qual.append(o.qual.substr(1));
+			if (o.qual.length() != 0) qual.append(o.qual.substr(1));
 
             return true;
 		}
 
 		inline size_t size() const {
 
-			return (!start.isEmpty) + (!end.isEmpty) + succ.length();
+			return static_cast<size_t>(!start.isEmpty) + static_cast<size_t>(!end.isEmpty) + succ.length();
 		}
 
 		inline size_t length() const {
@@ -282,23 +296,6 @@ class Path {
 		inline void setQuality(const char c) {
 
 			qual = string(size(), c);
-		}
-
-		inline bool replaceQuality(const size_t pos_start, const size_t length, const char c) {
-
-			if ((pos_start + length) <= qual.length()){
-
-				qual.replace(pos_start, length, length, c);
-
-				return true;
-			}
-
-			return false;
-		}
-
-		inline void rmQualityScore() {
-
-			qual.clear();
 		}
 
 		string toString() const {
@@ -350,7 +347,7 @@ class Path {
 
 			const_UnitigMap<U> curr = start;
 
-			size_t i = 0;
+			size_t i = 1;
 
 			string path_qual(start.len + k - 1, qual[0]);
 
@@ -365,19 +362,12 @@ class Path {
 				curr.dist = 0;
 				curr.len = curr.size - k + 1;
 
-				path_qual.append(string(curr.len, qual[++i]));
+				path_qual.append(curr.len, qual[i++]);
 			}
 
-			if (!end.isEmpty) path_qual.append(string(end.len, qual[++i]));
+			if (!end.isEmpty) path_qual.append(end.len, qual[i++]);
 
 			return path_qual;
-		}
-
-		vector<char> toQualityVector() const {
-
-			if (qual.empty() || start.isEmpty) return vector<char>();
-
-			return vector<char>(qual.begin(), qual.end()); 
 		}
 
 		PathOut toStringVector() const {
@@ -439,7 +429,7 @@ class Path {
 				path_qual = string(v_um[0].len + k - 1, qual[0]);
 				path_qual.reserve(l);
 
-				for (i = 1; i < v_um.size(); ++i) path_qual.append(string(v_um[i].len, qual[i]));
+				for (i = 1; i < v_um.size(); ++i) path_qual.append(v_um[i].len, qual[i]);
 			}
 
 			return PathOut(move(path_str), move(path_qual), move(v_um), *this);
@@ -528,7 +518,7 @@ class Path {
 				path_qual = string(v_um[0].len + k - 1, qual[0]);
 				path_qual.reserve(l);
 
-				for (size_t i = 1; i < v_um.size(); ++i) path_qual.append(string(v_um[i].len, qual[i]));
+				for (size_t i = 1; i < v_um.size(); ++i) path_qual.append(v_um[i].len, qual[i]);
 			}
 
 			return PathOut(move(path_str), move(path_qual), move(v_um), *this);
@@ -562,6 +552,13 @@ class Path {
 			if (!end.isEmpty) v_um.push_back(end);
 
 			return v_um;
+		}
+
+		vector<char> toQualityVector() const {
+
+			if (qual.empty() || start.isEmpty) return vector<char>();
+
+			return vector<char>(qual.begin(), qual.end()); 
 		}
 
 	private:

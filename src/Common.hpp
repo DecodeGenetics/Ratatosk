@@ -5,10 +5,12 @@
 
 #include "CompactedDBG.hpp"
 
+#include "edlib.h"
 #include "PairID.hpp"
 #include "TinyBloomFilter.hpp"
+#include "SharedPairID.hpp"
 
-#define RATATOSK_VERSION "0.4"
+#define RATATOSK_VERSION "0.5.0"
 
 struct Correct_Opt : CDBG_Build_opt {
 
@@ -20,6 +22,12 @@ struct Correct_Opt : CDBG_Build_opt {
 
 	string filename_long_out; // Output filename prefix for long reads
 
+	string fn_graph_in;
+	string fn_index_in;
+
+	bool correct;
+	bool index;
+
 	bool pass1_only;
 	bool pass2_only;
 
@@ -27,12 +35,14 @@ struct Correct_Opt : CDBG_Build_opt {
     int trim_qual;
 
     size_t small_k;
-
     size_t insert_sz;
 
     size_t min_cov_vertices;
     size_t max_cov_vertices;
+
     size_t min_nb_km_unmapped;
+
+    size_t nb_correction_rounds;
 
     size_t nb_partitions;
     size_t min_bases_partition;
@@ -45,19 +55,77 @@ struct Correct_Opt : CDBG_Build_opt {
 
     double weak_region_len_factor;
     double large_k_factor;
+    double min_score;
+    double min_color_sharing;
+    double sampling_rate;
 
-	Correct_Opt() : out_qual(1), trim_qual(0), small_k(31), insert_sz(500),
-					nb_partitions(1000), min_bases_partition(100000), buffer_sz(1048576),
-					min_nb_km_unmapped(small_k), min_cov_vertices(2), max_cov_vertices(128),
-					weak_region_len_factor(1.25), large_k_factor(1.5), h_seed(0),
-					max_len_weak_region1(1000), max_len_weak_region2(10000),
-					pass1_only(false), pass2_only(false) {
+    double min_confidence_snp_corr;
+    double min_confidence_2nd_pass;
+
+    bool force_unres_snp_corr;
+
+	Correct_Opt() {
+
+		clear();
+	}
+
+	void clear() {
+
+		filenames_long_in.clear();
+		filenames_helper_long_in.clear();
+		filenames_short_all.clear();
+		filenames_long_phase.clear();
+		filenames_short_phase.clear();
+
+		filename_long_out.clear();
+
+		fn_graph_in.clear();
+		fn_index_in.clear();
 
 		k = 63;
 
 		clipTips = false;
 		deleteIsolated = false;
 		useMercyKmers = false;
+
+		correct = false;
+		index = false;
+
+		pass1_only = false;
+		pass2_only = false;
+
+		out_qual = 1;
+	    trim_qual = 0;
+
+	    small_k = 31;
+	    insert_sz = 500;
+
+	    min_cov_vertices = 2;
+	    max_cov_vertices = 128;
+
+	    nb_correction_rounds = 1;
+
+	    nb_partitions = 1000;
+	    min_bases_partition = 100000;
+
+	    max_len_weak_region1 = 1000;
+	    max_len_weak_region2 = 10000;
+
+	    buffer_sz = 1048576;
+	    h_seed = 0;
+
+	    weak_region_len_factor = 1.25;
+	    large_k_factor = 1.5;
+	    min_score = 0.0;
+	    min_color_sharing = 0.5;
+	    sampling_rate = 1.0;
+
+	    min_confidence_snp_corr = 0.9;
+	    min_confidence_2nd_pass = 0.0;
+
+	    force_unres_snp_corr = false;
+
+	    min_nb_km_unmapped = small_k;
 	}
 };
 
@@ -135,6 +203,34 @@ struct WeightsPairID {
 	}
 };
 
+struct pair_hash
+{
+    template <class T1, class T2>
+    std::size_t operator() (const std::pair<T1, T2> &pair) const
+    {
+        return std::hash<T1>()(pair.first) ^ std::hash<T2>()(pair.second);
+    }
+};
+
+// This order of the nucleotide in this array is important -> DO NOT CHANGE
+static const char ambiguity_c[16] = {'.', 'A', 'C', 'M', 'G', 'R', 'S', 'V', 'T', 'W', 'Y', 'H', 'K', 'D', 'B', 'N'};
+
+static const EdlibEqualityPair edlib_iupac_alpha[28] = {
+															{'M', 'A'}, {'M', 'C'},
+															{'R', 'A'}, {'R', 'G'},
+															{'S', 'C'}, {'S', 'G'},
+															{'V', 'A'}, {'V', 'C'}, {'V', 'G'},
+															{'W', 'A'}, {'W', 'T'},
+															{'Y', 'C'}, {'Y', 'T'},
+															{'H', 'A'}, {'H', 'C'}, {'H', 'T'},
+															{'K', 'G'}, {'K', 'T'},
+															{'D', 'A'}, {'D', 'G'}, {'D', 'T'},
+															{'B', 'C'}, {'B', 'G'}, {'B', 'T'},
+															{'N', 'A'}, {'N', 'C'}, {'N', 'G'}, {'N', 'T'}
+														};
+
+static const size_t sz_edlib_iupac_alpha = 28;
+
 // returns maximal entropy score for random sequences which is log2|A| where A is the alphabet
 // returns something close to 0 for highly repetitive sequences
 double getEntropy(const char* s, const size_t len);
@@ -142,14 +238,18 @@ double getEntropy(const char* s, const size_t len);
 size_t getMaxPaths(const double seq_entropy, const size_t max_len_path, const size_t k);
 size_t getMaxBranch(const double seq_entropy, const size_t max_len_path, const size_t k);
 
-bool hasEnoughSharedPairID(const PairID& a, const PairID& b, const size_t min_shared_ids);
-bool hasEnoughSharedPairID(const TinyBloomFilter<uint32_t>& tbf_a, const PairID& a, const PairID& b, const size_t min_shared_ids);
+size_t getNumberSharedPairID(const PairID& a, const PairID& b, const size_t min_shared_ids);
+size_t getNumberSharedPairID(const SharedPairID& a, const PairID& b, const size_t min_shared_ids);
+size_t getNumberSharedPairID(const SharedPairID& a, const SharedPairID& b, const size_t min_shared_ids);
 
 size_t getNumberSharedPairID(const PairID& a, const PairID& b);
-size_t getNumberSharedPairID(const TinyBloomFilter<uint32_t>& tbf_a, const PairID& a, const PairID& b);
+size_t getNumberSharedPairID(const SharedPairID& a, const PairID& b);
+size_t getNumberSharedPairID(const SharedPairID& a, const SharedPairID& b);
 
-// This order of nucleotide in this array is important
-static const char ambiguity_c[16] = {'.', 'A', 'C', 'M', 'G', 'R', 'S', 'V', 'T', 'W', 'Y', 'H', 'K', 'D', 'B', 'N'};
+PairID getSharedPairID(const SharedPairID& a, const SharedPairID& b, const size_t min_shared);
+
+PairID subsample(const SharedPairID& spid, const size_t nb_id_out);
+PairID subsample(const PairID& spid, const size_t nb_id_out);
 
 inline void toUpperCase(char* s, const size_t len) {
 
@@ -168,38 +268,45 @@ inline void copyFile(const string& dest, const vector<string>& src){
     }
 }
 
-inline size_t countRecordsFASTX(const string& filename){
+inline size_t countRecords(const vector<string>& v_fn, const bool unique, const uint64_t seed){
 
-	const vector<string> v(1, filename);
-	
-	FileParser fp(v);
-
-	size_t i = 0;
-	size_t nb_rec = 0;
+	size_t i = 0, n = 0;
 
     string s;
+	
+	// Count number of non-unique records
+	{
+		FileParser fp(v_fn);
 
-	while (fp.read(s, i)) ++nb_rec;
+		while (fp.read(s, i)) ++n;
+	}
 
-	fp.close();
+	if (unique) { // Count number of unique records
 
-	return nb_rec;
+		unordered_set<uint64_t> sh;
+
+		FileParser fp(v_fn);
+
+		sh.reserve(n);
+
+		n = 0;
+
+		while (fp.read(s, i)){
+
+			const uint64_t h = XXH64(fp.getNameString(), strlen(fp.getNameString()), seed);
+
+			n += static_cast<size_t>(sh.insert(h).second);
+		}
+	}
+
+	return n;
 }
 
-inline size_t countRecordsFASTX(const vector<string>& filenames){
+inline size_t countRecords(const string& fn, const bool unique, const uint64_t seed){
+
+	const vector<string> v(1, fn);
 	
-	FileParser fp(filenames);
-
-	size_t i = 0;
-	size_t nb_rec = 0;
-
-    string s;
-
-	while (fp.read(s, i)) ++nb_rec;
-
-	fp.close();
-
-	return nb_rec;
+	return countRecords(v, unique, seed);
 }
 
 inline char getAmbiguity(const bool nuc_a, const bool nuc_c, const bool nuc_g, const bool nuc_t) {
@@ -266,7 +373,7 @@ inline char getQual(const double score, const size_t qv_min = 0) {
 	const char phred_base_std = static_cast<char>(33);
 	const char phred_scale_std = static_cast<char>(40);
 
-	const double qv_score = score * static_cast<double>(phred_scale_std - qv_min);
+	const double qv_score = min(score, 1.0) * static_cast<double>(phred_scale_std - qv_min);
 
 	return static_cast<char>(qv_score + phred_base_std + qv_min);
 }
@@ -278,7 +385,7 @@ inline double getScore(const char c, const size_t qv_min = 0) {
 
 	const double qv_score = static_cast<double>(c - phred_base_std - qv_min);
 
-	return (qv_score / static_cast<double>(phred_scale_std - qv_min));
+	return min(qv_score / static_cast<double>(phred_scale_std - qv_min), 1.0);
 }
 
 inline bool isValidHap(const PairID& hap_ids, const uint64_t hap_id) {
@@ -291,6 +398,14 @@ inline pair<size_t, size_t> getMinMaxLength(const size_t l, const double len_fac
 	return {static_cast<size_t>(max(l / len_factor, 1.0)), static_cast<size_t>(max(l * len_factor, 1.0))};
 }
 
+inline int count_prints(const string& s){
+
+    return std::count_if(s.begin(), s.end(), [](unsigned char c){ return std::isprint(c); });
+}
+
 size_t approximate_log2(size_t v);
+
+bool check_files(vector<string>& v_fn, const bool check_files_format, const bool verbose = false);
+bool check_files(const string& fn, const bool check_files_format, const bool verbose = false);
 
 #endif

@@ -170,7 +170,10 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 
 	if ((s_fw.length() <= dbg.getK()) || v_um_solid.empty() || (v_um_solid.size() == s_fw.length() - opt.k + 1)) {
 
-		return {s_fw, long_read_correct ? q_fw : string(s_fw.length(), getQual(0.0))};
+		if (long_read_correct) return {s_fw, q_fw};
+		else if (v_um_solid.size() == s_fw.length() - opt.k + 1) return {s_fw, string(s_fw.length(), getQual(1.0))};
+
+		return {s_fw, string(s_fw.length(), getQual(0.0))};
 	}
 
 	const size_t seq_len = s_fw.length();
@@ -190,6 +193,8 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 	const char q_max = getQual(1.0);
 
 	string q_bw = q_fw;
+
+	WeightsPairID lr_w_pid;
 
 	size_t prev_pos = v_um_solid[0].first;
 	size_t i_solid = 0;
@@ -217,20 +222,26 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 		p.second.strand = !p.second.strand;
 	}
 
-	auto chooseColors = [&](const unordered_map<const PairID*, pair<const PairID*, bool>>& s_pid,
+	auto chooseColors = [&](const unordered_map<const SharedPairID*, pair<const PairID*, bool>>& s_pid,
 							const pair<HapReads, HapReads>& hap_reads, const uint64_t hap_id, WeightsPairID& w_pid) {
 
 		for (const auto it : s_pid){
 
 			if (it.second.second){
 
-				const PairID& p_ids = *(it.first);
+				const SharedPairID& spids = *(it.first);
 				const PairID& hap_ids = *(it.second.first);
 			
-				if (hap_id == undetermined_hap_id) w_pid.weighted_pids |= p_ids;
+				if (hap_id == undetermined_hap_id) {
+
+					const pair<const PairID*, const PairID*> p_pids = spids.getPairIDs();
+
+					if (p_pids.first != nullptr) w_pid.weighted_pids |= *p_pids.first;
+					if (p_pids.second != nullptr) w_pid.weighted_pids |= *p_pids.second;
+				}
 				else {
 
-					for (const uint32_t id : p_ids){
+					for (const uint32_t id : spids){
 
 						if (phased_reads.contains(id)) w_pid.weighted_pids.add(id);
 					}
@@ -240,16 +251,22 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 
 		for (const auto it : s_pid){
 
-			const PairID& p_ids = *(it.first);
+			const SharedPairID& spids = *(it.first);
 			const PairID& hap_ids = *(it.second.first);
 
 			// For all branching nodes with insufficient unique reads coverage
-			if (!it.second.second && !hasEnoughSharedPairID(w_pid.weighted_pids, p_ids, opt.min_cov_vertices)) {
+			if (!it.second.second && (getNumberSharedPairID(spids, w_pid.weighted_pids, opt.min_cov_vertices) < opt.min_cov_vertices)) {
 
-				if (hap_id == undetermined_hap_id) w_pid.noWeight_pids |= p_ids;
+				if (hap_id == undetermined_hap_id) {
+
+					const pair<const PairID*, const PairID*> p_pids = spids.getPairIDs();
+
+					if (p_pids.first != nullptr) w_pid.noWeight_pids |= *p_pids.first;
+					if (p_pids.second != nullptr) w_pid.noWeight_pids |= *p_pids.second;
+				}
 				else {
 
-					for (const uint32_t id : p_ids){
+					for (const uint32_t id : spids){
 
 						if (phased_reads.contains(id)) w_pid.noWeight_pids.add(id);
 					}
@@ -261,12 +278,12 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 
 			for (const auto it : s_pid){
 
-				const PairID& p_ids = *(it.first);
+				const SharedPairID& spids = *(it.first);
 				const PairID& hap_ids = *(it.second.first);
 
-				if (it.second.second && !hasEnoughSharedPairID(w_pid.weighted_pids, p_ids, opt.min_cov_vertices)){
+				if (it.second.second && (getNumberSharedPairID(spids, w_pid.weighted_pids, opt.min_cov_vertices) < opt.min_cov_vertices)){
 
-					for (const uint32_t id : p_ids){
+					for (const uint32_t id : spids){
 						
 						if (hap_reads.first.hap2unphasedReads.contains(id)) w_pid.weighted_pids.add(id);
 					}
@@ -275,12 +292,12 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 
 			for (const auto it : s_pid){
 
-				const PairID& p_ids = *(it.first);
+				const SharedPairID& spids = *(it.first);
 				const PairID& hap_ids = *(it.second.first);
 
-				if (!it.second.second && !hasEnoughSharedPairID(w_pid.weighted_pids, p_ids, opt.min_cov_vertices)){
+				if (!it.second.second && (getNumberSharedPairID(spids, w_pid.weighted_pids, opt.min_cov_vertices) < opt.min_cov_vertices)){
 
-					for (const uint32_t id : p_ids){
+					for (const uint32_t id : spids){
 						
 						if (hap_reads.first.hap2unphasedReads.contains(id)) w_pid.noWeight_pids.add(id);
 					}
@@ -290,6 +307,82 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 
 		w_pid.noWeight_pids -= w_pid.weighted_pids;
 		w_pid.all_pids = w_pid.noWeight_pids | w_pid.weighted_pids;
+	};
+
+	auto readsToAvoid = [&](const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_s, const size_t i_s, const size_t min_start, const size_t min_end, const bool has_end_pt) {
+
+		unordered_map<Kmer, const SharedPairID*, KmerHash> m_km;
+
+		for (int64_t i_s_s = i_s; (i_s_s >= 0) && (v_s[i_s_s].first > min_start); --i_s_s){
+
+			const const_UnitigMap<UnitigData>& um = v_s[i_s_s].second;
+			const string km_ref = um.mappedSequenceToString();
+			const vector<pair<size_t, char>> v_snp_cand = um.getData()->get_ambiguity_char(um);
+
+			for (const auto& p_snp : v_snp_cand){
+
+				string km_query = km_ref;
+
+				bool is_dna[4] = {false, false, false, false};
+
+				getAmbiguityRev(p_snp.second, is_dna[0], is_dna[1], is_dna[2], is_dna[3]);
+
+				for (size_t j = 0; j < 4; ++j){
+
+					if (is_dna[j] && (alpha[j] != km_ref[p_snp.first])) {
+
+						km_query[p_snp.first] = alpha[j];
+
+						const const_UnitigMap<UnitigData> um_query = dbg.find(Kmer(km_query.c_str()));
+
+						if (!um_query.isEmpty) m_km.insert({um_query.getUnitigHead(), &(um_query.getData()->getPairID())});
+					}
+				}
+			}
+		}
+
+		if (has_end_pt) {
+
+			for (size_t i_s_e = i_s + 1; (i_s_e < v_s.size()) && (v_s[i_s_e].first < min_end); ++i_s_e){
+
+				const const_UnitigMap<UnitigData>& um = v_s[i_s_e].second;
+				const string km_ref = um.mappedSequenceToString();
+				const vector<pair<size_t, char>> v_snp_cand = um.getData()->get_ambiguity_char(um);
+
+				for (const auto& p_snp : v_snp_cand){
+
+					string km_query = km_ref;
+
+					bool is_dna[4] = {false, false, false, false};
+
+					getAmbiguityRev(p_snp.second, is_dna[0], is_dna[1], is_dna[2], is_dna[3]);
+
+					for (size_t j = 0; j < 4; ++j){
+
+						if (is_dna[j] && (alpha[j] != km_ref[p_snp.first])) {
+
+							km_query[p_snp.first] = alpha[j];
+
+							const const_UnitigMap<UnitigData> um_query = dbg.find(Kmer(km_query.c_str()));
+
+							if (!um_query.isEmpty) m_km.insert({um_query.getUnitigHead(), &(um_query.getData()->getPairID())});
+						}
+					}
+				}
+			}
+		}
+
+		PairID pid;
+
+		for (const auto& it : m_km) {
+
+			const pair<const PairID*, const PairID*> p_pids = it.second->getPairIDs();
+
+			if (p_pids.first != nullptr) pid |= *p_pids.first;
+			if (p_pids.second != nullptr) pid |= *p_pids.second;
+		}
+
+		return pid;
 	};
 
 	auto correct = [&] (const string& s, const string& q,
@@ -304,8 +397,8 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
         size_t len_weak_region = um_solid2.first - um_solid1.first + opt.k;
         size_t min_cov_vertex = 0xffffffffffffffffULL;
 
-        const int64_t min_start = um_solid1.first - opt.insert_sz;
-		const int64_t min_end = um_solid2.first + opt.insert_sz;
+        int64_t min_start = um_solid1.first - opt.insert_sz;
+		int64_t min_end = um_solid2.first + opt.insert_sz;
 
 		const char* s_start = s.c_str() + um_solid1.first;
 		const char* q_start = q.empty() ? nullptr : q.c_str() + um_solid1.first;
@@ -336,50 +429,49 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 
 		if (rc == nullptr){
 
-			unordered_map<const PairID*, pair<const PairID*, bool>> s_pid_solid, s_pid_weak;
-			unordered_map<const PairID*, pair<const PairID*, bool>> s_pid_solid_s, s_pid_solid_e;
+			unordered_map<const SharedPairID*, pair<const PairID*, bool>> s_pid_solid, s_pid_weak;
+			unordered_map<const SharedPairID*, pair<const PairID*, bool>> s_pid_solid_s, s_pid_solid_e;
 
-			for (size_t i_s_s = i_s; (i_s_s > 0) && (v_s[i_s_s].first > min_start); --i_s_s){
+			PairID p_id_2avoid;
 
-				const const_UnitigMap<UnitigData>& um = v_s[i_s_s].second;
-				const UnitigData* ud = um.getData();
+			if (long_read_correct) w_pid = lr_w_pid;
+			else {
 
-				const PairID& p_ids = ud->get_readID();
-				const PairID& hap_ids = ud->get_hapID();
+				for (size_t i_s_s = i_s; (i_s_s > 0) && (v_s[i_s_s].first > min_start); --i_s_s){
 
-				if ((i_s_s == i_s) || !um.isSameReferenceUnitig(v_s[i_s_s + 1].second)) {
-
-					const bool isVarCandidate = !ud->isBranching();
-					const pair<unordered_map<const PairID*, pair<const PairID*, bool>>::iterator, bool> p_it = s_pid_solid_s.insert({&p_ids, {&hap_ids, isVarCandidate}});
-
-					if (p_it.second) r_id_part_solid.add(ud->getConnectedComp());
-				}
-			}
-
-			if (has_end_pt) {
-
-				for (size_t i_s_e = i_s + 1; (i_s_e < v_s.size()) && (v_s[i_s_e].first < min_end); ++i_s_e){
-
-					const const_UnitigMap<UnitigData>& um = v_s[i_s_e].second;
+					const const_UnitigMap<UnitigData>& um = v_s[i_s_s].second;
 					const UnitigData* ud = um.getData();
 
-					const PairID& p_ids = ud->get_readID();
+					const SharedPairID& p_ids = ud->getPairID();
 					const PairID& hap_ids = ud->get_hapID();
 
-					if ((i_s_e == i_s + 1) || !um.isSameReferenceUnitig(v_s[i_s_e - 1].second)) {
+					if ((i_s_s == i_s) || !um.isSameReferenceUnitig(v_s[i_s_s + 1].second)) s_pid_solid_s.insert({&p_ids, {&hap_ids, !ud->isBranching()}});
+				}
 
-						const bool isVarCandidate = !ud->isBranching();
-						const pair<unordered_map<const PairID*, pair<const PairID*, bool>>::iterator, bool> p_it = s_pid_solid_e.insert({&p_ids, {&hap_ids, isVarCandidate}});
+				if (has_end_pt) {
 
-						if (p_it.second) r_id_part_solid.add(ud->getConnectedComp());
+					for (size_t i_s_e = i_s + 1; (i_s_e < v_s.size()) && (v_s[i_s_e].first < min_end); ++i_s_e){
+
+						const const_UnitigMap<UnitigData>& um = v_s[i_s_e].second;
+						const UnitigData* ud = um.getData();
+
+						const SharedPairID& p_ids = ud->getPairID();
+						const PairID& hap_ids = ud->get_hapID();
+
+						if ((i_s_e == i_s + 1) || !um.isSameReferenceUnitig(v_s[i_s_e - 1].second)) s_pid_solid_e.insert({&p_ids, {&hap_ids, !ud->isBranching()}});
 					}
 				}
-			}
 
-			s_pid_solid = s_pid_solid_s;
-			s_pid_solid.insert(s_pid_solid_e.begin(), s_pid_solid_e.end());
-			
-			chooseColors(s_pid_solid, hap_reads, hap_id, w_pid);
+				s_pid_solid = s_pid_solid_s;
+				s_pid_solid.insert(s_pid_solid_e.begin(), s_pid_solid_e.end());
+				
+				chooseColors(s_pid_solid, hap_reads, hap_id, w_pid);
+
+				p_id_2avoid = readsToAvoid(v_s, i_s, min_start, min_end, has_end_pt);
+
+				w_pid.weighted_pids -= p_id_2avoid;
+				w_pid.noWeight_pids -= p_id_2avoid;
+			}
 
 			if (!v_w.empty()) {
 
@@ -399,44 +491,8 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 				it_front = v_w.begin() + i_w_s;
 				it_back = v_w.begin() + i_w_e;
 
-				if (all_partitions != nullptr){
-
-					const size_t start_bound = um_solid1.first + opt.insert_sz;
-					const size_t end_bound = (um_solid2.first <= opt.insert_sz) ? 0 : (um_solid2.first - opt.insert_sz);
-
-					if (r_id_neighbors.cardinality() == 0){
-
-						// Add partitions from unique semi-solid k-mers to to list of solid partitions
-						while ((i_w_s < v_w.size()) && (v_w[i_w_s].first < min_end)){
-
-					    	if (hasUniquePosition(v_w, i_w_s)) r_id_part_solid.add(v_w[i_w_s].second.getData()->getConnectedComp());
-
-							++i_w_s;
-						}
-
-						// Get all partitions neighboring solid partitions
-						for (const uint32_t id_part_s_solid : r_id_part_solid){
-						
-							for (const uint32_t id_part_neighbor : all_partitions[id_part_s_solid]) r_id_neighbors.add(id_part_neighbor);
-						}
-					}
-
-					// Keep only semi-solid k-mers from list of neighboring or solid partitions
-					for (; it_front != it_back; ++it_front){
-
-						if ((it_front->first <= start_bound) || (it_front->first >= end_bound)){ // Semi solid k-mer is within range of partition radius
-
-							if (r_id_neighbors.contains(it_front->second.getData()->getConnectedComp())) l_v_w.push_back(*it_front); // Semi solid k-mer is a neighbor
-						}
-						else l_v_w.push_back(*it_front);
-					}
-				}
-				else {
-
-					// Keep only semi-solid k-mers from list of neighboring or solid partitions
-					for (; it_front != it_back; ++it_front) l_v_w.push_back(*it_front);
-				}
-
+				// Keep only semi-solid k-mers from list of neighboring or solid partitions
+				for (; it_front != it_back; ++it_front) l_v_w.push_back(*it_front);
 
 				if (!l_v_w.empty()){ // Filter semi-solid k-mers
 
@@ -446,21 +502,13 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 					{
 						for (size_t i = 0; i < l_v_w.size(); ++i){
 
-							if (hasEnoughSharedPairID(l_v_w[i].second.getData()->get_readID(), w_pid.all_pids, opt.min_cov_vertices)) l_v_w_tmp.push_back(l_v_w[i]);
+							if (getNumberSharedPairID(l_v_w[i].second.getData()->getPairID(), w_pid.all_pids, opt.min_cov_vertices) >= opt.min_cov_vertices) l_v_w_tmp.push_back(l_v_w[i]);
 						}
 
 						l_v_w = move(l_v_w_tmp);
 					}
 
-					// Remove positions having 2+ semi solid k-mers
-					{
-						for (size_t i = 0; i < l_v_w.size(); ++i){
-
-							if (hasUniquePosition(l_v_w, i)) l_v_w_tmp.push_back(l_v_w[i]);
-						}
-
-						l_v_w = move(l_v_w_tmp);
-					}
+					l_v_w = keep_non_overlap(s.c_str(), opt.k, l_v_w); // Remove positions having 2+ semi solid k-mers
 
 					// Remove weak anchors overlapping non-DNA characters
 					{
@@ -481,7 +529,7 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 						const const_UnitigMap<UnitigData>& um = l_v_w[i_w_s].second;
 						const UnitigData* ud = um.getData();
 
-						const PairID& p_ids = ud->get_readID();
+						const SharedPairID& p_ids = ud->getPairID();
 						const PairID& hap_ids = ud->get_hapID();
 
 						if ((i_w_s == 0) || !um.isSameReferenceUnitig(l_v_w[i_w_s - 1].second)) {
@@ -493,11 +541,17 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 					}
 
 					chooseColors(s_pid_weak, hap_reads, hap_id, w_pid);
+
+					w_pid.weighted_pids -= p_id_2avoid;
+					w_pid.noWeight_pids -= p_id_2avoid;
+
+					w_pid.weighted_pids.runOptimize();
+					w_pid.noWeight_pids.runOptimize();
 				}
 			}
 
+			// Reads mapping to non-branching unitigs weights twice as much as the other reads
 			{
-				// Reads mapping to non-branching unitigs weights twice as much as the other reads
 				if (w_pid.weighted_pids.cardinality() >= opt.min_cov_vertices) {
 
 					w_pid.weight = 2.0 * max(static_cast<double>(w_pid.noWeight_pids.cardinality()) / static_cast<double>(w_pid.weighted_pids.cardinality()), 1.0);
@@ -628,7 +682,7 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 			res_corrected.addCorrectedPosOldSeq(0, len_weak_region);
     	}
 
-    	if (long_read_correct) q_corrected.replace(0, opt.k, q, 0, opt.k);
+    	if (long_read_correct) q_corrected.replace(0, opt.k, q, v_s[i_s].first, opt.k);
     	else q_corrected.replace(0, opt.k, opt.k, q_max);
 
     	fixAmbiguity(dbg, opt, w_pid, s_corrected, q_corrected, s_start, q_start, res_corrected.getLengthOldSequence(), hap_id, v_ambiguity);
@@ -645,7 +699,7 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 	    if (!res_corrected.isCorrected()) {
 
     		// Corrected region might span the weak region too far
-			EdlibAlignConfig config(edlibNewAlignConfig(-1, EDLIB_MODE_SHW, EDLIB_TASK_DISTANCE, NULL, 0));
+			EdlibAlignConfig config(edlibNewAlignConfig(-1, EDLIB_MODE_SHW, EDLIB_TASK_DISTANCE, edlib_iupac_alpha, sz_edlib_iupac_alpha));
 			EdlibAlignResult align = edlibAlign(s_start, um_solid2.first - v_s[i_s].first + opt.k, s_corrected.c_str(), s_corrected.length(), config);
 
 			if (align.editDistance >= 0){
@@ -658,8 +712,7 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 				}
 
 				s_corrected = s_corrected.substr(0, end_location + 1);
-
-				if (!q_corrected.empty()) q_corrected = q_corrected.substr(0, end_location + 1);
+				q_corrected = q_corrected.substr(0, end_location + 1);
 			}
 
 			edlibFreeAlignResult(align);
@@ -670,6 +723,29 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 
 		return res_corrected;
 	};
+
+	if (long_read_correct) {
+		
+		unordered_map<const SharedPairID*, pair<const PairID*, bool>> s_pid_solid;
+
+		for (size_t i_s_e = 0; i_s_e < v_um_solid.size(); ++i_s_e){
+
+			const const_UnitigMap<UnitigData>& um = v_um_solid[i_s_e].second;
+			const UnitigData* ud = um.getData();
+
+			const SharedPairID& p_ids = ud->getPairID();
+			const PairID& hap_ids = ud->get_hapID();
+
+			if ((i_s_e == 0) || !um.isSameReferenceUnitig(v_um_solid[i_s_e - 1].second)) s_pid_solid.insert({&p_ids, {&hap_ids, !ud->isBranching()}});
+		}
+		
+		chooseColors(s_pid_solid, hap_reads, hap_id, lr_w_pid);
+
+		const PairID p_id_2avoid = readsToAvoid(v_um_solid, 0, 0, s_fw.length(), true);
+
+		lr_w_pid.weighted_pids -= p_id_2avoid;
+		lr_w_pid.noWeight_pids -= p_id_2avoid;
+	}
 
     if (v_um_solid[0].first != 0){ // Read starts with a semi-solid region (no left solid region)
 

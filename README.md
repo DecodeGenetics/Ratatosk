@@ -2,15 +2,14 @@
 
 ### Phased hybrid error correction of long reads using colored de Bruijn graphs
 
-Ratatosk is a phased error correction tool for erroneous long reads based on compacted and colored de Bruijn graphs built from accurate short reads. Short and long reads color paths in the graph while vertices are annotated with candidate *de novo* Single Nucleotide Polymorphisms. Long reads are subsequently anchored on the graph using exact and inexact *k*-mer matches to find paths corresponding to corrected sequences.
-We demonstrate that Ratatosk can reduce the raw error rate of Oxford Nanopore reads 6-fold on average with a median error rate as low as 0.28%. Ratatosk corrected data maintain nearly 99% accurate SNP calls and increase indel call accuracy by up to about 40% compared to the raw data. An assembly of the Ashkenazi individual HG002 created from Ratatosk corrected ONT reads yields a contig N50 of 43.22 Mbp and less misassemblies than an assembly created from PacBio HiFi reads.
+Ratatosk is a *de novo* error correction tool for erroneous long reads designed for accurate variant calling and assembly. It is based on a compacted and colored de Bruijn graph built from accurate short reads. Short and long reads color paths in the graph while vertices are annotated with candidate *de novo* SNPs. We demonstrate that Ratatosk can reduce the raw error rate of ONT reads 6-fold on average with a median error rate as low as 0.28%. Ratatosk corrected data maintain nearly 99% accurate SNP calls and increase indel call accuracy by up to about 40% compared to the raw data. An assembly of the Ashkenazi individual HG002 created from Ratatosk corrected ONT reads yields a contig N50 of 43.22 Mbp and less misassemblies than an assembly created from PacBio HiFi reads.
 
 ## Table of Contents
 
 * [Requirements](#requirements)
 * [Installation](#installation)
-* [Interface](#interface)
 * [Usage](#usage)
+* [Interface](#interface)
 * [FAQ](#faq)
 * [Troubleshooting](#troubleshooting)
 * [Citation](#citation)
@@ -51,7 +50,7 @@ sudo apt-get install build-essential cmake zlib1g-dev
 
 1. Clone the Git repository
   ```
-  git clone --recursive https://github.com/DecodeGenetics/Ratatosk.git
+  git clone --recursive https://github.com/DecodeGenetics/Ratatosk/Ratatosk.git
   cd Ratatosk
   ```
 2. Install Ratatosk
@@ -72,21 +71,90 @@ By default, the installation creates:
 
 **Before starting**
 - Ratatosk works best with paired-end short reads in input (`-s`): **reads from the same pair must have the same FASTA/FASTQ name** (if the reads are extracted from a BAM file, use `samtools bam2fq -n`).
-- Several temporary files are written to disk. These files have the same prefix name as the output file (`-o`) but are deleted at the end of Ratatosk execution. Given an input long read file (`-l`) of size *X* GB, ensure that the output folder has at least about *2.5X* GB of free space.
+- Several temporary files are written in the same repository has the output file (`-o`) so make sure the output folder has plenty of free space.
 
+### ***de novo*** correction (single node)
 
-### Command line
+```
+Ratatosk correct -v -c 16 -i short_reads.fastq -l long_reads.fastq -o out_long_reads
+```
+Ratatosk corrects (`Ratatosk correct`) the long read file (`-l long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-i short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads.fastq* (`-o out_long_reads`).
+
+### ***de novo*** correction (multiple nodes)
+
+See [multiple machines de novo correction](scripts/multi_nodes_denovo_correction).
+
+### Reference-guided correction (single and multiple nodes)
+
+See [reference-guided preprocessing](scripts/reference_guided_correction).
+
+### Options
+
+- **Phasing** (`-p` and `-P`)
+
+  See [Phasing](phasing.md) (experimental, single node only).
+
+- **Insert size** (`-i`)
+
+  By default, Ratatosk considers that the input paired-end short reads insert size is roughly 500 (read length * 2 + fragment size). You can set the exact insert size with `-i`. If your input short reads are single end reads, set the insert size to the read length.
+
+- **Trimming/Splitting** (`-t`)
+
+  By default, Ratatosk outputs all bases (corrected and uncorrected). By using `-t`, bases with a low correction quality score are trimmed and split. Specifically, given a minimum quality score *Q* (`-t Q`), only subsequences of the corrected long reads for which the bases have a correction quality score equal to or larger than *Q* are output. Each output subsequence will have `@name/i` as name where `name` is the input name of the long read and `i` is an integer subsequence ID for read `name`. Note that only subsequences larger than the *k2*-mer size in Ratatosk (63) are output.
+
+- **Correction rounds** (`-r`)
+
+  By default, Ratatosk only performs one correction round (`-r 1`) during the 1st correction pass but multiple correction rounds can also be performed to improve the reads accuracy. We advise to use 4 rounds of correction (`-r 4`) which is twice as slow as one correction round.
+
+### Advanced options
+
+The default *k1*/*k2*-mer lengths (1st/2nd correction passes) are 31/63. To work with larger *k*-mers (using `-k/-K`), you must compile Ratatosk with a larger `MAX_KMER_SIZE` parameter where `MAX_KMER_SIZE=round(k2 + 1, 32)`, i.e. (*k2* + 1) rounded to the larger multiple of 32. Specifying `MAX_KMER_SIZE` at compilation is done as follows when entering the `cmake` command:
+```
+cmake -DMAX_KMER_SIZE=96 ..
+```
+In this example, the maximum *k1*/*k2*-mer length allowed is 95.
+
+## Interface
+
 ```
 Ratatosk --help
 ```
-
 displays the command line interface:
 ```
 Ratatosk x.y.z
 
 Hybrid error correction of long reads using colored de Bruijn graphs
 
-Usage: Ratatosk [PARAMETERS]
+Usage: Ratatosk [COMMAND] [PARAMETERS]
+Usage: Ratatosk --help
+Usage: Ratatosk --version
+Usage: Ratatosk --cite
+
+[COMMAND]:
+
+   correct                         Correct long reads with short reads
+   index                           Prepare a Ratatosk index (advanced)
+
+Use "Ratatosk [COMMAND] --help" to get a specific command help
+```
+
+Two commands are available: `correct` and `index`. Command `index` is only useful when correcting a data set using multiple machines (see [multiple machines de novo correction](scripts/multi_nodes_denovo_correction)).
+
+```
+Ratatosk correct --help
+```
+displays the command line interface for the `correct` command:
+```
+Ratatosk x.y.z
+
+Hybrid error correction of long reads using colored de Bruijn graphs
+
+Usage: Ratatosk [COMMAND] [PARAMETERS]
+Usage: Ratatosk --help
+Usage: Ratatosk --version
+Usage: Ratatosk --cite
+
+[COMMAND]: correct
 
 [PARAMETERS]:
 
@@ -96,32 +164,37 @@ Usage: Ratatosk [PARAMETERS]
                                    List of input short read files to correct (one file per line)
    -l, --in-long                   Input long read file to correct (FASTA/FASTQ possibly gzipped)
                                    List of input long read files to correct (one file per line)
-   -o, --out-long                  Output file prefix
+   -o, --out-long                  Output corrected long read file
 
    > Optional with required argument:
 
    -c, --cores                     Number of cores (default: 1)
+   -S, --subsampling               Rate of short reads subsampling (default: Auto)
    -t, --trim-split                Trim and split bases with quality score < t (default: no trim/split)
                                    Only sub-read with length >= 63 are output if used
    -u, --in-unmapped-short         Input read file of the unmapped short reads (FASTA/FASTQ possibly gzipped)
                                    List of input read files of the unmapped short reads (one file per line)
    -a, --in-accurate-long          Input high quality long read file (FASTA/FASTQ possibly gzipped)
                                    List of input high quality long read files (one file per line)
-                                   (Those reads are NOT corrected but assist the correction of reads in input).
+                                   (Those reads are NOT corrected but assist the correction of reads in input)
+   -g, --in-graph                  Load graph file prepared with the index command
+   -d, --in-unitig-data            Load unitig data file prepared with the index command
 
    > Optional with no argument:
 
-   -v, --verbose                   Print information during execution
+   -v, --verbose                   Print information
 
 [ADVANCED PARAMETERS]:
 
    > Optional with required argument:
 
+   -m, --min-conf-snp-corr         Minimum confidence threshold to correct a SNP (default: 0.9)
+   -M, --min-conf-color2           Minimum confidence threshold to color vertices for 2nd pass (default: 0)
    -i, --insert-sz                 Insert size of the input paired-end short reads (default: 500)
    -k, --k1                        Length of short k-mers for 1st pass (default: 31)
    -K, --k2                        Length of long k-mers for 2nd pass (default: 63)
-   -w, --max-len-weak1             Do not correct weak regions >= w bases during 1st pass (default: 1000)
-   -W, --max-len-weak2             Do not correct weak regions >= w bases during 2nd pass (default: 10000)
+   -w, --max-len-weak1             Do not correct non-solid regions >= w bases during 1st pass (default: 1000)
+   -W, --max-len-weak2             Do not correct non-solid regions >= w bases during 2nd pass (default: 10000)
 
    > Optional with no argument:
 
@@ -132,48 +205,69 @@ Usage: Ratatosk [PARAMETERS]
 
    > Optional with required argument:
 
-   -p, --in-short-phase            Input short read phasing file
+   -r, --correction-rounds         Number of short read correction rounds (default: 1)
+   -p, --in-short-phase            Input short read phasing file (diploid only)
                                    List of input short read phasing files (one file per line)
-   -P, --in-long-phase             Input long read phasing file
+   -P, --in-long-phase             Input long read phasing file (diploid only)
                                    List of input long read phasing files (one file per line)
 ```
 
-### ***de novo*** correction
+```
+Ratatosk index --help
+```
+displays the command line interface for the `index` command:
 
 ```
-Ratatosk -v -c 16 -s short_reads.fastq -l long_reads.fastq -o out_long_reads
+Ratatosk x.y.z
+
+Hybrid error correction of long reads using colored de Bruijn graphs
+
+Usage: Ratatosk [COMMAND] [PARAMETERS]
+Usage: Ratatosk --help
+Usage: Ratatosk --version
+Usage: Ratatosk --cite
+
+[COMMAND]: index
+
+[PARAMETERS]:
+
+   > Mandatory with required argument:
+
+   -s, --in-short                  Input short read file to correct (FASTA/FASTQ possibly gzipped)
+                                   List of input short read files to correct (one file per line)
+   -l, --in-long                   Input long read file to correct (FASTA/FASTQ possibly gzipped)
+                                   List of input long read files to correct (one file per line)
+   -o, --out-long                  Prefix of the output index file
+
+   > Mandatory with no argument:
+
+   -1, --1st-pass-only             Prepare index for the 1st correction pass (default: false)
+   -2, --2nd-pass-only             Prepare index for the the 2nd correction pass (default: false)
+
+   > Optional with required argument:
+
+   -c, --cores                     Number of cores (default: 1)
+   -S, --subsampling               Rate of short reads subsampling (default: No subsampling)
+   -u, --in-unmapped-short         Input read file of the unmapped short reads (FASTA/FASTQ possibly gzipped)
+                                   List of input read files of the unmapped short reads (one file per line)
+   -a, --in-accurate-long          Input high quality long read file (FASTA/FASTQ possibly gzipped)
+                                   List of input high quality long read files (one file per line)
+                                   (Those reads are NOT corrected but assist the correction of reads in input)
+   -g, --in-graph                  Load graph file prepared with the index command
+
+   > Optional with no argument:
+
+   -v, --verbose                   Print information
+
+[ADVANCED PARAMETERS]:
+
+   > Optional with required argument:
+
+   -M, --min-conf-color2           Minimum confidence threshold to color vertices for 2nd pass (default: 0)
+   -i, --insert-sz                 Insert size of the input paired-end short reads (default: 500)
+   -k, --k1                        Length of short k-mers for 1st pass (default: 31)
+   -K, --k2                        Length of long k-mers for 2nd pass (default: 63)
 ```
-Ratatosk corrects (`Ratatosk`) the long read file (`-l long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-s short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads_corrected.fastq* (`-o out_long_reads`).
-
-### Reference-guided correction
-
-See [reference-guided preprocessing](https://github.com/DecodeGenetics/Ratatosk/tree/master/scripts/reference_guiding).
-
-## Output
-
-Ratatosk outputs a FASTQ file (hence with quality scores) regardless of whether the input was FASTA or FASTQ. Output quality scores use the standard Phred33 notation (base 33 + value from 0 to 40) but do not represent a log scale. Instead, output quality scores reflect how confident is Ratatosk in the correction of a base using a linear scale.
-
-## Options
-
-- **Phasing** (`-p` and `-P`)
-
-  See [Phasing](https://github.com/DecodeGenetics/Ratatosk/tree/master/phasing.md) (experimental).
-
-- **Insert size** (`-i`)
-
-  By default, Ratatosk considers that the input paired-end short reads insert size is roughly 500 (read length * 2 + fragment size). You can set the exact insert size with `-i`. If your input short reads are single end reads, set the insert size to the read length.
-
-- **Trimming/Splitting** (`-t`)
-
-  By default, Ratatosk outputs all bases (corrected and uncorrected). By using `-t`, bases with a low correction quality score are trimmed and split. Specifically, given a minimum quality score *X* (`-t X`), only subsequences of the corrected long reads for which the bases have a correction quality score equal to or larger than *X* are output. Each output subsequence will have as name `>name/i` (FASTA) or `@name/i` (FASTQ) where `name` is the input name of the long read and `i` is an integer subsequence ID for read `name`. Note that only subsequences larger than the *k*-mer size in Ratatosk (63) are output.
-
-## Advanced usage
-
-The default *k1*/*k2*-mer lengths (1st/2nd correction passes) are 31/63. To work with larger *k*-mers (using `-k/-K`), you must compile Ratatosk with a larger `MAX_KMER_SIZE` parameter where `MAX_KMER_SIZE=round(k2 + 1, 32)`, i.e. (*k2* + 1) rounded to the larger multiple of 32. Specifying `MAX_KMER_SIZE` at compilation is done as follows when entering the `cmake` command:
-```
-cmake -DMAX_KMER_SIZE=96 ..
-```
-In this example, the maximum *k1*/*k2*-mer length allowed is 95.
 
 ## FAQ
 
@@ -187,15 +281,31 @@ Yes, a text file containing one input filename per line with no empty lines can 
 
 **Does Ratatosk work with input short reads which are not paired-end reads?**
 
-Yes, although Ratatosk works best with paired-end short reads in input. You can mix paired-end and non-paired-end reads in input as well.
+Yes, although Ratatosk works best with paired-end short reads in input. You can also mix paired and non-paired short reads in input.
 
 **Are the output corrected long reads in the same order as the input uncorrected long reads?**
 
-Yes if Ratatosk was run with a single thread, otherwise the output order is random.
+Not necessarily.
 
-**Is it fine if my input reads contain non-{A,C,G,T} characters?**
+**Is it fine if my input *long* reads contain non-{A,C,G,T} characters?**
 
-Yes but they won't be corrected nor used in the graph index.
+Yes.
+
+**Is it fine if my input *short* reads contain non-{A,C,G,T} characters?**
+
+Yes (the *k*-mers overlapping these characters will be discarded).
+
+**Why does Ratatosk outputs non-{A,C,G,T} characters?**
+
+Ratatosk automatically detects heterozygous SNP candidates from the input short and long reads. If Ratatosk corrects a SNP candidate site in a long read but cannot establish with enough confidence which of the possible bases is correct, a IUPAC character is output to represent the ambiguity. For example, character `N` represents all possible bases while character `R` only represents `A` or `G`.
+
+**My downstream pipeline does not handle the non-{A,C,G,T} characters output be Ratatosk, what should I do?**
+
+Replace these characters by random {A,C,G,T} characters. The python script `scripts/replaceIUPAC.py` is provided to that effect.
+
+**What are the quality scores output by Ratatosk?**
+
+Ratatosk outputs a quality score for each corrected base indicating how confident is Ratatosk in the correction of that base. A score of 0 means the base is left uncorrected, a score of 1 means the base was corrected with a very low confidence while a score of 40 means that Ratatosk is very sure of the correction. The scores are output in the Phred33 format but the scoring scale is linear (rather than logarithmic for Phred33).
 
 ## Troubleshooting
 
@@ -211,7 +321,17 @@ export CPLUS_INCLUDE_PATH=$CPLUS_INCLUDE_PATH:/usr/local/include/
 
 ## Citation
 
-Coming soon
+```
+@article{holley2021ratatosk,
+  title={Ratatosk: hybrid error correction of long reads enables accurate variant calling and assembly},
+  author={Holley, Guillaume and Beyter, Doruk and Ingimundardottir, Helga and M{\o}ller, Peter L and Kristmundsdottir, Sn{\ae}dis and Eggertsson, Hannes P and Halldorsson, Bjarni V},
+  journal={Genome Biology},
+  volume={22},
+  number={1},
+  pages={1--22},
+  year={2021}
+}
+```
 
 ## Contact
 

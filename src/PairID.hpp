@@ -4,7 +4,6 @@
 #include "roaring.hh"
 #include "TinyBitmap.hpp"
 
-
 class PairID {
 
     //Ensure that PairID::setPtrBmp is always allocated with an 8 bytes alignment
@@ -12,9 +11,6 @@ class PairID {
 
     public:
 
-        /** @class PairID_const_iterator
-        * @brief See PairID::const_iterator
-        */
         class PairID_const_iterator : public std::iterator<std::forward_iterator_tag, uint32_t> {
 
             friend class PairID;
@@ -25,6 +21,8 @@ class PairID {
                 PairID_const_iterator(const PairID_const_iterator& o);
 
                 ~PairID_const_iterator();
+
+                void clear();
 
                 PairID_const_iterator& operator=(const PairID_const_iterator& o);
 
@@ -122,7 +120,9 @@ class PairID {
         const_iterator end() const;
 
         void runOptimize();
+
         Roaring toRoaring() const;
+        vector<uint32_t> toVector() const;
 
         static PairID fastunion(const size_t sz, const PairID** p_id) {
 
@@ -142,6 +142,29 @@ class PairID {
 
         void addSortedVector(const vector<uint32_t>& v);
         void removeSortedVector(const vector<uint32_t>& v);
+
+        static inline size_t l_approximate_log2(size_t v) {
+
+            static const uint8_t tab64[64] = {
+                63,  0, 58,  1, 59, 47, 53,  2,
+                60, 39, 48, 27, 54, 33, 42,  3,
+                61, 51, 37, 40, 49, 18, 28, 20,
+                55, 30, 34, 11, 43, 14, 22,  4,
+                62, 57, 46, 52, 38, 26, 32, 41,
+                50, 36, 17, 19, 29, 10, 13, 21,
+                56, 45, 25, 31, 35, 16,  9, 12,
+                44, 24, 15,  8, 23,  7,  6,  5
+            };
+
+            v |= v >> 1;
+            v |= v >> 2;
+            v |= v >> 4;
+            v |= v >> 8;
+            v |= v >> 16;
+            v |= v >> 32;
+
+            return tab64[(static_cast<size_t>((v - (v >> 1))*0x07EDD5E59A4E28C2)) >> 58];
+        }
 
         inline void releaseMemory(){
 
