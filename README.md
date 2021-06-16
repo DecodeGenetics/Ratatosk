@@ -76,9 +76,16 @@ By default, the installation creates:
 ### ***de novo*** correction (single node)
 
 ```
-Ratatosk correct -v -c 16 -i short_reads.fastq -l long_reads.fastq -o out_long_reads
+Ratatosk correct -v -c 16 -s short_reads.fastq -l long_reads.fastq -o out_long_reads
 ```
 Ratatosk corrects (`Ratatosk correct`) the long read file (`-l long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-i short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads.fastq* (`-o out_long_reads`).
+
+The correction can be split in 2 steps (which can be run on different compute nodes):
+```
+Ratatosk correct -1 -v -c 16 -s short_reads.fastq -l long_reads.fastq -o out_long_reads
+Ratatosk correct -2 -v -c 16 -s short_reads.fastq -l out_long_reads.2.fastq -o out_long_reads
+```
+It can also be split in more than steps (see [multiple machines de novo correction](scripts/multi_nodes_denovo_correction));
 
 ### ***de novo*** correction (multiple nodes)
 
