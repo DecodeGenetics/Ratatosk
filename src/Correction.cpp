@@ -309,7 +309,7 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 		w_pid.all_pids = w_pid.noWeight_pids | w_pid.weighted_pids;
 	};
 
-	auto readsToAvoid = [&](const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_s, const size_t i_s, const size_t min_start, const size_t min_end, const bool has_end_pt) {
+	/*auto readsToAvoid = [&](const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_s, const size_t i_s, const size_t min_start, const size_t min_end, const bool has_end_pt) {
 
 		unordered_map<Kmer, const SharedPairID*, KmerHash> m_km;
 
@@ -383,7 +383,7 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 		}
 
 		return pid;
-	};
+	};*/
 
 	auto correct = [&] (const string& s, const string& q,
 						const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_s, const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_w,
@@ -432,7 +432,7 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 			unordered_map<const SharedPairID*, pair<const PairID*, bool>> s_pid_solid, s_pid_weak;
 			unordered_map<const SharedPairID*, pair<const PairID*, bool>> s_pid_solid_s, s_pid_solid_e;
 
-			PairID p_id_2avoid;
+			//PairID p_id_2avoid;
 
 			if (long_read_correct) w_pid = lr_w_pid;
 			else {
@@ -467,10 +467,10 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 				
 				chooseColors(s_pid_solid, hap_reads, hap_id, w_pid);
 
-				p_id_2avoid = readsToAvoid(v_s, i_s, min_start, min_end, has_end_pt);
+				/*p_id_2avoid = readsToAvoid(v_s, i_s, min_start, min_end, has_end_pt);
 
 				w_pid.weighted_pids -= p_id_2avoid;
-				w_pid.noWeight_pids -= p_id_2avoid;
+				w_pid.noWeight_pids -= p_id_2avoid;*/
 			}
 
 			if (!v_w.empty()) {
@@ -542,8 +542,8 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 
 					chooseColors(s_pid_weak, hap_reads, hap_id, w_pid);
 
-					w_pid.weighted_pids -= p_id_2avoid;
-					w_pid.noWeight_pids -= p_id_2avoid;
+					//w_pid.weighted_pids -= p_id_2avoid;
+					//w_pid.noWeight_pids -= p_id_2avoid;
 
 					w_pid.weighted_pids.runOptimize();
 					w_pid.noWeight_pids.runOptimize();
@@ -562,7 +562,7 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 
 			res_corrected.setWeightsPairID(w_pid);
 		}
-		else w_pid = res_corrected.getWeightsPairID();
+		else w_pid = rc->getWeightsPairID();
 
 		const size_t card_pids = w_pid.weighted_pids.cardinality() + w_pid.noWeight_pids.cardinality();
 
@@ -741,10 +741,10 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 		
 		chooseColors(s_pid_solid, hap_reads, hap_id, lr_w_pid);
 
-		const PairID p_id_2avoid = readsToAvoid(v_um_solid, 0, 0, s_fw.length(), true);
+		/*const PairID p_id_2avoid = readsToAvoid(v_um_solid, 0, 0, s_fw.length(), true);
 
 		lr_w_pid.weighted_pids -= p_id_2avoid;
-		lr_w_pid.noWeight_pids -= p_id_2avoid;
+		lr_w_pid.noWeight_pids -= p_id_2avoid;*/
 	}
 
     if (v_um_solid[0].first != 0){ // Read starts with a semi-solid region (no left solid region)
@@ -787,7 +787,8 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 		        // Check same unitig and same strand
 		        bool sameUnitig = (start_um.getUnitigHead() == end_um.getUnitigHead()) && (start_um.strand == end_um.strand);
 
-	        	if (sameUnitig) {
+	        	//if (sameUnitig) {
+		        if (sameUnitig && !start_um.getData()->getVisitStatus()) { // Is not in a short cycle
 
 		    		const size_t min_pos = min(start_um.dist, end_um.dist);
 		    		const size_t max_pos = max(start_um.dist, end_um.dist);

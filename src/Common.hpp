@@ -50,6 +50,8 @@ struct Correct_Opt : CDBG_Build_opt {
     size_t max_len_weak_region1;
     size_t max_len_weak_region2;
 
+    size_t min_len_2nd_pass;
+
     size_t buffer_sz;
     size_t h_seed;
 
@@ -110,6 +112,8 @@ struct Correct_Opt : CDBG_Build_opt {
 
 	    max_len_weak_region1 = 1000;
 	    max_len_weak_region2 = 10000;
+
+	    min_len_2nd_pass = 3000;
 
 	    buffer_sz = 1048576;
 	    h_seed = 0;

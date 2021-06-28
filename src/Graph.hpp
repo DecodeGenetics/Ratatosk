@@ -22,6 +22,7 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
 void addPhasing(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads& hap_r, const bool long_read_phasing, const bool mapHapReads);
 
 void detectSNPs(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt);
+void detectShortCycles(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt);
 
 void writeGraphData(const string& output_filename, const CompactedDBG<UnitigData>& dbg, const bool verbose = false);
 void writeGraphPairID(CompactedDBG<UnitigData>& dbg, const string& out_fn, const Correct_Opt& opt);

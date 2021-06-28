@@ -357,7 +357,7 @@ pair<string, string> generateConsensus(const ResultCorrection* fw_s, const Resul
 			len_fw = fw_s->getLengthUncorrectedRegion(i);
 			len_bw = bw_s->getLengthUncorrectedRegion(i);
 
-			if (len_fw > len_bw) len_fw = -1;
+			if ((len_fw > len_bw) || (len_fw <= 0)) len_fw = -1;
 			else len_bw = -1;
 		}
 		

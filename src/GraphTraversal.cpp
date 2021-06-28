@@ -59,7 +59,7 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS(	const Correct_Opt& opt, co
 
 			pair<double, double> scores;
 
-			if (long_read_correct) scores = exploreSubGraphLong(opt, w_pid, ref + end_pos_ref, ref_len - end_pos_ref, um, const_UnitigMap<UnitigData>(), terminal_paths, non_terminal_paths, hap_id);
+			if (long_read_correct || um.getData()->getVisitStatus()) scores = exploreSubGraphLong(opt, w_pid, ref + end_pos_ref, ref_len - end_pos_ref, um, const_UnitigMap<UnitigData>(), terminal_paths, non_terminal_paths, hap_id);
 			else scores = exploreSubGraph(opt, w_pid, ref + end_pos_ref, ref_len - end_pos_ref, um, const_UnitigMap<UnitigData>(), level - 1, terminal_paths, non_terminal_paths, hap_id);
 
 			// Multi-round correction
@@ -311,7 +311,7 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS2(	const Correct_Opt& opt, c
 
 			pair<double, double> scores;
 
-			if (long_read_correct) scores = exploreSubGraphLong(opt, w_pid, ref + end_pos_ref, ref_len - end_pos_ref, um, um_h, terminal_paths, non_terminal_paths, hap_id);
+			if (long_read_correct || um.getData()->getVisitStatus()) scores = exploreSubGraphLong(opt, w_pid, ref + end_pos_ref, ref_len - end_pos_ref, um, um_h, terminal_paths, non_terminal_paths, hap_id);
 			else scores = exploreSubGraph(opt, w_pid, ref + end_pos_ref, ref_len - end_pos_ref, um, um_h, level - 1, terminal_paths, non_terminal_paths, hap_id);
 
 			// Multi-round correction
@@ -342,6 +342,7 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS2(	const Correct_Opt& opt, c
 	if (!um_s.isEmpty){
 
 		const size_t level = 4;
+		//const size_t level = 16;
 
 		const double seq_entropy = getEntropy(ref, ref_len);
 
@@ -1105,167 +1106,6 @@ vector<pair<size_t, char>> getAmbiguityVector(const Path<UnitigData>::PathOut& p
 
 	return v1;
 }
-
-/*bool isValidSNPcandidate(local_graph_traversal& lgt, const const_UnitigMap<UnitigData>& um_a, const const_UnitigMap<UnitigData>& um_b, const size_t limit_length_path, const size_t min_cov, const size_t limit_sz_stack){
-
-	auto exploreLocalGraphFW = [&um_a, &um_b, limit_length_path, min_cov, limit_sz_stack](local_graph_traversal& lgt) {
-
-		const SharedPairID& p_ids_a = um_a.getData()->getPairID();
-		const SharedPairID& p_ids_b = um_b.getData()->getPairID();
-
-		const size_t k = um_a.getGraph()->getK();
-		const size_t max_len_path = limit_length_path + (um_a.size - k + 1);
-
-		if (lgt.m_km_fw.empty()) {
-
-			lgt.q_um_fw.push({um_a, {0, 0}});
-			lgt.m_km_fw.insert({(um_a.strand ? um_a.getUnitigHead() : um_a.getUnitigTail().twin()), 0});
-		}
-
-		while (!lgt.q_um_fw.empty()) {
-
-			const pair<const_UnitigMap<UnitigData>, pair<size_t, size_t>> elem_pop = lgt.q_um_fw.front();
-
-			const const_UnitigMap<UnitigData>& um_pop = elem_pop.first;
-
-			const Kmer km_pop = um_pop.strand ? um_pop.getUnitigHead() : um_pop.getUnitigTail().twin();
-
-			const size_t nb_nodes_before = elem_pop.second.second;
-			const size_t nb_nodes_after = nb_nodes_before + 1;
-
-			const size_t dist_before = elem_pop.second.first;
-			const size_t dist_after = dist_before + (um_pop.size - k + 1);
-
-			lgt.q_um_fw.pop();
-
-			if (dist_before <= lgt.m_km_fw.find(km_pop)->second) {
-
-				for (const auto& um : um_pop.getSuccessors()){
-
-					pair<unordered_map<Kmer, size_t, KmerHash>::iterator, bool> p_km_m = lgt.m_km_fw.insert({um.getMappedHead(), dist_after});
-
-					if (p_km_m.second){ // Unitig hasn't been visited so far
-
-						const SharedPairID& pids_succ = um.getData()->getPairID();
-
-						if (hasEnoughSharedPairID(pids_succ, p_ids_a, min_cov)){ // Unitig shares enough reads with start unitig
-
-							lgt.p_ids_fw |= pids_succ.toPairID();
-
-							if (dist_after < max_len_path) lgt.q_um_fw.push({um, {dist_after, nb_nodes_after}});
-							if (hasEnoughSharedPairID(pids_succ, p_ids_b, min_cov)) return true;
-						}
-						else p_km_m.first->second = 0xffffffffffffffffULL; // Unitig is visited but is invalid
-					}
-					else if ((p_km_m.first->second != 0xffffffffffffffffULL) && (dist_after < p_km_m.first->second)) { // Unitig is valid, has been visited already but distance is shorter
-
-						p_km_m.first->second = dist_after;
-
-						if (dist_after < max_len_path) lgt.q_um_fw.push({um, {dist_after, nb_nodes_after}});
-					}
-				}
-
-				if (lgt.m_km_fw.size() >= limit_sz_stack) return true;
-			}
-		}
-
-		return false;
-	};
-
-	auto exploreLocalGraphBW = [&um_a, &um_b, limit_length_path, min_cov, limit_sz_stack](local_graph_traversal& lgt) {
-
-		const SharedPairID& p_ids_a = um_a.getData()->getPairID();
-		const SharedPairID& p_ids_b = um_b.getData()->getPairID();
-
-		const size_t k = um_a.getGraph()->getK();
-		const size_t max_len_path = limit_length_path + (um_a.size - k + 1);
-
-		if (lgt.m_km_bw.empty()) {
-
-			lgt.q_um_bw.push({um_a, {0, 0}});
-			lgt.m_km_bw.insert({(um_a.strand ? um_a.getUnitigHead() : um_a.getUnitigTail().twin()), 0});
-		}
-
-		while (!lgt.q_um_bw.empty()) {
-
-			const pair<const_UnitigMap<UnitigData>, pair<size_t, size_t>> elem_pop = lgt.q_um_bw.front();
-
-			const const_UnitigMap<UnitigData>& um_pop = elem_pop.first;
-
-			const Kmer km_pop = um_pop.strand ? um_pop.getUnitigHead() : um_pop.getUnitigTail().twin();
-
-			const size_t nb_nodes_before = elem_pop.second.second;
-			const size_t nb_nodes_after = nb_nodes_before + 1;
-
-			const size_t dist_before = elem_pop.second.first;
-			const size_t dist_after = dist_before + (um_pop.size - k + 1);
-
-			lgt.q_um_bw.pop();
-
-			if (dist_before <= lgt.m_km_bw.find(km_pop)->second) {
-
-				const SharedPairID& p_ids_pop = um_pop.getData()->getPairID();
-
-				for (const auto& um : um_pop.getPredecessors()){
-
-					pair<unordered_map<Kmer, size_t, KmerHash>::iterator, bool> p_km_m = lgt.m_km_bw.insert({um.getMappedHead(), dist_after});
-
-					if (p_km_m.second){ // Unitig hasn't been visited so far
-
-						const SharedPairID& pids_succ = um.getData()->getPairID();
-
-						if (hasEnoughSharedPairID(pids_succ, p_ids_a, min_cov)){ // Unitig shares enough reads with start unitig
-
-							lgt.p_ids_bw |= pids_succ.toPairID();
-
-							if (dist_after < limit_length_path) lgt.q_um_bw.push({um, {dist_after, nb_nodes_after}});
-							if (hasEnoughSharedPairID(pids_succ, p_ids_b, min_cov)) return true;
-						}
-						else p_km_m.first->second = 0xffffffffffffffffULL; // Unitig is visited but is invalid
-					}
-					else if ((p_km_m.first->second != 0xffffffffffffffffULL) && (dist_after < p_km_m.first->second)) { // Unitig is valid, has been visited already but distance is shorter
-
-						p_km_m.first->second = dist_after;
-
-						if (dist_after < limit_length_path) lgt.q_um_bw.push({um, {dist_after, nb_nodes_after}});
-					}
-				}
-
-				if (lgt.m_km_bw.size() >= limit_sz_stack) return true;
-			}
-		}
-
-		return false;
-	};
-
-	const SharedPairID& p_ids_b = um_b.getData()->getPairID();
-
-	bool isValidFW = false;
-	bool isValidBW = false;
-
-	if (lgt.m_km_fw.size() >= limit_sz_stack) isValidFW = true;
-	else if (hasEnoughSharedPairID(lgt.p_ids_fw, p_ids_b, min_cov)) {
-
-		local_graph_traversal lgt_fw;
-
-		isValidFW = exploreLocalGraphFW(lgt_fw);
-	}
-	else isValidFW = exploreLocalGraphFW(lgt);
-
-	if (isValidFW) {
-
-		if (lgt.m_km_bw.size() >= limit_sz_stack) isValidBW = true;
-		else if (hasEnoughSharedPairID(lgt.p_ids_bw, p_ids_b, min_cov)) {
-
-			local_graph_traversal lgt_bw;
-
-			isValidBW = exploreLocalGraphBW(lgt_bw);
-		}
-		else isValidBW = exploreLocalGraphBW(lgt);
-	}
-
-	return (isValidFW && isValidBW);
-}*/
 
 bool isValidSNPcandidate(	local_graph_traversal& lgt_fw, local_graph_traversal& lgt_bw,
 							const const_UnitigMap<UnitigData>& um_a, const const_UnitigMap<UnitigData>& um_b,

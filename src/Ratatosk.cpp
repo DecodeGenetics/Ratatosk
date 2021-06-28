@@ -71,6 +71,7 @@ void PrintUsage(const Correct_Opt& opt) {
         cout << "   > Optional with required argument:" << endl << endl <<
         "   -m, --min-conf-snp-corr         Minimum confidence threshold to correct a SNP (default: " << opt.min_confidence_snp_corr << ")" << endl <<
         "   -M, --min-conf-color2           Minimum confidence threshold to color vertices for 2nd pass (default: " << opt.min_confidence_2nd_pass << ")" << endl <<
+        "   -L, --min-len-color2            Minimum length of a long read to color vertices for 2nd pass (default: " << opt.min_len_2nd_pass << ")" << endl <<
         "   -i, --insert-sz                 Insert size of the input paired-end short reads (default: " << opt.insert_sz << ")" << endl <<
         "   -k, --k1                        Length of short k-mers for 1st pass (default: " << opt.small_k << ")" << endl <<
         "   -K, --k2                        Length of long k-mers for 2nd pass (default: " << opt.k << ")" << endl <<
@@ -118,6 +119,7 @@ void PrintUsage(const Correct_Opt& opt) {
         cout << "[ADVANCED PARAMETERS]:" << endl << endl;
         cout << "   > Optional with required argument:" << endl << endl <<
         "   -M, --min-conf-color2           Minimum confidence threshold to color vertices for 2nd pass (default: " << opt.min_confidence_2nd_pass << ")" << endl <<
+        "   -L, --min-len-color2            Minimum length of a long read to color vertices for 2nd pass (default: " << opt.min_len_2nd_pass << ")" << endl <<
         "   -i, --insert-sz                 Insert size of the input paired-end short reads (default: " << opt.insert_sz << ")" << endl <<
         "   -k, --k1                        Length of short k-mers for 1st pass (default: " << opt.small_k << ")" << endl <<
         "   -K, --k2                        Length of long k-mers for 2nd pass (default: " << opt.k << ")" << endl << endl;
@@ -128,7 +130,7 @@ int parse_ProgramOptions(int argc, char **argv, Correct_Opt& opt) {
 
     int option_index = 0, c;
 
-    const char* opt_string = "s:l:o:c:S:t:u:a:g:d:m:M:i:k:K:w:W:r:p:P:12fv";
+    const char* opt_string = "s:l:o:c:S:t:u:a:g:d:m:M:L:i:k:K:w:W:r:p:P:12fv";
 
     static struct option long_options[] = {
 
@@ -144,6 +146,7 @@ int parse_ProgramOptions(int argc, char **argv, Correct_Opt& opt) {
         {"in-unitig-data",          required_argument,  0, 'd'},
         {"min-conf-snp-corr",       required_argument,  0, 'm'},
         {"min-conf-color2",         required_argument,  0, 'M'},
+        {"min-len-color2",          required_argument,  0, 'L'},
         {"insert-sz",               required_argument,  0, 'i'},
         {"k1",                      required_argument,  0, 'k'},
         {"k2",                      required_argument,  0, 'K'},
@@ -216,6 +219,9 @@ int parse_ProgramOptions(int argc, char **argv, Correct_Opt& opt) {
                 break;
             case 'M':
                 opt.min_confidence_2nd_pass = atof(optarg);
+                break;
+            case 'L':
+                opt.min_len_2nd_pass = atoi(optarg);
                 break;
             case 'i':
                 opt.insert_sz = atoi(optarg);
@@ -332,6 +338,12 @@ bool check_ProgramOptions(Correct_Opt& opt) {
     if (opt.min_confidence_2nd_pass > 1.0){
 
         cerr << "Ratatosk::Ratatosk(): Minimum confidence threshold of a 1st pass corrected base to be used for coloring in 2nd pass must be lower or equal to 1.0." << endl;
+        ret = false;  
+    }
+
+    if (opt.min_len_2nd_pass < 0){
+
+        cerr << "Ratatosk::Ratatosk(): Minimum length of a 1st-pass-corrected read to be used for coloring in 2nd pass cannot be less than 0." << endl;
         ret = false;  
     }
 
@@ -833,6 +845,8 @@ int main(int argc, char *argv[]) {
                         if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Adding SNPs candidates to graph (1/2)." << endl;
 
                         detectSNPs(dbg, opt_pass1);
+
+                        detectShortCycles(dbg, opt_pass1);
                     }
 
                     if (opt.index) {

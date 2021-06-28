@@ -1022,7 +1022,7 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
                 len_read = s.length();
                 s_str = s.c_str();
 
-                if (len_read >= k){
+                if ((len_read >= k) && (!long_read_correct || (len_read >= opt.min_len_2nd_pass))) {
 
                 	if (pos_read == 0){ // New read
 
@@ -1096,7 +1096,7 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
                 len_read = s.length();
                 s_str = s.c_str();
 
-                if (len_read >= k){
+                if ((len_read >= k) && (!long_read_correct || (len_read >= opt.min_len_2nd_pass))) {
 
 		        	if (long_read_correct && new_reading) {
 
@@ -3591,3 +3591,144 @@ size_t estimateHaplotypeCoverage(const CompactedDBG<UnitigData>& dbg) {
         return nb_repeats;
 	}
 }*/
+
+// Detect unitigs which are in a short cycle
+void detectShortCycles(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt) {
+
+	auto detectShortCycle = [&](const UnitigMap<UnitigData>& um, const bool fw) {
+
+		queue<pair<UnitigMap<UnitigData>, PairID>> q_um;
+
+		unordered_set<Kmer, KmerHash> us_km;
+
+		q_um.push({um, um.getData()->getPairID().toPairID()});
+
+		while (!q_um.empty()) {
+
+			const pair<UnitigMap<UnitigData>, PairID> p_um = q_um.front();
+
+			q_um.pop();
+
+			if (fw) {
+
+				for (const auto& um_succ : p_um.first.getSuccessors()) {
+
+					if (um.isSameReferenceUnitig(um_succ) && (um_succ.strand == um.strand)) {
+
+						um.getData()->setVisitStatus(true);
+
+						return true;
+					}
+					else if (us_km.insert(um_succ.getMappedHead()).second) { // Insertion took place, vertex was never visited before
+
+						PairID p_int = p_um.second & um_succ.getData()->getPairID().toPairID();
+
+						if (p_int.cardinality() >= opt.min_cov_vertices) q_um.push({um_succ, move(p_int)});
+					}
+				}
+			}
+			else {
+
+				for (const auto& um_pred : p_um.first.getPredecessors()) {
+
+					if (um.isSameReferenceUnitig(um_pred) && (um_pred.strand == um.strand)) {
+
+						um.getData()->setVisitStatus(true);
+
+						return true;
+					}
+					else if (us_km.insert(um_pred.getMappedHead()).second) { // Insertion took place, vertex was never visited before
+
+						PairID p_int = p_um.second & um_pred.getData()->getPairID().toPairID();
+
+						if (p_int.cardinality() >= opt.min_cov_vertices) q_um.push({um_pred, move(p_int)});
+					}
+				}
+			}
+		}
+
+		return false;
+	};
+
+	if (opt.verbose) cout << "Ratatosk::detectShortCycles(): Detecting unitigs in short cycles" << endl;
+
+	if (opt.nb_threads == 1){
+
+		size_t count_short_cycles = 0;
+
+	    for (const auto& um : dbg) {
+
+	    	um.getData()->setVisitStatus(false);
+
+	    	count_short_cycles += static_cast<size_t>(detectShortCycle(um, true) || detectShortCycle(um, false));
+	    }
+
+	    if (opt.verbose) cout << "Ratatosk::detectShortCycles(): Found " << count_short_cycles << " in short cycles. " << endl;
+	}
+	else {
+
+		const size_t slice = 1024;
+
+        bool stop = false;
+
+        atomic<size_t> count_short_cycles(0);
+
+        vector<thread> workers; // need to keep track of threads so we can join them
+
+        mutex mutex_graph;
+
+        CompactedDBG<UnitigData>::iterator it_c = dbg.begin();
+        CompactedDBG<UnitigData>::iterator it_e = dbg.end();
+
+        for (size_t t = 0; t < opt.nb_threads; ++t){
+
+            workers.emplace_back(
+
+                [&, t]{
+
+					CompactedDBG<UnitigData>::iterator l_it_c, l_it_e;
+
+                    while (true) {
+
+                        {
+                            unique_lock<mutex> lock(mutex_graph);
+
+                            if (stop) return;
+
+                            l_it_c = it_c;
+
+					        size_t i = 0;
+
+					        while ((i < slice) && (it_c != it_e)){
+
+					        	++i;
+					        	++it_c;
+					        }
+
+                            stop = (it_c == it_e);
+							l_it_e = it_c;
+                        }
+
+                        {
+							size_t l_count_short_cycles = 0;
+
+							while (l_it_c != l_it_e){
+
+								l_it_c->getData()->setVisitStatus(false);
+
+								l_count_short_cycles += static_cast<size_t>(detectShortCycle(*l_it_c, true) || detectShortCycle(*l_it_c, false));
+								++l_it_c;
+							}
+
+							count_short_cycles += l_count_short_cycles;
+                        }
+                    }
+                }
+            );
+        }
+
+        for (auto& t : workers) t.join();
+
+        if (opt.verbose) cout << "Ratatosk::detectShortCycles(): Found " << count_short_cycles << " in short cycles. " << endl;
+	}
+}
