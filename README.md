@@ -50,7 +50,7 @@ sudo apt-get install build-essential cmake zlib1g-dev
 
 1. Clone the Git repository
   ```
-  git clone --recursive https://github.com/DecodeGenetics/Ratatosk/Ratatosk.git
+  git clone --recursive https://github.com/DecodeGenetics/Ratatosk.git
   cd Ratatosk
   ```
 2. Install Ratatosk
