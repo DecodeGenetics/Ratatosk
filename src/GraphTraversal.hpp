@@ -27,6 +27,17 @@ struct info_traversal {
 	info_traversal() : l(0) {};
 };
 
+/*struct info_traversal {
+
+	Path<UnitigData> p;
+	PairID pid;
+
+	info_traversal() {};
+	info_traversal(const Path<UnitigData>& p_) : p(p_) {};
+	info_traversal(const SharedPairID& spid) : pid(spid.toPairID()) {};
+	info_traversal(const Path<UnitigData>& p_, const SharedPairID& spid) : p(p_), pid(spid.toPairID()) {};
+};*/
+
 struct local_graph_traversal {
 
 	unordered_map<Kmer, const SharedPairID*, KmerHash> m_km;
@@ -38,27 +49,27 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS(	const Correct_Opt& opt, co
 														const bool long_read_correct, const uint64_t hap_id);
 
 pair<vector<Path<UnitigData>>, bool> explorePathsBFS2(	const Correct_Opt& opt, const char* ref, const size_t ref_len,
-														const WeightsPairID& w_pid, const const_UnitigMap<UnitigData>& um_s, const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_um_e,
+														const WeightsPairID& w_pid, const const_UnitigMap<UnitigData>& um_s, const const_UnitigMap<UnitigData>& um_e,
 														const bool long_read_correct, const uint64_t hap_id);
 
 
-pair<double, double> exploreSubGraph(	const Correct_Opt& opt, const WeightsPairID& w_pid, const char* ref, const size_t ref_len,
+pair<double, double> exploreSubGraph(	const Correct_Opt& opt, const WeightsPairID& w_pid, const char* ref, const size_t ref_len, const size_t max_len_path,
 										const const_UnitigMap<UnitigData>& um, const const_UnitigMap<UnitigData>& um_e, const size_t level,
-										vector<Path<UnitigData>>& terminal_paths, vector<Path<UnitigData>>& non_terminal_paths, const uint64_t hap_id);
+										vector<Path<UnitigData>>& terminal_paths, vector<Path<UnitigData>>& non_terminal_paths, const uint64_t hap_id,
+										unordered_map<const SharedPairID*, pair<double, bool>, HashSharedPairIDptr>& m_pid);
 
-pair<double, double> exploreSubGraph(	const Correct_Opt& opt, const WeightsPairID& w_pid, const char* ref, const size_t ref_len,
-										const const_UnitigMap<UnitigData>& um, const KmerHashTable<const_UnitigMap<UnitigData>>& h_um_e, const size_t level,
-										vector<Path<UnitigData>>& terminal_paths, vector<Path<UnitigData>>& non_terminal_paths, const uint64_t hap_id);
-
-pair<double, double> exploreSubGraphLong(	const Correct_Opt& opt, const WeightsPairID& w_pid, const char* ref, const size_t ref_len,
+pair<double, double> exploreSubGraphLong(	const Correct_Opt& opt, const WeightsPairID& w_pid, const char* ref, const size_t ref_len, const size_t max_len_path,
 											const const_UnitigMap<UnitigData>& um, const const_UnitigMap<UnitigData>& um_e,
-											vector<Path<UnitigData>>& terminal_paths, vector<Path<UnitigData>>& non_terminal_paths, const uint64_t hap_id);
+											vector<Path<UnitigData>>& terminal_paths, vector<Path<UnitigData>>& non_terminal_paths, const uint64_t hap_id,
+											unordered_map<const SharedPairID*, pair<double, bool>, HashSharedPairIDptr>& m_pid);
 
-pair<double, double> exploreSubGraphLong(	const Correct_Opt& opt, const WeightsPairID& w_pid, const char* ref, const size_t ref_len,
-											const const_UnitigMap<UnitigData>& um, const KmerHashTable<const_UnitigMap<UnitigData>>& h_um_e,
-											vector<Path<UnitigData>>& terminal_paths, vector<Path<UnitigData>>& non_terminal_paths, const uint64_t hap_id);
+pair<double, double> getScorePath(	const Path<UnitigData>& path, const char* ref, const size_t ref_len, const bool terminal, const WeightsPairID& w_pid, const double max_er);
+pair<double, double> getScorePath(	const Path<UnitigData>& path, const char* ref, const size_t ref_len, const bool terminal, const WeightsPairID& w_pid, const double max_er,
+									const size_t min_pid_sharing, unordered_map<const SharedPairID*, pair<double, bool>, HashSharedPairIDptr>& m_pid);
 
-pair<double, double> getScorePath(const Path<UnitigData>& path, const WeightsPairID& w_pid, const uint64_t hap_id, const char* ref, const size_t ref_len);
+string getScorePath(const Correct_Opt& opt, const Path<UnitigData>& path, const char* ref, const size_t ref_len, const double score_best, const double score_second_best);
+
+vector<Path<UnitigData>> fixRepeats(const Correct_Opt& opt, const vector<Path<UnitigData>>& v_path, const char* ref, const size_t ref_len);
 
 vector<Path<UnitigData>> selectMostContiguous(const vector<Path<UnitigData>>& v_paths, const WeightsPairID& w_pid);
 vector<Path<UnitigData>> selectMostContiguous(const vector<Path<UnitigData>>& v_paths, const size_t min_cov, const uint64_t hap_id);

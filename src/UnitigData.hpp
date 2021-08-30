@@ -12,18 +12,34 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
 
     public:
 
-        UnitigData() {
-
-            clear();
-        }
+        UnitigData() : kmCov_cardBranches(0), shared_pids(0), compactedCycles({0, nullptr}) {}
 
         UnitigData(const UnitigData& o) :   kmCov_cardBranches(o.kmCov_cardBranches), shared_pids(o.shared_pids),
-                                            read_ids(o.read_ids), ambiguity_ids(o.ambiguity_ids), hap_ids(o.hap_ids) {}
+                                            read_ids(o.read_ids), ambiguity_ids(o.ambiguity_ids), hap_ids(o.hap_ids) {
+
+            compactedCycles.first = o.compactedCycles.first;
+            compactedCycles.second = nullptr;
+
+            if ((o.compactedCycles.first != 0) && (o.compactedCycles.second != nullptr)) {
+
+                compactedCycles.second = new char[o.compactedCycles.first];
+
+                memcpy(compactedCycles.second, o.compactedCycles.second, o.compactedCycles.first * sizeof(char));
+            }
+        }
 
         UnitigData(UnitigData&& o) :    kmCov_cardBranches(o.kmCov_cardBranches), shared_pids(o.shared_pids),
-                                        read_ids(move(o.read_ids)), ambiguity_ids(move(o.ambiguity_ids)), hap_ids(move(o.hap_ids)) {
+                                        read_ids(move(o.read_ids)), ambiguity_ids(move(o.ambiguity_ids)),
+                                        hap_ids(move(o.hap_ids)), compactedCycles(o.compactedCycles) {
+
+            o.compactedCycles = {0, nullptr};
 
             o.clear();
+        }
+
+        ~UnitigData() {
+
+            clear();
         }
 
         UnitigData& operator=(const UnitigData& o){
@@ -36,6 +52,16 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
                 read_ids = o.read_ids;
                 ambiguity_ids = o.ambiguity_ids;
                 hap_ids = o.hap_ids;
+
+                compactedCycles.first = o.compactedCycles.first;
+                compactedCycles.second = nullptr;
+
+                if ((o.compactedCycles.first != 0) && (o.compactedCycles.second != nullptr)) {
+
+                    compactedCycles.second = new char[o.compactedCycles.first];
+
+                    memcpy(compactedCycles.second, o.compactedCycles.second, o.compactedCycles.first * sizeof(char));
+                }
             }
 
             return *this;
@@ -52,18 +78,36 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
                 ambiguity_ids = move(o.ambiguity_ids);
                 hap_ids = move(o.hap_ids);
 
+                compactedCycles = o.compactedCycles;
+
+                o.compactedCycles = {0, nullptr};
+
                 o.clear();
             }
 
             return *this;
         }
 
-        void clear(const bool cov = true, const bool visit = true, const bool branching = true, const bool shared = true, const bool pids = true, const bool amb = true, const bool hap = true){
+        void clear(const bool cov = true, const bool visit = true, const bool branching = true, const bool shared = true, const bool cycle = true, const bool pids = true, const bool amb = true, const bool hap = true){
 
             if (cov) resetCoverage();
             if (visit) setVisitStatus(false);
             if (branching) setBranching(false);
+
             if (shared) resetSharedPids();
+
+            if (cycle) {
+
+                resetIsCycle();
+
+                compactedCycles.first = 0;
+
+                if (compactedCycles.second != nullptr) {
+
+                    delete[] compactedCycles.second;
+                    compactedCycles.second = nullptr;
+                }
+            }
 
             if (pids) read_ids.clear();
 
@@ -181,11 +225,14 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
 
             cout << "- Unitig: " << l_um.referenceUnitigToString() << endl;
             cout << "- Unitig length: " << l_um.size << endl;
-            cout << "- Successors: " << l_um.getSuccessors().cardinality() << endl;
-            cout << "- Predecessors: " << l_um.getPredecessors().cardinality() << endl;
+            cout << "- |Successors|: " << l_um.getSuccessors().cardinality() << endl;
+            cout << "- |Predecessors|: " << l_um.getPredecessors().cardinality() << endl;
             cout << "- Coverage: " << getPhasedCoverage() << " (phased) + " << getUnphasedCoverage() << " (unphased) = " << getCoverage() << endl;
             cout << "- Kmer coverage: " << getPhasedKmerCoverage(l_um) << " (phased) + " << getUnphasedKmerCoverage(l_um) << " (unphased) = " << getKmerCoverage(l_um) << endl;
             cout << "- Read mapping: " << getPairID().cardinality() << endl;
+            cout << "- Branching: " << isBranching() << endl;
+            cout << "- Short cycle: " << isShortCycle() << endl;
+            cout << "- Visited: " << getVisitStatus() << endl;
 
             if (v.empty()) cout << "- SNPs: None" << endl;
             else {
@@ -210,7 +257,7 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
 
         inline void resetSharedPids() {
 
-            shared_pids = 0;
+            shared_pids &= 0xffffffffffffff00ULL;
         }
 
         inline bool setSharedPids(const bool strand, const char c) {
@@ -225,18 +272,6 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
             return true;
         }
 
-        inline bool unsetSharedPids(const bool strand, const char c) {
-
-            if (!isDNA(c)) return false;
-
-            const size_t idx = static_cast<size_t>(getAmbiguityIndex(c));
-
-            if (strand) shared_pids &= ~(idx << 4);
-            else shared_pids &= ~idx;
-
-            return true;
-        }
-
         inline bool getSharedPids(const bool strand, const char c) const {
 
             if (!isDNA(c)) return false;
@@ -246,6 +281,50 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
             if (strand) return static_cast<bool>(shared_pids & (idx << 4));
             
             return static_cast<bool>(shared_pids & idx);
+        }
+
+        inline bool hasSharedPids() const {
+
+            return static_cast<bool>(shared_pids & 0xffULL);
+        }
+
+        inline void setIsCycle(const bool isCycle) {
+
+            shared_pids &= 0xfffffffffffffeffULL; // Unset
+            shared_pids |= (static_cast<size_t>(isCycle) << 8); // Set
+        }
+
+        inline void resetIsCycle() {
+
+            shared_pids &= 0xfffffffffffffeffULL;
+        }
+
+        inline bool isShortCycle() const {
+
+            return static_cast<bool>(shared_pids & 0x0000000000000100ULL);
+        }
+
+        inline void setCompactCycles(const size_t sz, char* str) {
+
+            compactedCycles = pair<size_t, char*>(sz, str);
+        }
+
+        inline vector<const char*> getCompactCycles() const {
+
+            vector<const char*> v_out;
+
+            if ((compactedCycles.first != 0) && (compactedCycles.second != nullptr)) {
+
+                size_t sum_len = 0;
+
+                while (sum_len < compactedCycles.first) {
+
+                    v_out.push_back(static_cast<const char*>(compactedCycles.second + sum_len));
+                    sum_len += strlen(compactedCycles.second + sum_len) + 1;
+                }
+            }
+
+            return v_out;
         }
 
         inline void resetCoverage() {
@@ -426,6 +505,12 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
 
                 if (stream_out.good()) ambiguity_ids.write(stream_out);
                 if (stream_out.good()) hap_ids.write(stream_out);
+
+                if (stream_out.good()) stream_out.write(reinterpret_cast<const char*>(&(compactedCycles.first)), sizeof(size_t));
+                if (stream_out.good() && (compactedCycles.first != 0) && (compactedCycles.second != nullptr)) {
+
+                    stream_out.write(compactedCycles.second, compactedCycles.first * sizeof(char));
+                }
             }
 
             return stream_out.good();
@@ -437,7 +522,7 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
 
                 if (pids_only) {
 
-                    clear(false, false, false, false, true, false, false);
+                    clear(false, false, false, false, false, true, false, false);
 
                     if (stream_in.good()) read_ids.read(stream_in);
                 }
@@ -452,6 +537,15 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
 
                     if (stream_in.good()) ambiguity_ids.read(stream_in);
                     if (stream_in.good()) hap_ids.read(stream_in);
+
+                    if (stream_in.good()) stream_in.read(reinterpret_cast<char*>(&(compactedCycles.first)), sizeof(size_t));
+
+                    if (stream_in.good() && (compactedCycles.first != 0)) {
+
+                        compactedCycles.second = new char[compactedCycles.first]();
+
+                        stream_in.read(compactedCycles.second, compactedCycles.first * sizeof(char));
+                    }
                 }
             }
 
@@ -479,8 +573,10 @@ class UnitigData : public CDBG_Data_t<UnitigData> {
             return v;
         }
 
-        size_t kmCov_cardBranches;
-        size_t shared_pids;
+        size_t kmCov_cardBranches; // |abcccccc|CCC|cddddddd|DDD -> a/A: branching (1 bit), b/B: visit (1 bit), c/C: phased coverage (31 bits), d/D: unphased coverage (31 bits)
+        size_t shared_pids; // AAAAAA|aaaaaaab|C -> a/A: unused, b/B: short cycle (1 bit), c/C: all possible forward and backward neighbor (8 bits)
+
+        pair<size_t, char*> compactedCycles;
 
         SharedPairID read_ids;
 

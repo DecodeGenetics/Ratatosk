@@ -115,6 +115,8 @@ class SharedPairID {
         bool write(ostream& stream_out) const;
         bool read(istream& stream_in);
 
+        void forceRoaringInternal();
+
 		SharedPairID::const_iterator begin() const;
 		SharedPairID::const_iterator end() const;
 

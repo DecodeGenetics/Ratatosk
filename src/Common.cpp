@@ -48,72 +48,6 @@ size_t getMaxBranch(const double seq_entropy, const size_t max_len_path, const s
 	return (base_nb_nodes + 1) * entropy_factor;
 }
 
-size_t getNumberSharedPairID(const PairID& a, const PairID& b, const size_t min_shared_ids) {
-
-	size_t nb_shared = 0;
-
-	const size_t max_a = a.maximum(), min_a = a.minimum();
-	const size_t max_b = b.maximum(), min_b = b.minimum();
-
-	if ((min_a <= max_b) && (min_b <= max_a)) { // Check that range overlaps (both bitmaps must be non empty!)
-
-		const size_t a_card = a.cardinality();
-		const size_t b_card = b.cardinality();
-
-		const size_t log2_a = b_card * approximate_log2(a_card);
-		const size_t log2_b = a_card * approximate_log2(b_card);
-
-		const size_t min_a_b = min(a_card + b_card, min(log2_a, log2_b));
-
-		if (min_a_b == (a_card + b_card)) {
-
-			PairID::const_iterator a_it_s = a.begin(), a_it_e = a.end();
-			PairID::const_iterator b_it_s = b.begin(), b_it_e = b.end();
-
-			while ((a_it_s != a_it_e) && (b_it_s != b_it_e) && (nb_shared < min_shared_ids)){
-
-				const uint32_t val_a = *a_it_s;
-				const uint32_t val_b = *b_it_s;
-
-				if (val_a == val_b){
-
-					++nb_shared;
-					++a_it_s;
-					++b_it_s;
-				}
-				else if (val_a < val_b) ++a_it_s;
-				else ++b_it_s;
-			}
-		}
-		else if (min_a_b == log2_a){
-
-			PairID::const_iterator b_it_s = b.begin(), b_it_e = b.end();
-
-			while ((b_it_s != b_it_e) && (*b_it_s < min_a)) ++b_it_s;
-
-			while ((b_it_s != b_it_e) && (*b_it_s <= max_a) && (nb_shared < min_shared_ids)){
-
-				nb_shared += static_cast<size_t>(a.contains(*b_it_s));
-				++b_it_s;
-			}
-		}
-		else {
-
-			PairID::const_iterator a_it_s = a.begin(), a_it_e = a.end();
-
-			while ((a_it_s != a_it_e) && (*a_it_s < min_b)) ++a_it_s;
-
-			while ((a_it_s != a_it_e) && (*a_it_s <= max_b) && (nb_shared < min_shared_ids)){
-
-				nb_shared += static_cast<size_t>(b.contains(*a_it_s));
-				++a_it_s;
-			}
-		}
-	}
-
-	return nb_shared;
-}
-
 size_t getNumberSharedPairID(const SharedPairID& a, const SharedPairID& b, const size_t min_shared_ids) {
 
 	size_t nb_shared = 0;
@@ -125,7 +59,7 @@ size_t getNumberSharedPairID(const SharedPairID& a, const SharedPairID& b, const
 
 		nb_shared = pa.first->cardinality();
 
-		if (nb_shared < min_shared_ids) nb_shared += getNumberSharedPairID(*(pa.second), *(pb.second), min_shared_ids - nb_shared);
+		if (nb_shared < min_shared_ids) nb_shared += pa.second->and_cardinality(*pb.second, min_shared_ids - nb_shared);
 	}
 	else {
 
@@ -142,89 +76,8 @@ size_t getNumberSharedPairID(const SharedPairID& a, const PairID& b, const size_
 
 	const pair<const PairID*, const PairID*> p_pid = a.getPairIDs();
 
-	if (p_pid.first != nullptr) nb_shared = getNumberSharedPairID(*p_pid.first, b, min_shared_ids);
-	if ((p_pid.second != nullptr) && (nb_shared < min_shared_ids)) nb_shared += getNumberSharedPairID(*p_pid.second, b, min_shared_ids - nb_shared);
-
-	return nb_shared;
-}
-
-size_t getNumberSharedPairID(const PairID& a, const PairID& b) {
-
-	size_t nb_shared = 0;
-
-	if (!a.isEmpty() && !b.isEmpty()) {
-
-		const size_t max_a = a.maximum(), min_a = a.minimum();
-		const size_t max_b = b.maximum(), min_b = b.minimum();
-
-		if ((min_a <= max_b) && (min_b <= max_a)) { // Check that range overlaps (both bitmaps must be non empty!)
-
-			const size_t a_card = a.cardinality();
-			const size_t b_card = b.cardinality();
-
-			const size_t log2_a = b_card * approximate_log2(a_card);
-			const size_t log2_b = a_card * approximate_log2(b_card);
-
-			const size_t min_a_b = min(a_card + b_card, min(log2_a, log2_b));
-
-			if (min_a_b == (a_card + b_card)) {
-
-				PairID::const_iterator a_it_s = a.begin(), a_it_e = a.end();
-				PairID::const_iterator b_it_s = b.begin(), b_it_e = b.end();
-
-				while ((a_it_s != a_it_e) && (b_it_s != b_it_e)){
-
-					const uint32_t val_a = *a_it_s;
-					const uint32_t val_b = *b_it_s;
-
-					if (val_a == val_b){
-
-						++nb_shared;
-						++a_it_s;
-						++b_it_s;
-					}
-					else if (val_a < val_b) ++a_it_s;
-					else ++b_it_s;
-				}
-			}
-			else if (min_a_b == log2_a){
-
-				PairID::const_iterator b_it_s = b.begin(), b_it_e = b.end();
-
-				while ((b_it_s != b_it_e) && (*b_it_s < min_a)) ++b_it_s;
-
-				while ((b_it_s != b_it_e) && (*b_it_s <= max_a)){
-
-					nb_shared += static_cast<size_t>(a.contains(*b_it_s));
-					++b_it_s;
-				}
-			}
-			else {
-
-				PairID::const_iterator a_it_s = a.begin(), a_it_e = a.end();
-
-				while ((a_it_s != a_it_e) && (*a_it_s < min_b)) ++a_it_s;
-
-				while ((a_it_s != a_it_e) && (*a_it_s <= max_b)){
-
-					nb_shared += static_cast<size_t>(b.contains(*a_it_s));
-					++a_it_s;
-				}
-			}
-		}
-	}
-
-	return nb_shared;
-}
-
-size_t getNumberSharedPairID(const SharedPairID& a, const PairID& b) {
-
-	size_t nb_shared = 0;
-
-	const pair<const PairID*, const PairID*> p_pid = a.getPairIDs();
-
-	if (p_pid.first != nullptr) nb_shared += getNumberSharedPairID(*p_pid.first, b);
-	if (p_pid.second != nullptr) nb_shared += getNumberSharedPairID(*p_pid.second, b);
+	if (p_pid.first != nullptr) nb_shared = p_pid.first->and_cardinality(b, min_shared_ids);
+	if ((p_pid.second != nullptr) && (nb_shared < min_shared_ids)) nb_shared += p_pid.second->and_cardinality(b, min_shared_ids - nb_shared);
 
 	return nb_shared;
 }
@@ -236,12 +89,24 @@ size_t getNumberSharedPairID(const SharedPairID& a, const SharedPairID& b) {
 	const pair<const PairID*, const PairID*> pa = a.getPairIDs();
 	const pair<const PairID*, const PairID*> pb = b.getPairIDs();
 
-	if ((pa.first != nullptr) && (pa.first == pb.first)) nb_shared = pa.first->cardinality() + getNumberSharedPairID(*(pa.second), *(pb.second));
+	if ((pa.first != nullptr) && (pa.first == pb.first)) nb_shared = pa.first->cardinality() + pa.second->and_cardinality(*pb.second);
 	else {
 
 		if (pb.first != nullptr) nb_shared += getNumberSharedPairID(a, *pb.first);
 		if (pb.second != nullptr) nb_shared += getNumberSharedPairID(a, *pb.second);
 	}
+
+	return nb_shared;
+}
+
+size_t getNumberSharedPairID(const SharedPairID& a, const PairID& b) {
+
+	size_t nb_shared = 0;
+
+	const pair<const PairID*, const PairID*> p_pid = a.getPairIDs();
+
+	if (p_pid.first != nullptr) nb_shared += p_pid.first->and_cardinality(b);
+	if (p_pid.second != nullptr) nb_shared += p_pid.second->and_cardinality(b);
 
 	return nb_shared;
 }
@@ -271,8 +136,8 @@ PairID getSharedPairID(const SharedPairID& a, const SharedPairID& b, const size_
 
 			if ((min_a <= max_b) && (min_b <= max_a)) { // Check that range overlaps (both bitmaps must be non empty!)
 
-				const size_t log2_a = b_card * approximate_log2(a_card);
-				const size_t log2_b = a_card * approximate_log2(b_card);
+				const size_t log2_a = b_card * min(approximate_log2(a_card), 16UL);
+				const size_t log2_b = a_card * min(approximate_log2(b_card), 16UL);
 
 				const size_t min_a_b = min(a_card + b_card, min(log2_a, log2_b));
 
@@ -474,13 +339,24 @@ PairID subsample(const SharedPairID& spid, const size_t nb_id_out) {
 
 	if ((nb_id_out != 0) && !spid.isEmpty()) {
 
-		vector<uint32_t> v_ids = spid.toVector();
+		if (nb_id_out >= spid.cardinality()) return spid.toPairID();
+		else {
 
-		std::random_shuffle(v_ids.begin(), v_ids.end());
+			const vector<uint32_t> v_ids = spid.toVector();
 
-		const size_t sz = min(nb_id_out, v_ids.size());
+		    std::random_device rd; // Seed
+		    std::default_random_engine generator(rd()); // Random number generator
+		    std::uniform_int_distribution<> distribution(0, v_ids.size() - 1); // Distribution on which to apply the generator
 
-		for (size_t i = 0; i < sz; ++i) pid.add(v_ids[i]);
+		    for (size_t i = 0; i < nb_id_out; ++i) {
+
+		    	const int pos = distribution(generator);
+
+		    	pid.add(v_ids[pos]);
+		    }
+
+		    pid.runOptimize();
+		}
 	}
 
 	return pid;
@@ -492,13 +368,24 @@ PairID subsample(const PairID& spid, const size_t nb_id_out) {
 
 	if ((nb_id_out != 0) && !spid.isEmpty()) {
 
-		vector<uint32_t> v_ids = spid.toVector();
+		if (nb_id_out >= spid.cardinality()) return spid;
+		else {
 
-		std::random_shuffle(v_ids.begin(), v_ids.end());
+			const vector<uint32_t> v_ids = spid.toVector();
 
-		const size_t sz = min(nb_id_out, v_ids.size());
+		    std::random_device rd; // Seed
+		    std::default_random_engine generator(rd()); // Random number generator
+		    std::uniform_int_distribution<> distribution(0, v_ids.size() - 1); // Distribution on which to apply the generator
 
-		for (size_t i = 0; i < sz; ++i) pid.add(v_ids[i]);
+		    for (size_t i = 0; i < nb_id_out; ++i) {
+
+		    	const int pos = distribution(generator);
+
+		    	pid.add(v_ids[pos]);
+		    }
+
+		    pid.runOptimize();
+		}
 	}
 
 	return pid;

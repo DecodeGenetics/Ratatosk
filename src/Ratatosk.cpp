@@ -513,6 +513,8 @@ void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const b
     const size_t k = dbg.getK();
     const string fn_out = opt.filename_long_out + ".fastq";
 
+    const size_t max_km_cov = max(getMaxKmerCoverage(dbg, opt.top_km_cov_ratio), opt.max_km_cov);
+
     ofstream outfile;
     ostream out(0);
 
@@ -556,9 +558,18 @@ void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const b
 
                 if (opt.force_unres_snp_corr) in_read = fixSNPs(opt, dbg, in_read);
 
+                //const auto start = std::chrono::high_resolution_clock::now();
+
                 const pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> p = getSeeds(opt, dbg, in_read, in_qual, long_read_correct, hap_id, m_km_um, false);
 
-                pair<string, string> correction = correctSequence(dbg, opt, in_read, in_qual, p.first, p.second, long_read_correct, partitions, hap_id, hap_reads);
+                //const auto middle = std::chrono::high_resolution_clock::now();
+
+                pair<string, string> correction = correctSequence(dbg, opt, in_read, in_qual, p.first, p.second, long_read_correct, partitions, hap_id, hap_reads, max_km_cov);
+
+                //const auto end = std::chrono::high_resolution_clock::now();
+
+                //cout << std::chrono::duration_cast<std::chrono::milliseconds>(middle - start).count() << " " << std::chrono::duration_cast<std::chrono::milliseconds>(end - middle).count()
+                //<< " " << (static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(end - middle).count()) / static_cast<double>(in_read.length())) << endl;
 
                 in_read = move(correction.first);
                 in_qual = move(correction.second);
@@ -566,7 +577,7 @@ void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const b
             else {
 
                 const double step_min_score = 1.00 / static_cast<double>(opt.nb_correction_rounds);
-                const double step_weak_region_len_factor = (opt.nb_correction_rounds == 1) ? 0.0 : ((opt.weak_region_len_factor - 1.10) / static_cast<double>(opt.nb_correction_rounds - 1));
+                const double step_weak_region_len_factor = (opt.nb_correction_rounds == 1) ? 0.0 : ((opt.weak_region_len_factor - 0.10) / static_cast<double>(opt.nb_correction_rounds - 1));
                 const size_t step_max_len_weak_region1 = opt.max_len_weak_region1 / opt.nb_correction_rounds;
 
                 for (size_t j = 0; j < opt.nb_correction_rounds; ++j) {
@@ -577,9 +588,18 @@ void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const b
                     l_opt.weak_region_len_factor = opt.weak_region_len_factor - (opt.nb_correction_rounds - j - 1) * step_weak_region_len_factor;
                     l_opt.max_len_weak_region1 = (j+1) * step_max_len_weak_region1;
 
+                    //const auto start = std::chrono::high_resolution_clock::now();
+
                     const pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> p = getSeeds(l_opt, dbg, in_read, in_qual, long_read_correct, hap_id, m_km_um, (j+1) != opt.nb_correction_rounds);
 
-                    pair<string, string> correction = correctSequence(dbg, l_opt, in_read, in_qual, p.first, p.second, long_read_correct, partitions, hap_id, hap_reads);
+                    //const auto middle = std::chrono::high_resolution_clock::now();
+
+                    pair<string, string> correction = correctSequence(dbg, l_opt, in_read, in_qual, p.first, p.second, long_read_correct, partitions, hap_id, hap_reads, max_km_cov);
+
+                    //const auto end = std::chrono::high_resolution_clock::now();
+
+                    //cout << std::chrono::duration_cast<std::chrono::milliseconds>(middle - start).count() << " " << std::chrono::duration_cast<std::chrono::milliseconds>(end - middle).count()
+                    //<< " " << (static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(end - middle).count()) / static_cast<double>(in_read.length())) << endl;
 
                     in_read = move(correction.first);
                     in_qual = move(correction.second);
@@ -670,15 +690,17 @@ void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const b
 
                                         const pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> p = getSeeds(opt, dbg, v_in_read[i], v_in_qual[i], long_read_correct, hap_id, m_km_um, false);
 
-                                        pair<string, string> correction = correctSequence(dbg, opt, v_in_read[i], v_in_qual[i], p.first, p.second, long_read_correct, partitions, hap_id, hap_reads);
+                                        pair<string, string> correction = correctSequence(dbg, opt, v_in_read[i], v_in_qual[i], p.first, p.second, long_read_correct, partitions, hap_id, hap_reads, max_km_cov);
 
                                         v_in_read[i] = move(correction.first);
                                         v_in_qual[i] = move(correction.second);
+
+                                        //v_in_read[i] = phasing(dbg, opt, v_in_read[i], p.first);
                                     }
                                     else {
 
                                         const double step_min_score = 1.00 / static_cast<double>(opt.nb_correction_rounds);
-                                        const double step_weak_region_len_factor = (opt.nb_correction_rounds == 1) ? 0.0 : ((opt.weak_region_len_factor - 1.10) / static_cast<double>(opt.nb_correction_rounds - 1));
+                                        const double step_weak_region_len_factor = (opt.nb_correction_rounds == 1) ? 0.0 : ((opt.weak_region_len_factor - 0.10) / static_cast<double>(opt.nb_correction_rounds - 1));
                                         const size_t step_max_len_weak_region1 = opt.max_len_weak_region1 / opt.nb_correction_rounds;
 
                                         for (size_t j = 0; j < opt.nb_correction_rounds; ++j) {
@@ -691,7 +713,7 @@ void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const b
 
                                             const pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> p = getSeeds(l_opt, dbg, v_in_read[i], v_in_qual[i], long_read_correct, hap_id, m_km_um, (j+1) != opt.nb_correction_rounds);
 
-                                            pair<string, string> correction = correctSequence(dbg, l_opt, v_in_read[i], v_in_qual[i], p.first, p.second, long_read_correct, partitions, hap_id, hap_reads);
+                                            pair<string, string> correction = correctSequence(dbg, l_opt, v_in_read[i], v_in_qual[i], p.first, p.second, long_read_correct, partitions, hap_id, hap_reads, max_km_cov);
 
                                             v_in_read[i] = move(correction.first);
                                             v_in_qual[i] = move(correction.second);
@@ -727,6 +749,8 @@ void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const b
 }
 
 int main(int argc, char *argv[]) {
+
+    srand(time(NULL));
 
     Correct_Opt opt;
 
@@ -846,6 +870,8 @@ int main(int argc, char *argv[]) {
 
                         detectSNPs(dbg, opt_pass1);
 
+                        if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Adding micro/mini-satellites motif candidates to graph (1/2)." << endl;
+
                         detectShortCycles(dbg, opt_pass1);
                     }
 
@@ -939,6 +965,10 @@ int main(int argc, char *argv[]) {
                             if (opt_pass2.verbose) cout << "Ratatosk::Ratatosk(): Adding SNPs candidates to graph (2/2)." << endl;
 
                             detectSNPs(dbg, opt_pass2);
+
+                            if (opt_pass2.verbose) cout << "Ratatosk::Ratatosk(): Adding micro/mini-satellites motif candidates to graph (2/2)." << endl;
+
+                            detectShortCycles(dbg, opt_pass2);
                         }
 
                         if (opt.index) {

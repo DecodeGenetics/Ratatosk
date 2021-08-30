@@ -85,56 +85,62 @@ pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, cons
     }
     else {
 
-    	v_um = dbg.searchSequence(s, true, true, true, true, true);
+    	//v_um = dbg.searchSequence(s, true, !long_read_correct, !long_read_correct, !long_read_correct, !long_read_correct);
+
+    	if (long_read_correct) v_um = dbg.searchSequence(s, true, false, false, false, false);
+    	else {
+
+    		v_um = dbg.searchSequence(s, true, false, false, false, false);
+
+       		string l_s = std::string(s.length(), 'N');
+
+       		sort(v_um.begin(), v_um.end(), comp_pair);
+
+       		for (size_t i = 1; i < v_um.size(); ++i) {
+
+       			if (v_um[i].first != (v_um[i-1].first + 1)) {
+
+       				const size_t diff = v_um[i].first - v_um[i-1].first;
+
+       				if (diff >= opt.insert_sz) l_s.replace(v_um[i-1].first + 1, diff + opt.k - 2, s, v_um[i-1].first + 1, diff + opt.k - 2);
+       			}
+       		}
+
+       		if (!v_um.empty()) {
+
+	       		if (v_um.front().first >= (opt.insert_sz/2)) l_s.replace(0, v_um.front().first + opt.k - 1, s, 0, v_um.front().first + opt.k - 1);
+	       		if (s.length() - v_um.back().first >= (opt.insert_sz/2)) l_s.replace(v_um.back().first + 1, s.length() - v_um.back().first - 1, s, v_um.back().first + 1, s.length() - v_um.back().first - 1);
+       		}
+
+       		vector<pair<size_t, const_UnitigMap<UnitigData>>> v_um_inexact = dbg.searchSequence(l_s, false, true, true, true, true);
+
+       		v_um.insert(v_um.end(), v_um_inexact.begin(), v_um_inexact.end());
+    	}
 
     	if (fill_map) fillMap(v_um); 
     }
 
     sort(v_um.begin(), v_um.end(), comp_pair); // Sort k-mer hits by query position and mapped k-mer similarity
 
-    // The next piece of code separate query hits into 2 vectors:
-    // - v_um_solid: contains solid and semi-solid k-mers. Solid k-mer is an exact match with the graph.
-    //   Semi-solid k-mer is a non-solid k-mer with one inexact match in the graph (maximum one indel or substitution).
-    // - v_um_weak: contains semi-weak k-mers. Semi-weak k-mer is a non-solid k-mer with more than one inexact match
-    //   in the graph (maximum one indel or substitution).
+    // Divide k-mer matches into solid and non-solid k-mers
+	{
+		const size_t v_um_sz = v_um.size();
 
-    // Pull out solid matches
-    {
-    	const size_t v_um_sz = v_um.size();
+		const char* s_str = s.c_str();
 
-	    int64_t exact_match = -1;
+		for (size_t i = 0; i < v_um_sz; ++i) {
 
-	    size_t i = 0;
-    	size_t prev_idx = 0xffffffffffffffffULL;
+			if ((i == 0) || (v_um[i] != v_um[i-1])){
 
-	    while (i < v_um_sz){ // For every exact or inexact k-mer hit between the query and the graph
+				if (cstrMatch(v_um[i].second.mappedSequenceToString().c_str(), s_str + v_um[i].first) == opt.k) v_um_solid.push_back(v_um[i]);
+				else v_um_weak.push_back(v_um[i]);
+			}
+		}
 
-	        const size_t idx = v_um[i].first;
-	        const string km_ref = s.substr(idx, opt.k);
-	        const string km_mapped = v_um[i].second.mappedSequenceToString();
-
-	        if (idx != prev_idx){ // New k-mer on the query
-
-	            // For previous query k-mer, there was no exact match but exactly one inexact match,
-	            // use that match as a seed;
-	            if (exact_match != -1) v_um_solid.push_back(v_um[exact_match]);
-
-	            prev_idx = idx;
-	            exact_match = -1;
-	        }
-
-	        if ((km_ref == km_mapped) && (exact_match == -1)) exact_match = i;
-
-	        ++i;
-
-	        while ((i < v_um_sz) && (v_um[i].first == idx) && (v_um[i].second.mappedSequenceToString() == km_mapped)) ++i;
-	    }
-
-	    if (exact_match != -1) v_um_solid.push_back(v_um[exact_match]);
+		v_um.clear();
 	}
 
-	// Make sure solid matches overlap by k-1
-	if (v_um_solid.size() >= 2) {
+	if (v_um_solid.size() >= 2) { // Make sure solid k-mers overlap by k-1
 
     	for (size_t i = 1; i < v_um_solid.size(); ++i){
 
@@ -154,52 +160,92 @@ pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, cons
     	removeEmptyUnitigMap(v_um_solid);
 	}
 
-    // Build the list of semi-weak k-mers
-    {
-	    size_t i = 0, j = 0;
+	if (!v_um_weak.empty()) v_um_weak = keep_non_overlap(opt, s.c_str(), v_um_weak);
 
-    	const size_t v_um_sz = v_um.size();
-	    const size_t v_um_solid_sz = v_um_solid.size();
+	// TEST
+	/*if (long_read_correct) {
 
-	    while ((i != v_um_sz) && (j != v_um_solid_sz)) {
+		struct CustomHashPair {
 
-	     	if (v_um[i].first < v_um_solid[j].first){
+		    size_t operator()(const pair<size_t, size_t>& p) const {
 
-	     		if (v_um_weak.empty() || (v_um[i] != v_um_weak.back())) v_um_weak.push_back(v_um[i]);
-		     	
-		     	++i;
-	     	}
-	     	else if (v_um[i].first > v_um_solid[j].first) ++j;
-	     	else ++i;
-	    }
+		        return XXH64(&p, sizeof(pair<size_t, size_t>), 0);
+		    }
+		};
 
-	    if (j == v_um_solid.size()){
+	    auto comp_pair = [](const pair<pair<size_t, size_t>, size_t>& p1, const pair<pair<size_t, size_t>, size_t>& p2) {
 
-	    	while (i != v_um_sz){
+	        return (p1.second < p2.second);
+	    };
 
-	     		v_um_weak.push_back(v_um[i]);
-	     		++i;
-	    	}
-	    }
-	}
+		unordered_map<size_t, vector<size_t>> m_pids;
+		unordered_map<pair<size_t, size_t>, size_t, CustomHashPair> m_tup;
 
-	//Remove duplicated weak matches
-	if (!v_um_weak.empty()){
+		vector<pair<pair<size_t, size_t>, size_t>> v_tup;
+		vector<size_t> v_all_pids;
 
-		vector<pair<size_t, const_UnitigMap<UnitigData>>> v_um_weak_tmp(1, v_um_weak[0]);
+		for (size_t i = 0; i < v_um_solid.size(); ++i) {
 
-		const size_t v_um_weak_sz = v_um_weak.size();
+			const const_UnitigMap<UnitigData>& um = v_um_solid[i].second;
 
-		for (size_t i = 1; i < v_um_weak_sz; ++i){
+			if (((i==0) || !um.isSameReferenceUnitig(v_um_solid[i-1].second)) && um.getData()->has_ambiguity_char()) {
 
-			if ((v_um_weak[i].first != v_um_weak[i-1].first) || (v_um_weak[i].second.mappedSequenceToString() != v_um_weak[i-1].second.mappedSequenceToString())) v_um_weak_tmp.push_back(v_um_weak[i]);
+				const SharedPairID& spid = um.getData()->getPairID().toPairID();
+
+				for (const auto id : spid) m_pids.insert(pair<size_t, vector<size_t>>(id, vector<size_t>())).first->second.push_back(i);
+
+				v_all_pids.push_back(i);
+			}
 		}
 
-		v_um_weak = move(v_um_weak_tmp);
-	}
+		if (v_all_pids.size() >= 2) {
 
-	// Runs of solid anchors must be consistent:
-	// - Anchor i+1 must be on same unitig as anchor i or on a successor unitig
+			for (const auto& pid_occ : m_pids) {
+
+				for (size_t i = 0; i < pid_occ.second.size() - 1; ++i) {
+
+					const pair<size_t, size_t> p = {pid_occ.second[i], pid_occ.second[i+1]};
+
+					m_tup.insert(pair<pair<size_t, size_t>, size_t>(p, 0)).first->second += 1;
+				}
+			}
+
+			for (size_t i = 0; i < v_all_pids.size() - 1; ++i) {
+
+				const unordered_map<pair<size_t, size_t>, size_t, CustomHashPair>::const_iterator it = m_tup.find({v_all_pids[i], v_all_pids[i+1]});
+
+				if (it != m_tup.end()) v_tup.push_back(*it);
+			}
+
+			sort(v_tup.begin(), v_tup.end(), comp_pair);
+
+			for (size_t i = 0; i < 0.05 * v_tup.size(); ++i) {
+
+				const_UnitigMap<UnitigData>& um_a = v_um_solid[v_tup[i].first.first].second;
+				const_UnitigMap<UnitigData>& um_b = v_um_solid[v_tup[i].first.second].second;
+
+				for (size_t j = v_tup[i].first.first + 1; j < v_um_solid.size(); ++j) {
+
+					if (v_um_solid[j].second.isSameReferenceUnitig(um_a)) v_um_solid[j].second.isEmpty = true;
+					else break;
+				}
+
+				for (size_t j = v_tup[i].first.second + 1; j < v_um_solid.size(); ++j) {
+
+					if (v_um_solid[j].second.isSameReferenceUnitig(um_b)) v_um_solid[j].second.isEmpty = true;
+					else break;
+				}
+
+				um_a.isEmpty = true;
+				um_b.isEmpty = true;
+			}
+		}
+
+		removeEmptyUnitigMap(v_um_solid);
+	}*/
+
+	// Runs of solid k-mers must be consistent:
+	// - Kmer i+1 must be on same unitig as k-mer i or on a successor unitig
 	// - In the latter case, both unitigs must share a minimum number of colors
 	{
     	for (size_t i = 1; i < v_um_solid.size(); ++i){ // Make sure solid regions are color-consistent
@@ -247,57 +293,110 @@ pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, cons
     	removeEmptyUnitigMap(v_um_solid);
     }
 
-    {
-    	for (size_t i = 1; i < v_um_solid.size(); ++i){ // Make sure solid regions are color-consistent
+    // Make sure solid regions are color-consistent
+    /*{
+    	for (size_t i = 1; i < v_um_solid.size(); ++i){
 
     		const size_t diff_pos = v_um_solid[i].first - v_um_solid[i-1].first;
 
     		if ((diff_pos > 1) && (diff_pos < (opt.insert_sz/2))) {
 
-    			size_t i_l = i-1;
-    			size_t i_r = i+1;
+    			bool shareGlobalPairID = false;
 
-    			SharedPairID pid_left = v_um_solid[i-1].second.getData()->getPairID();
-    			SharedPairID pid_right = v_um_solid[i].second.getData()->getPairID();
+    			// Check first for intersection of shared PairIDs
+    			{
+	    			unordered_set<const PairID*> us_gpid;
 
-    			const_UnitigMap<UnitigData> prev_um_left = v_um_solid[i-1].second;
-    			const_UnitigMap<UnitigData> prev_um_right = v_um_solid[i].second;
+	    			const const_UnitigMap<UnitigData>* prev_um_left = &(v_um_solid[i-1].second);
+	    			const const_UnitigMap<UnitigData>* prev_um_right = &(v_um_solid[i].second);
 
-    			i_l -= (i_l != 0);
+	    			const PairID* g_pids_l = prev_um_left->getData()->getPairID().getPairIDs().first;
+	    			const PairID* g_pids_r = prev_um_right->getData()->getPairID().getPairIDs().first;
 
-    			while ((i_l > 0) && (v_um_solid[i_l].first == (v_um_solid[i_l+1].first - 1))){
+	    			size_t i_l = i-1;
+	    			size_t i_r = i+1;
 
-    				if (!v_um_solid[i_l].second.isSameReferenceUnitig(prev_um_left)) {
+	    			i_l -= (i_l != 0);
 
-	    				pid_left |= v_um_solid[i_l].second.getData()->getPairID();
-	    				prev_um_left = v_um_solid[i_l].second;
-    				}
+	    			if (g_pids_l != nullptr) us_gpid.insert(g_pids_l);
 
-    				--i_l;
-    			}
+	    			while ((i_l > 0) && (v_um_solid[i_l].first == (v_um_solid[i_l+1].first - 1))){
 
-    			while ((i_r < v_um_solid.size()) && (v_um_solid[i_r].first == (v_um_solid[i_r-1].first + 1))){
+	    				if (!v_um_solid[i_l].second.isSameReferenceUnitig(*prev_um_left)) {
 
-    				if (!v_um_solid[i_r].second.isSameReferenceUnitig(prev_um_right)) {
+	    					const PairID* g_pids = v_um_solid[i_l].second.getData()->getPairID().getPairIDs().first;
 
-	    				pid_right |= v_um_solid[i_r].second.getData()->getPairID();
-	    				prev_um_right = v_um_solid[i_r].second;
-    				}
+	    					if (g_pids != nullptr) us_gpid.insert(g_pids);
 
-    				++i_r;
-    			}
+		    				prev_um_left = &(v_um_solid[i_l].second);
+	    				}
 
-    			if (getNumberSharedPairID(pid_left, pid_right, opt.min_cov_vertices) < opt.min_cov_vertices){
+	    				--i_l;
+	    			}
 
-    				for (++i_l; i_l < i_r; ++i_l) v_um_solid[i_l].second.isEmpty = true;
+	    			shareGlobalPairID = ((g_pids_r != nullptr) && (us_gpid.find(g_pids_r) != us_gpid.end()) && (g_pids_r->cardinality() >= opt.min_cov_vertices));
 
-    				i = i_r;
-    			}
+	    			while ((i_r < v_um_solid.size()) && (v_um_solid[i_r].first == (v_um_solid[i_r-1].first + 1)) && !shareGlobalPairID){
+
+	    				if (!v_um_solid[i_r].second.isSameReferenceUnitig(*prev_um_right)) {
+
+		    				const PairID* g_pids = v_um_solid[i_r].second.getData()->getPairID().getPairIDs().first;
+
+		    				shareGlobalPairID = shareGlobalPairID || ((g_pids != nullptr) && (us_gpid.find(g_pids) != us_gpid.end()) && (g_pids->cardinality() >= opt.min_cov_vertices));
+		    				prev_um_right = &(v_um_solid[i_r].second);
+	    				}
+
+	    				++i_r;
+	    			}
+	    		}
+
+	    		if (!shareGlobalPairID) { // No intersection of shared PairIDs
+
+	    			const const_UnitigMap<UnitigData>* prev_um_left = &(v_um_solid[i-1].second);
+	    			const const_UnitigMap<UnitigData>* prev_um_right = &(v_um_solid[i].second);
+
+	    			SharedPairID pid_left = v_um_solid[i-1].second.getData()->getPairID();
+	    			SharedPairID pid_right = v_um_solid[i].second.getData()->getPairID();
+
+	    			size_t i_l = i-1;
+	    			size_t i_r = i+1;
+
+	    			i_l -= (i_l != 0);
+
+	    			while ((i_l > 0) && (v_um_solid[i_l].first == (v_um_solid[i_l+1].first - 1))){
+
+	    				if (!v_um_solid[i_l].second.isSameReferenceUnitig(*prev_um_left)) {
+
+		    				pid_left |= v_um_solid[i_l].second.getData()->getPairID();
+		    				prev_um_left = &(v_um_solid[i_l].second);
+	    				}
+
+	    				--i_l;
+	    			}
+
+	    			while ((i_r < v_um_solid.size()) && (v_um_solid[i_r].first == (v_um_solid[i_r-1].first + 1))){
+
+	    				if (!v_um_solid[i_r].second.isSameReferenceUnitig(*prev_um_right)) {
+
+		    				pid_right |= v_um_solid[i_r].second.getData()->getPairID();
+		    				prev_um_right = &(v_um_solid[i_r].second);
+	    				}
+
+	    				++i_r;
+	    			}
+
+	    			if (getNumberSharedPairID(pid_left, pid_right, opt.min_cov_vertices) < opt.min_cov_vertices){
+
+	    				for (++i_l; i_l < i_r; ++i_l) v_um_solid[i_l].second.isEmpty = true;
+
+	    				i = i_r;
+	    			}
+	    		}
     		}
     	}
 
     	removeEmptyUnitigMap(v_um_solid);
-    }
+    }*/
 
     pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> p = {move(v_um_solid), move(v_um_weak)};
 
@@ -342,39 +441,42 @@ void detectSNPs(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt){
 
 		    		const pair<size_t, UnitigMap<UnitigData>>& p = v_um[i];
 
-	    			const Kmer head = p.second.getUnitigHead();
-		    		const string km_snp = p.second.mappedSequenceToString();
-		    		const size_t pos_snp_km = cstrMatch(km_snp.c_str(), seq_ref.c_str() + p.first);
+		    		if (!p.second.isSameReferenceUnitig(um)) { // SNP candidate cannot be on the same unitig
 
-		    		if (pos_snp_km < k){
+		    			const Kmer head = p.second.getUnitigHead();
+			    		const string km_snp = p.second.mappedSequenceToString();
+			    		const size_t pos_snp_km = cstrMatch(km_snp.c_str(), seq_ref.c_str() + p.first);
 
-		    			bool nuc_a_f = false, nuc_c_f = false, nuc_g_f = false, nuc_t_f = false;
-			    		bool nuc_a_t = false, nuc_c_t = false, nuc_g_t = false, nuc_t_t = false;
-			    		bool nuc_a_k = false, nuc_c_k = false, nuc_g_k = false, nuc_t_k = false;
+			    		if (pos_snp_km < k){
 
-			    		getAmbiguityRev(seq_final[p.first + pos_snp_km], nuc_a_f, nuc_c_f, nuc_g_f, nuc_t_f);
-			    		getAmbiguityRev(seq_tried[p.first + pos_snp_km], nuc_a_t, nuc_c_t, nuc_g_t, nuc_t_t);
-			    		getAmbiguityRev(km_snp[pos_snp_km], nuc_a_k, nuc_c_k, nuc_g_k, nuc_t_k);
+			    			bool nuc_a_f = false, nuc_c_f = false, nuc_g_f = false, nuc_t_f = false;
+				    		bool nuc_a_t = false, nuc_c_t = false, nuc_g_t = false, nuc_t_t = false;
+				    		bool nuc_a_k = false, nuc_c_k = false, nuc_g_k = false, nuc_t_k = false;
 
-			    		const char cf = getAmbiguity(nuc_a_f || nuc_a_k, nuc_c_f || nuc_c_k, nuc_g_f || nuc_g_k, nuc_t_f || nuc_t_k);
-			    		const char ct = getAmbiguity(nuc_a_t || nuc_a_k, nuc_c_t || nuc_c_k, nuc_g_t || nuc_g_k, nuc_t_t || nuc_t_k);
+				    		getAmbiguityRev(seq_final[p.first + pos_snp_km], nuc_a_f, nuc_c_f, nuc_g_f, nuc_t_f);
+				    		getAmbiguityRev(seq_tried[p.first + pos_snp_km], nuc_a_t, nuc_c_t, nuc_g_t, nuc_t_t);
+				    		getAmbiguityRev(km_snp[pos_snp_km], nuc_a_k, nuc_c_k, nuc_g_k, nuc_t_k);
 
-			    		if (seq_tried[p.first + pos_snp_km] != ct) { // We didn't try that SNP candidate before
+				    		const char cf = getAmbiguity(nuc_a_f || nuc_a_k, nuc_c_f || nuc_c_k, nuc_g_f || nuc_g_k, nuc_t_f || nuc_t_k);
+				    		const char ct = getAmbiguity(nuc_a_t || nuc_a_k, nuc_c_t || nuc_c_k, nuc_g_t || nuc_g_k, nuc_t_t || nuc_t_k);
 
-			    			seq_tried[p.first + pos_snp_km] = ct;
+				    		if (seq_tried[p.first + pos_snp_km] != ct) { // We didn't try that SNP candidate before
 
-			    			if (s_valid_unitigs.find(head) != s_valid_unitigs.end()) seq_final[p.first + pos_snp_km] = cf; // Unitig was already analyzed before and was valid
-			    			else if (s_invalid_unitigs.find(head) == s_invalid_unitigs.end()) { // Unitig was not already analyzed before or it was invalid
+				    			seq_tried[p.first + pos_snp_km] = ct;
 
-			    				if (isValidSNPcandidate(lgt_fw, lgt_bw, um, p.second, opt.insert_sz, opt.min_cov_vertices)) {
+				    			if (s_valid_unitigs.find(head) != s_valid_unitigs.end()) seq_final[p.first + pos_snp_km] = cf; // Unitig was already analyzed before and was valid
+				    			else if (s_invalid_unitigs.find(head) == s_invalid_unitigs.end()) { // Unitig was not already analyzed before or it was invalid
 
-			    					seq_final[p.first + pos_snp_km] = cf;
+				    				if (isValidSNPcandidate(lgt_fw, lgt_bw, um, p.second, opt.insert_sz, opt.min_cov_vertices)) {
 
-			    					s_valid_unitigs.insert(head);
-			    				}
-			    				else s_invalid_unitigs.insert(head);
-			    			}
-			    		}
+				    					seq_final[p.first + pos_snp_km] = cf;
+
+				    					s_valid_unitigs.insert(head);
+				    				}
+				    				else s_invalid_unitigs.insert(head);
+				    			}
+				    		}
+				    	}
 			    	}
 			    }
 
@@ -421,39 +523,42 @@ void detectSNPs(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt){
 
 			    		const pair<size_t, UnitigMap<UnitigData>>& p = v_um[i];
 
-		    			const Kmer head = p.second.getUnitigHead();
-			    		const string km_snp = p.second.mappedSequenceToString();
-			    		const size_t pos_snp_km = cstrMatch(km_snp.c_str(), seq_ref.c_str() + p.first);
+			    		if (!p.second.isSameReferenceUnitig(um)) { // SNP candidate cannot be on the same unitig
 
-			    		if (pos_snp_km < k){
+			    			const Kmer head = p.second.getUnitigHead();
+				    		const string km_snp = p.second.mappedSequenceToString();
+				    		const size_t pos_snp_km = cstrMatch(km_snp.c_str(), seq_ref.c_str() + p.first);
 
-			    			bool nuc_a_f = false, nuc_c_f = false, nuc_g_f = false, nuc_t_f = false;
-				    		bool nuc_a_t = false, nuc_c_t = false, nuc_g_t = false, nuc_t_t = false;
-				    		bool nuc_a_k = false, nuc_c_k = false, nuc_g_k = false, nuc_t_k = false;
+				    		if (pos_snp_km < k){
 
-				    		getAmbiguityRev(seq_final[p.first + pos_snp_km], nuc_a_f, nuc_c_f, nuc_g_f, nuc_t_f);
-				    		getAmbiguityRev(seq_tried[p.first + pos_snp_km], nuc_a_t, nuc_c_t, nuc_g_t, nuc_t_t);
-				    		getAmbiguityRev(km_snp[pos_snp_km], nuc_a_k, nuc_c_k, nuc_g_k, nuc_t_k);
+				    			bool nuc_a_f = false, nuc_c_f = false, nuc_g_f = false, nuc_t_f = false;
+					    		bool nuc_a_t = false, nuc_c_t = false, nuc_g_t = false, nuc_t_t = false;
+					    		bool nuc_a_k = false, nuc_c_k = false, nuc_g_k = false, nuc_t_k = false;
 
-				    		const char cf = getAmbiguity(nuc_a_f || nuc_a_k, nuc_c_f || nuc_c_k, nuc_g_f || nuc_g_k, nuc_t_f || nuc_t_k);
-				    		const char ct = getAmbiguity(nuc_a_t || nuc_a_k, nuc_c_t || nuc_c_k, nuc_g_t || nuc_g_k, nuc_t_t || nuc_t_k);
+					    		getAmbiguityRev(seq_final[p.first + pos_snp_km], nuc_a_f, nuc_c_f, nuc_g_f, nuc_t_f);
+					    		getAmbiguityRev(seq_tried[p.first + pos_snp_km], nuc_a_t, nuc_c_t, nuc_g_t, nuc_t_t);
+					    		getAmbiguityRev(km_snp[pos_snp_km], nuc_a_k, nuc_c_k, nuc_g_k, nuc_t_k);
 
-				    		if (seq_tried[p.first + pos_snp_km] != ct) { // We didn't try that SNP candidate before
+					    		const char cf = getAmbiguity(nuc_a_f || nuc_a_k, nuc_c_f || nuc_c_k, nuc_g_f || nuc_g_k, nuc_t_f || nuc_t_k);
+					    		const char ct = getAmbiguity(nuc_a_t || nuc_a_k, nuc_c_t || nuc_c_k, nuc_g_t || nuc_g_k, nuc_t_t || nuc_t_k);
 
-				    			seq_tried[p.first + pos_snp_km] = ct;
+					    		if (seq_tried[p.first + pos_snp_km] != ct) { // We didn't try that SNP candidate before
 
-				    			if (s_valid_unitigs.find(head) != s_valid_unitigs.end()) seq_final[p.first + pos_snp_km] = cf; // Unitig was already analyzed before and was valid
-				    			else if (s_invalid_unitigs.find(head) == s_invalid_unitigs.end()) { // Unitig was not already analyzed before or it was invalid
+					    			seq_tried[p.first + pos_snp_km] = ct;
 
-				    				if (isValidSNPcandidate(lgt_fw, lgt_bw, um, p.second, opt.insert_sz, opt.min_cov_vertices)) {
+					    			if (s_valid_unitigs.find(head) != s_valid_unitigs.end()) seq_final[p.first + pos_snp_km] = cf; // Unitig was already analyzed before and was valid
+					    			else if (s_invalid_unitigs.find(head) == s_invalid_unitigs.end()) { // Unitig was not already analyzed before or it was invalid
 
-				    					seq_final[p.first + pos_snp_km] = cf;
+					    				if (isValidSNPcandidate(lgt_fw, lgt_bw, um, p.second, opt.insert_sz, opt.min_cov_vertices)) {
 
-				    					s_valid_unitigs.insert(head);
-				    				}
-				    				else s_invalid_unitigs.insert(head);
-				    			}
-				    		}
+					    					seq_final[p.first + pos_snp_km] = cf;
+
+					    					s_valid_unitigs.insert(head);
+					    				}
+					    				else s_invalid_unitigs.insert(head);
+					    			}
+					    		}
+					    	}
 				    	}
 				    }
 
@@ -529,136 +634,6 @@ void detectSNPs(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt){
 	}
 }
 
-/*unordered_set<uint64_t> preprocessGraphQueries(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt) {
-
-	const size_t k = dbg.getK();
-
-	unordered_set<uint64_t> us_mini_mini;
-
-    auto comp_pair = [](const pair<size_t, const_UnitigMap<UnitigData>>& p1, const pair<size_t, const_UnitigMap<UnitigData>>& p2) {
-
-        return (p1.first < p2.first);
-    };
-
-	auto worker_function = [&](CompactedDBG<UnitigData>::const_iterator it_c, CompactedDBG<UnitigData>::const_iterator it_e) {
-
-		unordered_set<uint64_t> us_mini_mini;
-
-		while (it_c != it_e){
-
-			const string unitig = it_c->referenceUnitigToString();
-
-			vector<pair<size_t, const_UnitigMap<UnitigData>>> v_um = dbg.searchSequence(unitig, false, false, false, true, false);
-
-			if (!v_um.empty()){
-
-				size_t pos_v_um = 0;
-
-				minHashIterator<RepHash> it_min_s(unitig.c_str(), unitig.length(), dbg.getK(), dbg.getG(), RepHash(), true), it_min_e;
-
-				sort(v_um.begin(), v_um.end(), comp_pair);
-
-				while (it_min_s != it_min_e) {
-
-					const size_t unitig_pos = it_min_s.getKmerPosition();
-
-					uint64_t min_h_min = it_min_s.getHash();
-
-					while ((pos_v_um < v_um.size()) && (v_um[pos_v_um].first < unitig_pos)) ++pos_v_um;
-
-					while ((pos_v_um < v_um.size()) && (v_um[pos_v_um].first == unitig_pos)) {
-
-						const string kmer = v_um[pos_v_um].second.mappedSequenceToString();
-
-						if (cstrMatch(kmer.c_str(), unitig.c_str() + unitig_pos) != k) {
-
-							const minHashIterator<RepHash> l_it_min_s(kmer.c_str(), kmer.length(), dbg.getK(), dbg.getG(), RepHash(), true);
-
-							min_h_min = min(min_h_min, l_it_min_s.getHash());
-						}
-
-						++pos_v_um;
-					}
-
-					us_mini_mini.insert(min_h_min);
-
-					++it_min_s; // Increment k-mer position, does not jump to next minimizer in sequence
-				}
-			}
-
-			++it_c;
-		}
-
-		return us_mini_mini;
-	};
-
-	{
-		const size_t slice = 1024;
-
-        bool stop = false;
-
-        size_t count_before = 0, count_after = 0;
-
-        vector<thread> workers; // need to keep track of threads so we can join them
-
-        mutex mutex_graph, mutex_mini;
-
-        CompactedDBG<UnitigData>::const_iterator it_c = dbg.begin();
-        CompactedDBG<UnitigData>::const_iterator it_e = dbg.end();
-
-        for (size_t t = 0; t < opt.nb_threads; ++t){
-
-            workers.emplace_back(
-
-                [&, t]{
-
-					CompactedDBG<UnitigData>::const_iterator l_it_c, l_it_e;
-
-                    while (true) {
-
-                        {
-                            unique_lock<mutex> lock(mutex_graph);
-
-                            if (stop) return;
-
-                            l_it_c = it_c;
-
-					        size_t i = 0;
-
-					        count_before = count_after;
-
-					        while ((i < slice) && (it_c != it_e)){
-
-					        	++i;
-					        	++it_c;
-					        }
-
-                            if (it_c == it_e) stop = true;
-
-                            count_after += i;
-							l_it_e = it_c;
-
-							if (opt.verbose && ((count_before/1000000) != (count_after/1000000))) cout << "Processed " << count_after << " vertices." << endl;
-                        }
-
-                        const unordered_set<uint64_t> l_us_mini_mini = worker_function(l_it_c, l_it_e);
-
-                        {
-                            unique_lock<mutex> lock(mutex_mini);
-
-                            for (const uint64_t h : l_us_mini_mini) us_mini_mini.insert(h);
-                        }
-                    }
-                }
-            );
-        }
-
-        for (auto& t : workers) t.join();
-    }
-
-	return us_mini_mini;
-}*/
-
 bool readGraphData(const string& input_filename, CompactedDBG<UnitigData>& dbg, const bool pid_only, const bool verbose){
 
     ifstream infile;
@@ -677,7 +652,7 @@ bool readGraphData(const string& input_filename, CompactedDBG<UnitigData>& dbg, 
 
     while (in.good()){
 
-    	head.read(in);
+    	if (!head.read(in)) break;
 
     	const UnitigMap<UnitigData> um = dbg.find(head, true);
 
@@ -688,6 +663,8 @@ bool readGraphData(const string& input_filename, CompactedDBG<UnitigData>& dbg, 
     		// See if we can switched our global owned PairID to a global shared PairID 
     		{
 	    		SharedPairID& spid = um.getData()->getPairID();
+
+	    		//spid.forceRoaringInternal();
 
 	    		const pair<const PairID*, const PairID*> pids = spid.getPairIDs(); // Get pointers to <global, local> PairIDs
 
@@ -754,10 +731,28 @@ void writeGraphPairID(CompactedDBG<UnitigData>& dbg, const string& out_fn, const
 
 			um.getUnitigHead().write(out);
 
-	    	ud->write(out, true);
-	    	ud->clear(false, false, false, false, true, false, false);
+			ud->write(out, true);
+	    	ud->clear(false, false, false, false, false, true, false, false);
     	}
     }
+}
+
+size_t getMaxKmerCoverage(const CompactedDBG<UnitigData>& dbg, const double top_ratio) {
+
+    auto cmpKmerCovReversed = [](const double a, const double b) {
+
+    	return (a > b);
+    };
+
+	vector<double> v_km;
+
+	v_km.reserve(dbg.size());
+
+	for (const auto& um : dbg) v_km.push_back(um.getData()->getKmerCoverage(um));
+
+	sort(v_km.begin(), v_km.end(), cmpKmerCovReversed); // Sort unitigs by coverage
+
+	return v_km[(v_km.size() * top_ratio)];
 }
 
 unordered_map<Kmer, vector<streampos>, KmerHash> mergeDiskPairIDs(const string& fn) {
@@ -769,21 +764,18 @@ unordered_map<Kmer, vector<streampos>, KmerHash> mergeDiskPairIDs(const string& 
     ifstream infile;
     istream in(0);
 
-    infile.open(fn.c_str(), std::ofstream::in | std::ofstream::binary);
+    infile.open(fn.c_str(), std::ifstream::in | std::ifstream::binary);
     in.rdbuf(infile.rdbuf());
 
     while (in.good()){
 
   		SharedPairID l_spid;
 
-   		if (in.good()) {
+		if (!head.read(in)) break;
 
-   			head.read(in);
+		umap_pos.insert({head, vector<streampos>()}).first->second.push_back(in.tellg());
 
-   			umap_pos.insert({head, vector<streampos>()}).first->second.push_back(in.tellg());
-
-    		if (in.good()) l_spid.read(in);
-    	}
+		if (in.good()) l_spid.read(in);
 	}
 
     return umap_pos;	
@@ -794,8 +786,6 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
 	if (dbg.isInvalid() || (dbg.length() == 0)) vector<Kmer>();
 
 	vector<string> v_seq_in(opt.filename_seq_in);
-
-	const string fn_tmp = opt.filename_long_out + ".tmp";
 
 	const size_t k = dbg.getK();
 	const size_t nb_pairs = countRecords(v_seq_in, !long_read_correct, opt.h_seed) + 1;
@@ -832,9 +822,13 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
 	LockGraph lck_g(opt.nb_threads * 1024);
 	LockGraph lck_h(opt.nb_threads * 1024);
 
-	name_hmap.reserve(nb_pairs);
+	string fn_pids_1 = opt.filename_long_out + ".pids.1";
+	string fn_pids_2 = opt.filename_long_out + ".pids.2";
 
-	remove(fn_tmp.c_str());
+	remove(fn_pids_1.c_str());
+	remove(fn_pids_2.c_str());
+
+	name_hmap.reserve(nb_pairs);
 
     auto cmpPair = [](const pair<uint64_t, uint64_t>& a, const pair<uint64_t, uint64_t>& b) {
 
@@ -1150,6 +1144,7 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
 				SharedPairID spid_tmp;
 
 				in.seekg(fpos);
+
 				spid_tmp.read(in);
 
 				spid |= spid_tmp.toPairID();
@@ -1341,15 +1336,11 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
     {
     	if (opt.verbose) cout << "Ratatosk::addCoverage(): Coloring graph with reads." << endl;
 
-    	const size_t limit_sz_read = 0x00000000ffffffffULL;
-
         char** buffer_seq = new char*[opt.nb_threads];
         size_t* buffer_seq_sz = new size_t[opt.nb_threads];
         uint64_t** buffer_name = new uint64_t*[opt.nb_threads];
 
     	size_t curr_sz_read = 0;
-
-	    vector<string> v_fn_out_part; // vector of temporary file(name)s
 
 	    len_read = 0;
 	    pos_read = 0;
@@ -1367,9 +1358,9 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
 
             	curr_sz_read += buffer_seq_sz[0];
 
-            	if (curr_sz_read >= limit_sz_read) {
+            	if (curr_sz_read >= opt.buffer_sz_read2disk) {
 
-		        	writeGraphPairID(dbg, fn_tmp, opt);
+		        	writeGraphPairID(dbg, fn_pids_1, opt);
 
 		        	curr_sz_read = 0;
             	}
@@ -1402,7 +1393,7 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
 		                        {
 		                            unique_lock<mutex> lock(mutex_file);
 
-		                            if (eof_fastx || (curr_sz_read >= limit_sz_read)) return;
+		                            if (eof_fastx || (curr_sz_read >= opt.buffer_sz_read2disk)) return;
 
 		                            eof_fastx = reading_function2(buffer_seq[t], buffer_seq_sz[t], buffer_name[t]);
 					            	curr_sz_read += buffer_seq_sz[t];
@@ -1416,9 +1407,9 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
 
 		        for (auto& t : workers) t.join();
 
-		        if (curr_sz_read >= limit_sz_read) {
+		        if (curr_sz_read >= opt.buffer_sz_read2disk) {
 
-		        	writeGraphPairID(dbg, fn_tmp, opt);
+		        	writeGraphPairID(dbg, fn_pids_1, opt);
 
 		        	curr_sz_read = 0;
 
@@ -1440,7 +1431,7 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
         name_hmap.clear();
         fp.close();
 
-    	if (check_files(fn_tmp, false, false)) umap_pids = mergeDiskPairIDs(fn_tmp); // Reassemble data from disk
+    	if (check_files(fn_pids_1, false, false)) umap_pids = mergeDiskPairIDs(fn_pids_1); // Reassemble data from disk
 	}
 
 	{
@@ -1456,9 +1447,9 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
 	    	ifstream infile;
 	    	istream in(0);
 
-	    	if (check_files(fn_tmp, false, false)) {
+	    	if (check_files(fn_pids_1, false, false)) {
 
-		    	infile.open(fn_tmp.c_str(), std::ofstream::in | std::ofstream::binary);
+		    	infile.open(fn_pids_1.c_str(), std::ifstream::in | std::ifstream::binary);
 		    	in.rdbuf(infile.rdbuf());
 	    	}
 
@@ -1482,9 +1473,9 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
 				    	ifstream infile;
 				    	istream in(0);
 
-				    	if (check_files(fn_tmp, false, false)) {
+				    	if (check_files(fn_pids_1, false, false)) {
 
-					    	infile.open(fn_tmp.c_str(), std::ofstream::in | std::ofstream::binary);
+					    	infile.open(fn_pids_1.c_str(), std::ifstream::in | std::ifstream::binary);
 					    	in.rdbuf(infile.rdbuf());
 				    	}
 
@@ -1521,25 +1512,23 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
 
 		if (opt.verbose) cout << "Ratatosk::addCoverage(): Subsampling reads." << endl;
 
-		fstream in(0);
-
 		vector<pair<Kmer, size_t>> v_km;
 
 		const double step = 0.05;
 
 		const size_t sz_bitset = ((nextID + 63) / 64) + 1;
 
-		double sampling_rate = 5.0 / static_cast<double>(estimated_hap_cov);
+		const double sampling_rate = 5.0 / static_cast<double>(estimated_hap_cov);
+
+		unordered_map<size_t, size_t> m_id_compact;
 
 	    std::random_device rd; // Seed
 	    std::default_random_engine generator(rd()); // Random number generator
 	    std::uniform_real_distribution<> distribution(0.0, 1.0); // Distribution on which to apply the generator
 
 		uint64_t* all_ids = new uint64_t[sz_bitset]();
-		uint64_t* all_subsampled_ids = new uint64_t[sz_bitset]();
-		uint64_t* sampled_ids = new uint64_t[sz_bitset]();
-
-		if (check_files(fn_tmp, false, false)) in.open(fn_tmp.c_str(), ios::in | ios::out | ios::binary | ios::app);
+		uint64_t* all_subsampled_ids = new uint64_t[sz_bitset](); // Subsampled IDs
+		uint64_t* sampled_ids = new uint64_t[sz_bitset](); // Locally sampled IDs
 
 		v_km.reserve(dbg.size());
 
@@ -1550,16 +1539,28 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
 		size_t prev_max_km_cov = 0;
 		size_t prev_min_km_cov = 0;
 
-		for (const auto& um : dbg) {
+    	ifstream infile;
+    	istream in(0);
 
-			const UnitigData* ud = um.getData();
+    	if (check_files(fn_pids_1, false, false)) {
 
-			if (!ud->isBranching()) {
+	    	infile.open(fn_pids_1.c_str(), std::ifstream::in | std::ifstream::binary);
+	    	in.rdbuf(infile.rdbuf());
+    	}
 
-				const SharedPairID spid = getDiskPairID(in, um);
-				const PairID pid = subsample(spid, opt.min_cov_vertices);
+		// Make sure every unitig is covered by at least 2 reads
+		{
+			for (const auto& um : dbg) {
 
-				for (const uint32_t id : pid) all_subsampled_ids[id >> 6] |= (0x1ULL << (id & 0x3fULL));
+				const UnitigData* ud = um.getData();
+
+				if (!ud->isBranching()) {
+
+					const SharedPairID spid = getDiskPairID(in, um);
+					const PairID pid = subsample(spid, opt.min_cov_vertices);
+
+					for (const uint32_t id : pid) all_subsampled_ids[id >> 6] |= (0x1ULL << (id & 0x3fULL));
+				}
 			}
 		}
 
@@ -1571,97 +1572,170 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
 			const size_t min_km_cov = v_km[pos_min].second;
 			const size_t max_km_cov = v_km[pos_max].second;
 
+			const size_t slice = 1024;
+
+			in.seekg(0, ios::beg); // Put back cursor at the beginning of file
+
 			if ((max_km_cov != min_km_cov) && (max_km_cov != prev_max_km_cov)) {
 
 				memset(sampled_ids, 0, sz_bitset * sizeof(uint64_t));
 
 				if (opt.nb_threads == 1) {
 				
-					for (auto& um : dbg) {
+					for (const auto& um : dbg) {
 
 						const size_t um_km_cov = um.getData()->getKmerCoverage(um);
 
 						if ((um_km_cov >= min_km_cov) && (um_km_cov < max_km_cov)) {
 
-							const vector<SharedPairID> v_spids = getDiskPairIDs(in, um);
+							const SharedPairID& spid = um.getData()->getPairID();
 
-							for (const auto& spid : v_spids) {
+							for (const uint32_t id : spid) sampled_ids[id >> 6] |= (0x1ULL << (id & 0x3fULL));
+						}
+					}
+
+					while (in.good()) {
+
+            			Kmer km;
+            			SharedPairID spid;
+
+            			if (!km.read(in)) break;
+            			
+            			spid.read(in);
+
+        				const const_UnitigMap<UnitigData> um = dbg.find(km);
+
+        				if (!um.isEmpty) {
+
+							const size_t um_km_cov = um.getData()->getKmerCoverage(um);
+
+							if ((um_km_cov >= min_km_cov) && (um_km_cov < max_km_cov)) {
 
 								for (const uint32_t id : spid) sampled_ids[id >> 6] |= (0x1ULL << (id & 0x3fULL));
 							}
-						}
+        				}
 					}
 				}
 				else {
 
-					const size_t slice = 1024;
-
 			        vector<thread> workers;
 
-			        mutex mtx_g, mtx_f;
+			        mutex mtx_g;
 
 			        CompactedDBG<UnitigData>::iterator it_s = dbg.begin();
 			        CompactedDBG<UnitigData>::iterator it_e = dbg.end();
 
 			        uint64_t** l_sampled_ids = new uint64_t*[opt.nb_threads];
 
-			        for (size_t t = 0; t < opt.nb_threads; ++t){
+			        for (size_t t = 0; t < opt.nb_threads; ++t) l_sampled_ids[t] = new uint64_t[sz_bitset]();
 
-			        	l_sampled_ids[t] = new uint64_t[sz_bitset]();
+			        // Extract all read ids for unitigs with given range of coverage for read id stored on disk
+			        // It is more efficient to read ids from disk sequentially, then query for coverage afterwards
+			        {
+				        for (size_t t = 0; t < opt.nb_threads; ++t){
 
-			            workers.emplace_back(
+				            workers.emplace_back(
 
-			                [&, t]{
+				                [&, t]{
 
-			                	CompactedDBG<UnitigData>::iterator it_s_l;
-			                	CompactedDBG<UnitigData>::iterator it_e_l;
+			                		while (true) {
 
-			                	while (true){
+			                			vector<pair<Kmer, SharedPairID>> v_km_spid;
 
-			                		{
-			                			unique_lock<mutex> lock(mtx_g);
+			                			v_km_spid.reserve(slice);
 
-			                			if (it_s == it_e) return;
-			                			else {
+				                		{
+				                			Kmer km;
+				                			SharedPairID spid;
 
-			                				it_s_l = it_s;
-			                				it_e_l = it_s;
+				                			unique_lock<mutex> lock(mtx_g);
 
-			                				for (size_t j = 0; (j < slice) && (it_e_l != it_e); ++j) ++it_e_l;
+				                			if (!in.good()) return;
 
-			                				it_s = it_e_l;
+				                			for (size_t i = 0; in.good() && (i < slice); ++i){
+
+				                				if (!km.read(in)) break;
+
+				                				spid.read(in);
+
+				                				v_km_spid.push_back(pair<Kmer, SharedPairID>(move(km), move(spid)));
+				                			}
+				                		}
+
+			                			for (const auto& p_km_spid : v_km_spid) {
+
+			                				const const_UnitigMap<UnitigData> um = dbg.find(p_km_spid.first);
+
+			                				if (!um.isEmpty) {
+
+												const size_t um_km_cov = um.getData()->getKmerCoverage(um);
+
+												if ((um_km_cov >= min_km_cov) && (um_km_cov < max_km_cov)) {
+
+													for (const uint32_t id : p_km_spid.second) l_sampled_ids[t][id >> 6] |= (0x1ULL << (id & 0x3fULL));
+												}
+			                				}
 			                			}
-			                		}
+		                			}
+			                	}
+				            );
+				        }
 
-			                		while (it_s_l != it_e_l) {
+				        for (auto& t : workers) t.join();
+					}
 
-										const size_t um_km_cov = it_s_l->getData()->getKmerCoverage(*it_s_l);
+				    workers.clear();
 
-										if ((um_km_cov >= min_km_cov) && (um_km_cov < max_km_cov)) {
+					// Extract all read ids for unitigs with given range of coverage for read id stored in RAM
+					{
+				        for (size_t t = 0; t < opt.nb_threads; ++t){
 
-											vector<SharedPairID> v_spids;
+				            workers.emplace_back(
 
-					                		{
-					                			unique_lock<mutex> lock(mtx_f);
+				                [&, t]{
 
-												v_spids = getDiskPairIDs(in, *it_s_l);
-											}
+				                	CompactedDBG<UnitigData>::iterator it_s_l;
+				                	CompactedDBG<UnitigData>::iterator it_e_l;
 
-											for (const auto& spid : v_spids) {
+							    	while (true) {
+
+				                		{
+				                			unique_lock<mutex> lock(mtx_g);
+
+				                			if (it_s == it_e) return;
+				                			else {
+
+				                				it_s_l = it_s;
+				                				it_e_l = it_s;
+
+				                				for (size_t j = 0; (j < slice) && (it_e_l != it_e); ++j) ++it_e_l;
+
+				                				it_s = it_e_l;
+				                			}
+				                		}
+
+				                		while (it_s_l != it_e_l) {
+
+											const size_t um_km_cov = it_s_l->getData()->getKmerCoverage(*it_s_l);
+
+											if ((um_km_cov >= min_km_cov) && (um_km_cov < max_km_cov)) {
+
+												const SharedPairID& spid = it_s_l->getData()->getPairID();
 
 												for (const uint32_t id : spid) l_sampled_ids[t][id >> 6] |= (0x1ULL << (id & 0x3fULL));
 											}
-										}
 
-										++it_s_l;
+											++it_s_l;
+				                		}
 			                		}
 			                	}
-			                }
-			            );
-			        }
+				            );
+				        }
 
-			        for (auto& t : workers) t.join();
+				        for (auto& t : workers) t.join();
+			    	}
 
+			    	// Merge read ids collected by the different threads
 			        for (size_t t = 0; t < opt.nb_threads; ++t){
 
 			        	for (size_t j = 0; j < sz_bitset; ++j) sampled_ids[j] |= l_sampled_ids[t][j];
@@ -1702,143 +1776,291 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
 			prev_min_km_cov = min_km_cov;
 		}
 
-		if (opt.verbose) cout << "Ratatosk::addCoverage(): Coloring graph with subsampled reads." << endl;
+		v_km.clear();
 
-		if (opt.nb_threads == 1) {
+		{
+			if (opt.verbose) cout << "Ratatosk::addCoverage(): Compacting subsampled reads." << endl;
 
-			const bool hasDiskPairID = !umap_pids.empty();
+			nextID = 1;
 
-			for (auto& um : dbg) {
+			for (size_t i = 0; i < sz_bitset; ++i) {
 
-				const Kmer head = um.getUnitigHead();
+				if (all_subsampled_ids[i] != 0) {
 
-				const SharedPairID disk_spids = getDiskPairID(in, um);
+					for (size_t j = 0; j < 64; ++j) {
 
-				SharedPairID& spids = um.getData()->getPairID();
+						if (static_cast<bool>(all_subsampled_ids[i] & (0x1ULL << j))){
 
-				spids.clear();
+							const size_t curr_id = (i << 6) + j;
+							const pair<unordered_map<size_t, size_t>::iterator, bool> p_it = m_id_compact.insert(pair<size_t, size_t>(curr_id, 0));
 
-				for (const uint32_t id : disk_spids) {
-
-					if (static_cast<bool>(all_subsampled_ids[id >> 6] & (0x1ULL << (id & 0x3fULL)))) spids.add(id);
-				}
-
-				spids.runOptimize();
-
-				if (hasDiskPairID) {
-
-					const unordered_map<Kmer, vector<streampos>, KmerHash>::iterator it_umap_um = umap_pids.find(head);
-
-					if (it_umap_um != umap_pids.end()) {
-
-						in.seekg(0, ios::end); // Place file cursor at the end of the file
-
-						it_umap_um->second.clear(); // Clear all disk PairID associated with that unitig
-						it_umap_um->second.push_back(in.tellg()); // Insert position of next disk PairID associated with that unitig
-
-						head.write(in); // Write to disk position of unitig head k-mer
-
-	    				um.getData()->write(in, true); // Write to disk the new PairID of that unitig
-	    				um.getData()->clear(false, false, false, false, true, false, false); //
+							if (p_it.second) p_it.first->second = nextID++;
+						}
 					}
 				}
 			}
+
+			{
+				HapReads hap_r_sub = hap_reads;
+
+				for (size_t i = 0; i < hap_reads.hap2phasedReads.size(); ++i) {
+
+					hap_r_sub.hap2phasedReads[i].clear();
+
+					for (const auto id : hap_reads.hap2phasedReads[i]) {
+
+						if (static_cast<bool>(all_subsampled_ids[id >> 6] & (0x1ULL << (id & 0x3fULL)))) {
+
+							const unordered_map<size_t, size_t>::const_iterator it = m_id_compact.find(id);
+
+							if (it != m_id_compact.end()) hap_r_sub.hap2phasedReads[i].add(it->second);
+						}
+					}
+
+					hap_r_sub.hap2phasedReads[i].runOptimize();
+				}
+
+				{
+					hap_r_sub.hap2unphasedReads.clear();
+
+					for (const auto id : hap_reads.hap2unphasedReads) {
+
+						if (static_cast<bool>(all_subsampled_ids[id >> 6] & (0x1ULL << (id & 0x3fULL)))) {
+
+							const unordered_map<size_t, size_t>::const_iterator it = m_id_compact.find(id);
+
+							if (it != m_id_compact.end()) hap_r_sub.hap2unphasedReads.add(it->second);
+						}
+					}
+
+					hap_r_sub.hap2unphasedReads.runOptimize();
+				}
+
+				hap_reads = move(hap_r_sub);
+			}
 		}
-		else {
 
-			const size_t slice = (dbg.size() / opt.nb_threads) + 1;
+		{
+			if (opt.verbose) cout << "Ratatosk::addCoverage(): Coloring graph with subsampled reads." << endl;
 
-			const bool hasDiskPairID = !umap_pids.empty();
+	    	ifstream infile;
+	    	istream in(0);
 
-	        vector<thread> workers;
+	    	ofstream outfile;
+	    	ostream out(0);
 
-	        mutex mtx_g, mtx_f;
+	    	if (check_files(fn_pids_1, false, false)) {
 
-	        CompactedDBG<UnitigData>::iterator it_s = dbg.begin();
-	        CompactedDBG<UnitigData>::iterator it_e = dbg.end();
+		    	infile.open(fn_pids_1.c_str(), std::ifstream::in | std::ifstream::binary);
+		    	in.rdbuf(infile.rdbuf());
 
-	        for (size_t t = 0; t < opt.nb_threads; ++t){
+			    outfile.open(fn_pids_2.c_str(), std::ofstream::out | std::ofstream::binary | std::ofstream::app);
+			    out.rdbuf(outfile.rdbuf());
+	    	}
 
-	            workers.emplace_back(
+	    	umap_pids.clear();
 
-	                [&]{
+			if (opt.nb_threads == 1) {
 
-	                	CompactedDBG<UnitigData>::iterator it_s_l;
-	                	CompactedDBG<UnitigData>::iterator it_e_l;
+				for (auto& um : dbg) {
 
-	                	while (true){
+					SharedPairID sub_spids;
 
-	                		{
-	                			unique_lock<mutex> lock(mtx_g);
+					SharedPairID& spids = um.getData()->getPairID();
 
-	                			if (it_s == it_e) return;
-	                			else {
+					for (const uint32_t id : spids) {
 
-	                				it_s_l = it_s;
-	                				it_e_l = it_s;
+						if (static_cast<bool>(all_subsampled_ids[id >> 6] & (0x1ULL << (id & 0x3fULL)))) {
 
-	                				for (size_t i = 0; (i < slice) && (it_e_l != it_e); ++i) ++it_e_l;
+							const unordered_map<size_t, size_t>::const_iterator it = m_id_compact.find(id);
 
-	                				it_s = it_e_l;
-	                			}
-	                		}
+							if (it != m_id_compact.end()) sub_spids.add(it->second);
+						}
+					}
 
-	                		while (it_s_l != it_e_l) {
+					sub_spids.runOptimize();
 
-	                			if (it_s_l->getData()->isBranching()) {
+					spids = move(sub_spids);
+				}
 
-									const Kmer head = it_s_l->getUnitigHead();
+				while (in.good()) {
 
-									SharedPairID& spids = it_s_l->getData()->getPairID();
+        			Kmer km;
+        			SharedPairID spid, sub_spids;
 
-									SharedPairID spid_tmp;
+        			if (!km.read(in)) break;
+        			
+        			spid.read(in);
 
-			                		if (hasDiskPairID) {
+					for (const uint32_t id : spid) {
 
-			                			unique_lock<mutex> lock(mtx_f);
+						if (static_cast<bool>(all_subsampled_ids[id >> 6] & (0x1ULL << (id & 0x3fULL)))) {
 
-			                			spid_tmp = getDiskPairID(in, *it_s_l);
+							const unordered_map<size_t, size_t>::const_iterator it = m_id_compact.find(id);
+
+							if (it != m_id_compact.end()) sub_spids.add(it->second);
+						}
+					}
+
+					sub_spids.runOptimize();
+
+					pair<unordered_map<Kmer, vector<streampos>, KmerHash>::iterator, bool> it_umap_um = umap_pids.insert({km, vector<streampos>()});
+
+					km.write(out); // Write to disk position of unitig head k-mer
+
+					it_umap_um.first->second.push_back(out.tellp()); // Insert position of next disk PairID associated with that unitig
+
+    				sub_spids.write(out); // Write to disk the new PairID of that unitig
+				}
+			}
+			else {
+
+				const size_t slice = 1024;
+
+		        vector<thread> workers;
+
+		        mutex mtx_g, mtx_f;
+
+		        {
+			        CompactedDBG<UnitigData>::iterator it_s = dbg.begin();
+			        CompactedDBG<UnitigData>::iterator it_e = dbg.end();
+
+			        for (size_t t = 0; t < opt.nb_threads; ++t){
+
+			            workers.emplace_back(
+
+			                [&]{
+
+			                	CompactedDBG<UnitigData>::iterator it_s_l;
+			                	CompactedDBG<UnitigData>::iterator it_e_l;
+
+						    	while (true) {
+
+			                		{
+			                			unique_lock<mutex> lock(mtx_g);
+
+			                			if (it_s == it_e) return;
+			                			else {
+
+			                				it_s_l = it_s;
+			                				it_e_l = it_s;
+
+			                				for (size_t i = 0; (i < slice) && (it_e_l != it_e); ++i) ++it_e_l;
+
+			                				it_s = it_e_l;
+			                			}
 			                		}
-			                		else spid_tmp = spids;
 
-									spids.clear();
+			                		while (it_s_l != it_e_l) {
 
-									for (const uint32_t id : spid_tmp) {
+										SharedPairID sub_spids;
 
-										if (static_cast<bool>(all_subsampled_ids[id >> 6] & (0x1ULL << (id & 0x3fULL)))) spids.add(id);
-									}
+										SharedPairID& spids = it_s_l->getData()->getPairID();
 
-									spids.runOptimize();
+										for (const uint32_t id : spids) {
 
-			                		if (hasDiskPairID) {
+											if (static_cast<bool>(all_subsampled_ids[id >> 6] & (0x1ULL << (id & 0x3fULL)))) {
 
-										const unordered_map<Kmer, vector<streampos>, KmerHash>::iterator it_umap_um = umap_pids.find(head);
+												const unordered_map<size_t, size_t>::const_iterator it = m_id_compact.find(id);
 
-										if (it_umap_um != umap_pids.end()) {
-
-			                				unique_lock<mutex> lock(mtx_f);
-
-											in.seekg(0, ios::end); // Place file cursor at the end of the file
-
-											it_umap_um->second.clear(); // Clear all disk PairID associated with that unitig
-											it_umap_um->second.push_back(in.tellg()); // Insert position of next disk PairID associated with that unitig
-
-											head.write(in); // Write to disk position of unitig head k-mer
-
-						    				it_s_l->getData()->write(in, true); // Write to disk the new PairID of that unitig
-						    				it_s_l->getData()->clear(false, false, false, false, true, false, false); // Clear data
+												if (it != m_id_compact.end()) sub_spids.add(it->second);
+											}
 										}
-									}
-								}
 
-								++it_s_l;
-	                		}
-	                	}
-	                }
-	            );
-	        }
+										sub_spids.runOptimize();
 
-	        for (auto& t : workers) t.join();
+										spids = move(sub_spids);
+
+										++it_s_l;
+			                		}
+		                		}
+			                }
+			            );
+			        }
+
+			        for (auto& t : workers) t.join();
+		    	}
+
+		    	workers.clear();
+
+		        {
+			        for (size_t t = 0; t < opt.nb_threads; ++t){
+
+			            workers.emplace_back(
+
+			                [&, t]{
+
+		                		while (true) {
+
+		                			vector<pair<Kmer, SharedPairID>> v_km_spid;
+
+		                			v_km_spid.reserve(slice);
+
+			                		{
+			                			Kmer km;
+			                			SharedPairID spid;
+
+			                			unique_lock<mutex> lock(mtx_g);
+
+			                			if (!in.good()) return;
+
+			                			for (size_t i = 0; in.good() && (i < slice); ++i){
+
+			                				if (!km.read(in)) break;
+
+			                				spid.read(in);
+
+			                				v_km_spid.push_back(pair<Kmer, SharedPairID>(move(km), move(spid)));
+			                			}
+			                		}
+
+		                			for (auto& p_km_spid : v_km_spid) {
+
+										SharedPairID sub_spids;
+
+										for (const uint32_t id : p_km_spid.second) {
+
+											if (static_cast<bool>(all_subsampled_ids[id >> 6] & (0x1ULL << (id & 0x3fULL)))) {
+
+												const unordered_map<size_t, size_t>::const_iterator it = m_id_compact.find(id);
+
+												if (it != m_id_compact.end()) sub_spids.add(it->second);
+											}
+										}
+
+										sub_spids.runOptimize();
+
+										p_km_spid.second = move(sub_spids);
+		                			}
+
+		                			{
+		                				unique_lock<mutex> lock(mtx_f);
+
+		                				for (const auto& p_km_spid : v_km_spid) {
+
+		                					pair<unordered_map<Kmer, vector<streampos>, KmerHash>::iterator, bool> it_umap_um = umap_pids.insert({p_km_spid.first, vector<streampos>()});
+
+											p_km_spid.first.write(out); // Write to disk position of unitig head k-mer
+
+											it_umap_um.first->second.push_back(out.tellp()); // Insert position of next disk PairID associated with that unitig
+
+						    				p_km_spid.second.write(out); // Write to disk the new PairID of that unitig
+		                				}
+		                			}
+	                			}
+		                	}
+			            );
+			        }
+
+			        for (auto& t : workers) t.join();
+		    	}
+			}
+
+			infile.close();
+			outfile.close();
+
+			remove(fn_pids_1.c_str()); // Remove non-subsampled reads ids from disk
+			swap(fn_pids_1, fn_pids_2); // Replace read id file with subsampled reads ids
 		}
 
 		delete[] all_ids;
@@ -1854,9 +2076,9 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
 
    		vector<pair<Kmer, size_t>> v_km;
 
-    	if (check_files(fn_tmp, false, false)) {
+    	if (check_files(fn_pids_1, false, false)) {
 
-	    	infile.open(fn_tmp.c_str(), std::ofstream::in | std::ofstream::binary);
+	    	infile.open(fn_pids_1.c_str(), std::ifstream::in | std::ifstream::binary);
 	    	in.rdbuf(infile.rdbuf());
     	}
 
@@ -1967,6 +2189,7 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
 
 								um_neigh.getData()->getPairID() = move(l_new_spid);
 								um_neigh.getData()->setVisitStatus(true);
+
 							}
 						}
 					}
@@ -1992,7 +2215,7 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
 		}
 		else {
 
-			const size_t slice = (dbg.size() / opt.nb_threads) + 1;
+			const size_t slice = 1024;
 
 	        vector<thread> workers;
 
@@ -2057,7 +2280,7 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
 		}
 	}
 
-	if (!umap_pids.empty() && (remove(fn_tmp.c_str()) != 0)) cerr << "Ratatosk::addCoverage(): Could not remove tmp file " << fn_tmp << endl;
+	if (!umap_pids.empty() && (remove(fn_pids_1.c_str()) != 0)) cerr << "Ratatosk::addCoverage(): Could not remove tmp file " << fn_pids_1 << endl;
 }
 
 void addPhasing(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads& hap_r, const bool long_read_phasing, const bool mapHapReads) {
@@ -3396,258 +3619,83 @@ size_t estimateHaplotypeCoverage(const CompactedDBG<UnitigData>& dbg) {
 	return adjacency;
 }*/
 
-/*size_t detectSTRs(CompactedDBG<UnitigData>& dbg, const size_t max_len_cycle, const size_t max_cov_km, const size_t nb_threads, const bool verbose){
-
-	const size_t k = dbg.getK();
-
-	if (verbose) cout << "Ratatosk::detectSTRs(): Scanning graph for unitigs in short cycles (STRs)" << endl;
-
-	auto comparePathsDist = [](const pair<size_t, UnitigMap<UnitigData>>& a, const pair<size_t, UnitigMap<UnitigData>>& b){
-
-		return a.first > b.first;
-	};
-
-	auto BFS = [&](const UnitigMap<UnitigData>& um, const bool strand, const size_t max_len_cycle){
-
-		if (um.size >= max_len_cycle) return false;
-
-		KmerHashTable<uint8_t> km_h;
-		queue<pair<size_t, UnitigMap<UnitigData>>> q;
-
-		UnitigMap<UnitigData> start_um(um);
-
-		start_um.dist = 0;
-		start_um.len = start_um.size - k + 1;
-		start_um.strand = strand;
-
-		const Kmer start_head = um.getMappedHead();
-		const size_t max_len_path = max_len_cycle - k;
-
-		q.push({0, start_um});
-		km_h.insert(start_head, 0);
-
-		while (!q.empty()){
-
-			const pair<size_t, UnitigMap<UnitigData>> traversed_path = q.front();
-
-			q.pop();
-
-			for (const auto& um_succ : traversed_path.second.getSuccessors()){
-
-				const Kmer head_succ = um_succ.getMappedHead();
-				const pair<KmerHashTable<uint8_t>::iterator, bool> p_it_succ = km_h.insert(head_succ, 0);
-
-				if (head_succ == start_head) return true;
-				if (p_it_succ.second && (traversed_path.first + 1 <= max_len_path)) q.push({traversed_path.first + 1, um_succ});
-			}
-		}
-
-		return false;
-	};
-
-	auto detectCycle = [&](const UnitigMap<UnitigData>& um, const bool strand, const size_t max_len_cycle) {
-
-		if (um.size >= max_len_cycle) return false;
-		//if (!BFS(um, strand, max_len_cycle)) return false;
-
-		KmerHashTable<size_t> km_h;
-		priority_queue<pair<size_t, UnitigMap<UnitigData>>, vector<pair<size_t, UnitigMap<UnitigData>>>, decltype(comparePathsDist)> q_traversal(comparePathsDist);
-
-		UnitigMap<UnitigData> start_um(um);
-
-		start_um.dist = 0;
-		start_um.len = start_um.size - k + 1;
-		start_um.strand = strand;
-
-		const Kmer start_head = um.getMappedHead();
-
-		q_traversal.push({0, start_um});
-
-		while (!q_traversal.empty()){
-
-			const pair<size_t, UnitigMap<UnitigData>> traversed_path = q_traversal.top();
-
-			q_traversal.pop();
-
-			for (const auto& um_succ : traversed_path.second.getSuccessors()){
-
-				//if (um_succ.getData()->getCoverage() != 0){
-
-					const Kmer head_succ = um_succ.getMappedHead();
-					const KmerHashTable<size_t>::iterator it_succ = km_h.find(head_succ);
-					const size_t dist_succ = (it_succ == km_h.end()) ? 0xffffffffffffffffULL : *it_succ; 
-
-					if (dist_succ > (traversed_path.first + (um_succ.size - k + 1))){
-
-						if (dist_succ == 0xffffffffffffffffULL) km_h.insert(head_succ, traversed_path.first + (um_succ.size - k + 1));
-						else *it_succ = traversed_path.first + (um_succ.size - k + 1);
-
-						if ((traversed_path.first + k) <= max_len_cycle) q_traversal.push({traversed_path.first + (um_succ.size - k + 1), um_succ});
-					}
-
-					if (head_succ == start_head){
-
-						const KmerHashTable<size_t>::const_iterator it_succ = km_h.find(head_succ);
-
-						if ((it_succ != km_h.end()) && (*it_succ <= max_len_cycle)) return true;
-					}
-				//}
-			}
-		}
-
-		return false;
-	};
-
-	if (nb_threads == 1){
-
-		size_t nb_repeats = 0;
-
-		for (const auto& um : dbg){
-
-			if (um.size <= max_len_cycle){ // Motif is short enough to be an STR or poly-A/C/G/T sequence
-
-				const double km_frequency = um.getData()->getKmerCoverage(um);
-				const double seq_entropy = getEntropy(um.referenceUnitigToString().c_str(), um.size);
-
-				if (((km_frequency >= max_cov_km) && (seq_entropy <= 1)) || (seq_entropy <= 0.5)) { // Sequence has very high coverage or low sequence entropy
-
-					if (detectCycle(um, true, max_len_cycle)){
-
-						um.getData()->setCycle();
-						++nb_repeats;
-					}
-					else if (detectCycle(um, false, max_len_cycle)) {
-
-						um.getData()->setCycle();
-						++nb_repeats;
-					}
-				}
-			}
-		}
-
-		return nb_repeats;
-	}
-	else {
-
-		atomic<size_t> nb_repeats;
-
-        vector<thread> workers; // need to keep track of threads so we can join them
-
-        mutex mutex_graph;
-
-        CompactedDBG<UnitigData>::iterator it_dbg = dbg.begin();
-
-        nb_repeats = 0;
-
-        for (size_t t = 0; t < nb_threads; ++t){
-
-            workers.emplace_back(
-
-                [&]{
-
-                	UnitigMap<UnitigData> um;
-
-                    while (true) {
-
-                        {
-                            unique_lock<mutex> lock(mutex_graph);
-
-                            if (it_dbg == dbg.end()) return;
-
-                            um = *it_dbg;
-
-                            ++it_dbg;
-                        }
-
-                        bool cycle = false;
-
-						if (um.size <= max_len_cycle){ // Motif is short enough to be an STR or poly-A/C/G/T sequence
-
-							const double km_frequency = um.getData()->getKmerCoverage(um);
-							const double seq_entropy = getEntropy(um.referenceUnitigToString().c_str(), um.size);
-
-							// Sequence has very high coverage and low-ish sequence entropy or just low sequence entropy
-							if (((km_frequency >= max_cov_km) && (seq_entropy <= 1)) || (seq_entropy <= 0.5)) {
-
-								if (detectCycle(um, true, max_len_cycle)){
-
-									um.getData()->setCycle();
-									++nb_repeats;
-								}
-								else if (detectCycle(um, false, max_len_cycle)) {
-
-									um.getData()->setCycle();
-									++nb_repeats;
-								}
-							}
-						}
-                    }
-                }
-            );
-        }
-
-        for (auto& t : workers) t.join();
-
-        return nb_repeats;
-	}
-}*/
-
 // Detect unitigs which are in a short cycle
 void detectShortCycles(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt) {
 
-	auto detectShortCycle = [&](const UnitigMap<UnitigData>& um, const bool fw) {
+	auto detectShortCycle = [&opt](const const_UnitigMap<UnitigData>& um, const bool traversal_direction) {
 
-		queue<pair<UnitigMap<UnitigData>, PairID>> q_um;
+		queue<Path<UnitigData>> q_traversal; // Queue for graph traversal
+		vector<string> v_path_out;
 
-		unordered_set<Kmer, KmerHash> us_km;
+		const SharedPairID& spid_start = um.getData()->getPairID();
 
-		q_um.push({um, um.getData()->getPairID().toPairID()});
+		const_UnitigMap<UnitigData> um_start = um;
 
-		while (!q_um.empty()) {
+		um_start.strand = traversal_direction;
 
-			const pair<UnitigMap<UnitigData>, PairID> p_um = q_um.front();
+		// Initialize graph traversal
+		{
+			Path<UnitigData> p_start;
 
-			q_um.pop();
+			p_start.extend(um_start);
+			q_traversal.push(move(p_start));
+		}
 
-			if (fw) {
+		while (!q_traversal.empty()) {
 
-				for (const auto& um_succ : p_um.first.getSuccessors()) {
+			const Path<UnitigData> path = q_traversal.front();
+			const const_UnitigMap<UnitigData>& um_curr = path.back();
 
-					if (um.isSameReferenceUnitig(um_succ) && (um_succ.strand == um.strand)) {
+			q_traversal.pop();
 
-						um.getData()->setVisitStatus(true);
+			for (const auto& um_succ : um_curr.getSuccessors()) {
 
-						return true;
-					}
-					else if (us_km.insert(um_succ.getMappedHead()).second) { // Insertion took place, vertex was never visited before
+				// If the edge (v1,v2) exists in a min. number of reads
+				if (um_curr.getData()->getSharedPids(um_curr.strand, um_succ.getMappedHead().toString()[opt.k-1])) {
 
-						PairID p_int = p_um.second & um_succ.getData()->getPairID().toPairID();
+					// Make sure we follow a unitig which is read-compatible with the start unitig
+					if (getNumberSharedPairID(um_curr.getData()->getPairID(), spid_start, opt.min_cov_vertices) >= opt.min_cov_vertices) {
 
-						if (p_int.cardinality() >= opt.min_cov_vertices) q_um.push({um_succ, move(p_int)});
-					}
-				}
-			}
-			else {
+						// Graph traversal came back on the same visited unitig
+						if (um_start.isSameReferenceUnitig(um_succ) && (um_succ.strand == um_start.strand)) {
 
-				for (const auto& um_pred : p_um.first.getPredecessors()) {
+							Path<UnitigData> p_succ(path);
 
-					if (um.isSameReferenceUnitig(um_pred) && (um_pred.strand == um.strand)) {
+							p_succ.extend(um_succ);
 
-						um.getData()->setVisitStatus(true);
+							const vector<const_UnitigMap<UnitigData>> v_um_succ = p_succ.toVector();
 
-						return true;
-					}
-					else if (us_km.insert(um_pred.getMappedHead()).second) { // Insertion took place, vertex was never visited before
+							bool noShorterCycle = true;
 
-						PairID p_int = p_um.second & um_pred.getData()->getPairID().toPairID();
+							// Check if path contains repeated unitigs except start and end unitigs, indicating path contains a smaller cycle in it
+							{
+								unordered_set<Kmer, KmerHash> us_km;
 
-						if (p_int.cardinality() >= opt.min_cov_vertices) q_um.push({um_pred, move(p_int)});
+								for (size_t i = 1; (i < v_um_succ.size() - 1) && noShorterCycle; ++i) noShorterCycle = us_km.insert(v_um_succ[i].getMappedHead()).second;
+							}
+
+							if (noShorterCycle) {
+
+								PairID pid = spid_start.toPairID();
+
+								for (size_t i = 1; (i < (v_um_succ.size() - 1)) && (pid.cardinality() >= opt.min_cov_vertices); ++i) pid &= v_um_succ[i].getData()->getPairID().toPairID();
+
+								if (pid.cardinality() >= opt.min_cov_vertices) v_path_out.push_back(p_succ.getMiddleCompactedPath()); // Cycle is supported by at least opt.min_cov_vertices reads
+							}
+						}
+						else if ((path.length() - um_start.len) < (opt.k * 2)) { // Only short cycles are visited
+
+							Path<UnitigData> p_succ(path);
+
+							p_succ.extend(um_succ);
+							q_traversal.push(move(p_succ));
+						}
 					}
 				}
 			}
 		}
 
-		return false;
+		return v_path_out;
 	};
 
 	if (opt.verbose) cout << "Ratatosk::detectShortCycles(): Detecting unitigs in short cycles" << endl;
@@ -3655,23 +3703,43 @@ void detectShortCycles(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt) {
 	if (opt.nb_threads == 1){
 
 		size_t count_short_cycles = 0;
+		size_t count_unique_short_cycles = 0;
 
 	    for (const auto& um : dbg) {
 
-	    	um.getData()->setVisitStatus(false);
+	    	const vector<string> v_cycles = detectShortCycle(um, true);
 
-	    	count_short_cycles += static_cast<size_t>(detectShortCycle(um, true) || detectShortCycle(um, false));
+	    	count_short_cycles += static_cast<size_t>(v_cycles.size() != 0);
+	    	count_unique_short_cycles += static_cast<size_t>(v_cycles.size() == 1);
+
+	    	um.getData()->setIsCycle(!v_cycles.empty());
+						    	
+	    	if (!v_cycles.empty()){
+
+	    		size_t sum_len_compact_cycles = 0;
+
+	    		for (const auto& s_cycle : v_cycles) sum_len_compact_cycles += s_cycle.length() + 1;
+
+	    		char* cstr_cycles = new char[sum_len_compact_cycles]();
+
+	    		for (size_t i = 0, j = 0; i < v_cycles.size(); ++i) {
+
+	    			memcpy(cstr_cycles + j, v_cycles[i].c_str(), (v_cycles[i].length() + 1) * sizeof(char));
+	    			j += (v_cycles[i].length() + 1);
+	    		}
+
+	    		um.getData()->setCompactCycles(sum_len_compact_cycles, cstr_cycles);
+	    	}
 	    }
 
-	    if (opt.verbose) cout << "Ratatosk::detectShortCycles(): Found " << count_short_cycles << " in short cycles. " << endl;
+	    if (opt.verbose) cout << "Ratatosk::detectShortCycles(): Found " << count_short_cycles << " in short cycles. (" << count_unique_short_cycles << " unique)" << endl;
 	}
 	else {
 
 		const size_t slice = 1024;
 
-        bool stop = false;
-
         atomic<size_t> count_short_cycles(0);
+        atomic<size_t> count_unique_short_cycles(0);
 
         vector<thread> workers; // need to keep track of threads so we can join them
 
@@ -3693,34 +3761,50 @@ void detectShortCycles(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt) {
                         {
                             unique_lock<mutex> lock(mutex_graph);
 
-                            if (stop) return;
+                            if (it_c == it_e) return;
 
                             l_it_c = it_c;
 
-					        size_t i = 0;
+					        for (size_t i = 0; (i < slice) && (it_c != it_e); ++i) ++it_c;
 
-					        while ((i < slice) && (it_c != it_e)){
-
-					        	++i;
-					        	++it_c;
-					        }
-
-                            stop = (it_c == it_e);
 							l_it_e = it_c;
                         }
 
                         {
 							size_t l_count_short_cycles = 0;
+							size_t l_count_unique_short_cycles = 0;
 
 							while (l_it_c != l_it_e){
 
-								l_it_c->getData()->setVisitStatus(false);
+						    	const vector<string> v_cycles = detectShortCycle(*l_it_c, true);
 
-								l_count_short_cycles += static_cast<size_t>(detectShortCycle(*l_it_c, true) || detectShortCycle(*l_it_c, false));
+	    						l_count_short_cycles += static_cast<size_t>(v_cycles.size() != 0);
+	    						l_count_unique_short_cycles += static_cast<size_t>(v_cycles.size() == 1);
+
+	    						l_it_c->getData()->setIsCycle(!v_cycles.empty());
+						    	
+						    	if (!v_cycles.empty()){
+
+						    		size_t sum_len_compact_cycles = 0;
+
+						    		for (const auto& s_cycle : v_cycles) sum_len_compact_cycles += s_cycle.length() + 1;
+
+						    		char* cstr_cycles = new char[sum_len_compact_cycles]();
+
+						    		for (size_t i = 0, j = 0; i < v_cycles.size(); ++i) {
+
+						    			memcpy(cstr_cycles + j, v_cycles[i].c_str(), (v_cycles[i].length() + 1) * sizeof(char));
+						    			j += (v_cycles[i].length() + 1);
+						    		}
+
+						    		l_it_c->getData()->setCompactCycles(sum_len_compact_cycles, cstr_cycles);
+						    	}
+
 								++l_it_c;
 							}
 
 							count_short_cycles += l_count_short_cycles;
+							count_unique_short_cycles += l_count_unique_short_cycles;
                         }
                     }
                 }
@@ -3729,6 +3813,86 @@ void detectShortCycles(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt) {
 
         for (auto& t : workers) t.join();
 
-        if (opt.verbose) cout << "Ratatosk::detectShortCycles(): Found " << count_short_cycles << " in short cycles. " << endl;
+        if (opt.verbose) cout << "Ratatosk::detectShortCycles(): Found " << count_short_cycles << " in short cycles. (" << count_unique_short_cycles << " unique)" << endl;
 	}
+}
+
+string phasing(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const string& s, const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_um_solid) {
+
+	struct CustomHashPair {
+
+	    size_t operator()(const pair<size_t, size_t>& p) const {
+
+	        return XXH64(&p, sizeof(pair<size_t, size_t>), 0);
+	    }
+	};
+
+	unordered_map<size_t, vector<size_t>> m_pids;
+	unordered_map<pair<size_t, size_t>, size_t, CustomHashPair> m_tup;
+
+	vector<pair<pair<size_t, size_t>, size_t>> v_tup;
+	vector<size_t> v_all_pids;
+
+	string s_out = s;
+
+    auto comp_pair = [](const pair<pair<size_t, size_t>, size_t>& p1, const pair<pair<size_t, size_t>, size_t>& p2) {
+
+        return (p1.second < p2.second);
+    };
+
+	for (size_t i = 0; i < v_um_solid.size(); ++i) {
+
+		const const_UnitigMap<UnitigData>& um = v_um_solid[i].second;
+
+		if (((i==0) || !um.isSameReferenceUnitig(v_um_solid[i-1].second)) && um.getData()->has_ambiguity_char()) {
+
+			const SharedPairID& spid = um.getData()->getPairID().toPairID();
+
+			for (const auto id : spid) m_pids.insert(pair<size_t, vector<size_t>>(id, vector<size_t>())).first->second.push_back(i);
+
+			v_all_pids.push_back(i);
+		}
+	}
+
+	if (v_all_pids.size() >= 2) {
+
+		for (const auto& pid_occ : m_pids) {
+
+			for (size_t i = 0; i < pid_occ.second.size() - 1; ++i) {
+
+				const pair<size_t, size_t> p = {pid_occ.second[i], pid_occ.second[i+1]};
+
+				m_tup.insert(pair<pair<size_t, size_t>, size_t>(p, 0)).first->second += 1;
+			}
+		}
+
+		for (size_t i = 0; i < v_all_pids.size() - 1; ++i) {
+
+			const unordered_map<pair<size_t, size_t>, size_t, CustomHashPair>::const_iterator it = m_tup.find({v_all_pids[i], v_all_pids[i+1]});
+
+			if (it != m_tup.end()) v_tup.push_back(*it);
+		}
+
+		sort(v_tup.begin(), v_tup.end(), comp_pair);
+
+		for (size_t i = 0; i < 0.05 * v_tup.size(); ++i) {
+
+			s_out.replace(v_um_solid[v_tup[i].first.first].first, opt.k, opt.k, 'N');
+			s_out.replace(v_um_solid[v_tup[i].first.second].first, opt.k, opt.k, 'N');
+
+			for (size_t j = v_tup[i].first.first + 1; j < v_um_solid.size(); ++j) {
+
+				if (v_um_solid[j].second.isSameReferenceUnitig(v_um_solid[j-1].second)) s_out.replace(v_um_solid[j].first, opt.k, opt.k, 'N');
+				else break;
+			}
+
+			for (size_t j = v_tup[i].first.second + 1; j < v_um_solid.size(); ++j) {
+
+				if (v_um_solid[j].second.isSameReferenceUnitig(v_um_solid[j-1].second)) s_out.replace(v_um_solid[j].first, opt.k, opt.k, 'N');
+				else break;
+			}
+		}
+	}
+
+	return s_out;
 }

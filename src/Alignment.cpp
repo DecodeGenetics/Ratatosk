@@ -241,6 +241,71 @@ pair<int, pair<int, int>> selectBestPrefixAlignment2(const char* ref, const size
 	return {best_cand_id, {best_end_loc_target, best_end_loc_src}};
 }
 
+bool test(const string& query_seq, const size_t query_len, const string& qual_seq, const size_t qual_len, const string& ref_seq, const size_t ref_len) {
+
+	EdlibAlignConfig config = edlibNewAlignConfig(-1, EDLIB_MODE_NW, EDLIB_TASK_PATH, edlib_iupac_alpha, sz_edlib_iupac_alpha);
+	EdlibAlignResult align_fw = edlibAlign(query_seq.c_str(), query_len, ref_seq.c_str(), ref_len, config);
+
+	char* cigar  = edlibAlignmentToCigar(align_fw.alignment, align_fw.alignmentLength, EDLIB_CIGAR_STANDARD);
+
+	const size_t cigar_len = strlen(cigar);
+
+	edlibFreeAlignResult(align_fw);
+
+	size_t prev_cigar_pos = 0;
+	size_t cigar_pos = 0;
+	size_t query_pos = 0;
+	size_t ref_pos = 0;
+
+	bool ret = false;
+
+	cout << "===" << endl;
+
+	while ((cigar_pos != cigar_len) && (ref_pos < ref_len)){
+
+		if ((cigar[cigar_pos] < 0x30) || (cigar[cigar_pos] > 0x39)){ // If current char. is not a number
+
+			if (cigar[cigar_pos] == 'M') { //match
+
+				const size_t cigar_l = atoi(&cigar[prev_cigar_pos]);
+
+				query_pos += cigar_l;
+				ref_pos += cigar_l;
+			}
+			else if ((cigar[cigar_pos] == 'I') || (cigar[cigar_pos] == 'S')) {
+
+				if (atoi(&cigar[prev_cigar_pos]) >= 5) cout << "I" << atoi(&cigar[prev_cigar_pos]) << endl;
+
+				query_pos += atoi(&cigar[prev_cigar_pos]); //insertion or soft-clipping
+			}
+			else if (cigar[cigar_pos] == 'D') {
+
+				if (atoi(&cigar[prev_cigar_pos]) >= 2) {
+
+					cout << "D" << atoi(&cigar[prev_cigar_pos]) << " " << query_pos << " " << ref_pos << " " << query_len << " " << ref_len << endl;
+					ret = true;
+				}
+
+				ref_pos += atoi(&cigar[prev_cigar_pos]);  //deletion
+			}
+
+			prev_cigar_pos = cigar_pos + 1;
+		}
+
+		++cigar_pos;
+	}
+
+	free(cigar);
+
+	if (ret) {
+
+		cout << query_seq << endl;
+		cout << qual_seq << endl;
+	}
+
+	return ret;
+}
+
 pair<string, string> generateConsensus(const ResultCorrection* fw_s, const ResultCorrection* bw_s, const string& ref_seq, const double max_norm_edit_distance){
 
 	if ((bw_s->getNbCorrectedPosOldSeq() == 0) && (fw_s->getNbCorrectedPosOldSeq() != 0)) return {fw_s->getSequence(), fw_s->getQuality()};
@@ -352,7 +417,7 @@ pair<string, string> generateConsensus(const ResultCorrection* fw_s, const Resul
 
 		pair<pair<size_t, size_t>, size_t> pos_read;
 
-		if ((len_fw + len_bw) == 0){
+		if ((len_fw + len_bw) <= 0){
 
 			len_fw = fw_s->getLengthUncorrectedRegion(i);
 			len_bw = bw_s->getLengthUncorrectedRegion(i);
@@ -647,7 +712,7 @@ void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
 
 			if (isDNA(p.second)){
 
-				if (isPairIDconsistent(p.first, p.second)){
+				//if (isPairIDconsistent(p.first, p.second)){
 
 					const size_t pos_buff = (p.first < (k - 1)) ? 0 : (p.first - k + 1);
 					const size_t len_buff = min(p.first + k, query_len) - pos_buff;
@@ -699,8 +764,8 @@ void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
 			                it_km += um.len - 1;
 						}
 					}
-				}
-				else p.second = query[p.first];
+				//}
+				//else p.second = query[p.first];
 			}
 		}
 
@@ -949,19 +1014,27 @@ pair<int, int> selectBestSubstringAlignment(const char* ref, const size_t ref_le
 	return {best_cand_id, best_end_loc};
 }
 
-vector<pair<size_t, const_UnitigMap<UnitigData>>> keep_non_overlap(const char* ref, const size_t k, const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v){
+vector<pair<size_t, const_UnitigMap<UnitigData>>> keep_non_overlap(const Correct_Opt& opt/*, const WeightsPairID& w_pid*/, const char* ref, const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v){
 
 	struct var_info_t {
 
 		size_t pos_s;
 		size_t pos_e;
 
-		set<Kmer> s_km;
+		bool keep;
 
 		PairID pos_v;
+		
+		//PairID pid;
 
-		var_info_t() : pos_s(0), pos_e(0) {}
+		set<Kmer> s_km;
+
+		//const const_UnitigMap<UnitigData>* prev_um;
+
+		var_info_t() : pos_s(0), pos_e(0), keep(true)/*, prev_um(nullptr)*/ {}
 	};
+
+	const size_t ref_len = strlen(ref);
 
 	map<size_t, var_info_t> m_var;
 
@@ -973,7 +1046,7 @@ vector<pair<size_t, const_UnitigMap<UnitigData>>> keep_non_overlap(const char* r
 
 		const pair<size_t, const_UnitigMap<UnitigData>>& p_um = v[i];
 
-		const string km_ref = string(ref + p_um.first, k);
+		const string km_ref = string(ref + p_um.first, opt.k);
 		const string km_query = p_um.second.mappedSequenceToString();
 
 		const size_t l_match_pref = cstrMatch(km_ref.c_str(), km_query.c_str());
@@ -981,22 +1054,25 @@ vector<pair<size_t, const_UnitigMap<UnitigData>>> keep_non_overlap(const char* r
 		uint8_t type_var = 0;
 		uint8_t mis_ins = getAmbiguityIndex('.');
 
-		if (l_match_pref + cstrMatch(km_ref.c_str() + l_match_pref + 1, km_query.c_str() + l_match_pref + 1) == (k-1)) {
+		if (l_match_pref + cstrMatch(km_ref.c_str() + l_match_pref + 1, km_query.c_str() + l_match_pref + 1) == (opt.k-1)) {
 
 			type_var = 1; // mismatch
 			mis_ins = getAmbiguityIndex(km_query[l_match_pref]); // mismatching character
 		}
-		else if (l_match_pref + cstrMatch(km_ref.c_str() + l_match_pref, km_query.c_str() + l_match_pref + 1) == (k-1)){
+		else if (l_match_pref + cstrMatch(km_ref.c_str() + l_match_pref, km_query.c_str() + l_match_pref + 1) == (opt.k-1)){
 
 			type_var = 2; // insertion
 			mis_ins = getAmbiguityIndex(km_query[l_match_pref]); // inserted character
 		}
-		else if (l_match_pref + cstrMatch(km_ref.c_str() + l_match_pref + 1, km_query.c_str() + l_match_pref) == (k-1)) type_var = 3; // deletion
+		else if (l_match_pref + cstrMatch(km_ref.c_str() + l_match_pref + 1, km_query.c_str() + l_match_pref) == (opt.k-1)) type_var = 3; // deletion
 
-		if (type_var != 0) {
+		if ((type_var != 0) && (l_match_pref != 0) && (l_match_pref != opt.k-1)){
 
 			const size_t pos = p_um.first + l_match_pref;
 			const size_t key = (pos << 16) | ((static_cast<size_t>(mis_ins) & 0x00000000000000ffULL) << 8) | (static_cast<size_t>(type_var) & 0x00000000000000ffULL);
+
+			const const_UnitigMap<UnitigData>& um = p_um.second;
+			const SharedPairID& spid = um.getData()->getPairID();
 
 			pair<map<size_t, var_info_t>::iterator, bool> p_it = m_var.insert(pair<size_t, var_info_t>(key, var_info_t()));
 
@@ -1005,51 +1081,58 @@ vector<pair<size_t, const_UnitigMap<UnitigData>>> keep_non_overlap(const char* r
 			if (p_it.second) {
 
 				var_info.pos_s = p_um.first;
-				var_info.pos_e = p_um.first + k;
+				var_info.pos_e = p_um.first + opt.k;
+
+				//var_info.pid = spid.toPairID();
 			}
 			else {
 
 				var_info.pos_s = min(var_info.pos_s, p_um.first);
-				var_info.pos_e = max(var_info.pos_e, p_um.first + k);
+				var_info.pos_e = max(var_info.pos_e, p_um.first + opt.k);
+
+				//if (!v[i].second.isSameReferenceUnitig(*var_info.prev_um)) var_info.pid |= spid.toPairID();
 			}
 
+			/*if (*/var_info.s_km.insert(um.strand ? um.getUnitigHead() : um.getUnitigHead().twin())/*.second) var_info.pid |= spid.toPairID()*/;
+			//var_info.prev_um = &(v[i].second);
+
 			var_info.pos_v.add(i);
-			var_info.s_km.insert(p_um.second.getUnitigHead());
 		}
 	}
 
-	map<size_t, var_info_t>::const_iterator it2 = m_var.begin();
+	for (auto& it1 : m_var) {
 
-	for (const auto& it1 : m_var) {
+		if (it1.second.keep) {
 
-		const size_t it1_pos_var = (it1.first >> 16);
+			const size_t it1_pos = (it1.first >> 16);
 
-		if ((it1.first & 0x00000000000000ffULL) != 0){
-
-			bool keepVar = true;
-
-			const size_t lower_bound_pos = (it1_pos_var < k-1) ? 0 : (it1_pos_var - k + 1);
-			const size_t upper_bound_pos = (it1_pos_var + k);
+			//const size_t lower_bound_pos = (it1.second.pos_s < opt.k-1) ? 0 : (it1.second.pos_s - opt.k + 1);
+			//const size_t upper_bound_pos = ((it1.second.pos_e + opt.k) >= ref_len) ? ref_len : (it1.second.pos_e + opt.k);
+			const size_t lower_bound_pos = (it1_pos < opt.k-1) ? 0 : (it1_pos - opt.k + 1);
+			const size_t upper_bound_pos = ((it1_pos + opt.k) >= ref_len) ? ref_len : (it1_pos + opt.k);
 
 			const size_t lower_bound_pos_key = lower_bound_pos << 16;
 			const size_t upper_bound_pos_key = (upper_bound_pos << 16) + 0x000000000000ffffULL;
 
-			while ((it2 != m_var.end()) && (it2->first < lower_bound_pos_key)) ++it2;
+			map<size_t, var_info_t>::iterator it2 = m_var.lower_bound(lower_bound_pos_key);
 
-			map<size_t, var_info_t>::const_iterator l_it2 = it2;
+			while (it1.second.keep && (it2 != m_var.end()) && (it2->first <= upper_bound_pos_key)) {
 
-			while (keepVar && (l_it2 != m_var.end()) && (l_it2->first <= upper_bound_pos_key)) {
+				const size_t it2_pos = (it2->first >> 16);
 
-				// l_it2 kmer variant overlaps it1 variant
-				if ((it1.first != l_it2->first) && ((l_it2->first & 0x00000000000000ffULL) != 0) && (it1_pos_var >= l_it2->second.pos_s) && (it1_pos_var < l_it2->second.pos_e)) {
+				const bool overlap1 = (it1_pos >= it2->second.pos_s) && (it1_pos < it2->second.pos_e);
+				const bool overlap2 = (it2_pos >= it1.second.pos_s) && (it2_pos < it1.second.pos_e);
+
+				// it2 kmer variant overlaps it1 variant
+				if ((it1.first != it2->first) && (overlap1 || overlap2)) {
 
 					bool sameUnitig = false;
 
 					set<Kmer>::const_iterator it1_s = it1.second.s_km.begin();
-					set<Kmer>::const_iterator it2_s = l_it2->second.s_km.begin();
+					set<Kmer>::const_iterator it2_s = it2->second.s_km.begin();
 
 					set<Kmer>::const_iterator it1_e = it1.second.s_km.end();
-					set<Kmer>::const_iterator it2_e = l_it2->second.s_km.end();
+					set<Kmer>::const_iterator it2_e = it2->second.s_km.end();
 
 					while ((it1_s != it1_e) && (it2_s != it2_e)) {
 
@@ -1062,13 +1145,48 @@ vector<pair<size_t, const_UnitigMap<UnitigData>>> keep_non_overlap(const char* r
 						}
 					}
 
-					keepVar = keepVar && sameUnitig;
+					if (!sameUnitig){
+
+						/*const bool it1_safe = it1.second.keep && (getNumberSharedPairID(it1.second.pid, w_pid.weighted_pids, opt.min_cov_vertices) >= opt.min_cov_vertices);
+						const bool it2_safe = it2->second.keep && (getNumberSharedPairID(it2->second.pid, w_pid.weighted_pids, opt.min_cov_vertices) >= opt.min_cov_vertices);
+
+						it1.second.keep = (it1_safe && !it2_safe);
+						it2->second.keep = (it2_safe && !it1_safe);*/
+
+						it1.second.keep = false;
+						it2->second.keep = false;
+
+						/*{
+							const size_t lower_bound_pos2 = it2->second.pos_s;
+							const size_t upper_bound_pos2 = it2->second.pos_e;
+
+							const char mis1 = getAmbiguityIndexRev(((it1.first >> 8) & 0x00000000000000ffULL));
+							const char mis2 = getAmbiguityIndexRev(((it2->first >> 8) & 0x00000000000000ffULL));
+
+							const string seq1 = string(ref + lower_bound_pos, upper_bound_pos - lower_bound_pos);
+							const string seq2 = string(ref + lower_bound_pos2, upper_bound_pos2 - lower_bound_pos2);
+
+							string seq_q1 = seq1;
+							string seq_q2 = seq2;
+
+							if ((it1.first & 0x00000000000000ffULL) == 1) seq_q1[it1_pos - lower_bound_pos] = mis1;
+							else if ((it1.first & 0x00000000000000ffULL) == 2) seq_q1.insert(it1_pos - lower_bound_pos, 1, mis1);
+							else seq_q1.erase(it1_pos - lower_bound_pos, 1);
+
+							if ((it2->first & 0x00000000000000ffULL) == 1) seq_q2[it2_pos - lower_bound_pos2] = mis2;
+							else if ((it2->first & 0x00000000000000ffULL) == 2) seq_q2.insert(it2_pos - lower_bound_pos2, 1, mis2);
+							else seq_q2.erase(it2_pos - lower_bound_pos2, 1);
+
+							cout << "1: " << seq1 << " " << seq_q1 << " " << lower_bound_pos << " " << upper_bound_pos << " " << it1_pos << " " << (it1.first & 0x00000000000000ffULL) << endl;
+							cout << "2: " << seq2 << " " << seq_q2 << " " << lower_bound_pos2 << " " << upper_bound_pos2 << " " << it2_pos << " " << (it2->first & 0x00000000000000ffULL) << endl;
+						}*/
+					}
 				}
 
-				++l_it2;
+				++it2;
 			}
 
-			if (keepVar){
+			if (it1.second.keep) {
 
 				for (const uint32_t pos : it1.second.pos_v) pos_out.add(pos);
 			}

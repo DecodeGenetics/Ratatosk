@@ -76,7 +76,11 @@ class PairID {
         PairID& operator=(PairID&& o);
 
         bool operator==(const PairID& o) const;
-        inline bool operator!=(const PairID& o) const { return !operator==(o); }
+
+        inline bool operator!=(const PairID& o) const {
+
+            return !operator==(o);
+        }
 
         PairID operator|(const PairID& rhs) const;
         PairID& operator|=(const PairID& rhs);
@@ -109,7 +113,14 @@ class PairID {
         size_t minimum() const;
 
         size_t size() const;
-        inline size_t cardinality() const { return size(); }
+
+        size_t and_cardinality(const PairID& rhs) const;
+        size_t and_cardinality(const PairID& rhs, const uint64_t min_shared) const;
+
+        inline size_t cardinality() const {
+
+            return size();
+        }
 
         bool write(ostream& stream_out) const;
         bool read(istream& stream_in);
@@ -137,6 +148,9 @@ class PairID {
 
             return p;
         }
+
+        PairID forceRoaringInternal() const;
+        PairID subsample(const uint64_t nb) const;
 
     private:
 

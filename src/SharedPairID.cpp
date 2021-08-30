@@ -87,26 +87,6 @@ SharedPairID& SharedPairID::operator=(SharedPairID&& o){
     return *this;
 }
 
-/*SharedPairID& SharedPairID::operator=(PairID&& pid){
-
-    clear();
-
-   	local_pid = move(pid);
-
-   	pid.clear();
-
-    return *this;
-}
-
-SharedPairID& SharedPairID::operator=(const PairID& pid){
-
-	clear();
-
-	local_pid = pid;
-
-    return *this;
-}*/
-
 bool SharedPairID::operator==(const SharedPairID& o) const {
 
     if (size() != o.size()) return false;
@@ -151,8 +131,8 @@ SharedPairID& SharedPairID::operator|=(const PairID& rhs) {
 			const size_t a_card = cardinality();
 			const size_t b_card = rhs.cardinality();
 
-			const size_t log2_a = b_card * l_approximate_log2(a_card);
-			const size_t log2_b = a_card * l_approximate_log2(b_card);
+			const size_t log2_a = b_card * min(l_approximate_log2(a_card), 16UL);
+			const size_t log2_b = a_card * min(l_approximate_log2(b_card), 16UL);
 
 			const size_t min_a_b = min(a_card + b_card, min(log2_a, log2_b));
 
@@ -331,6 +311,8 @@ size_t SharedPairID::size() const {
 
 void SharedPairID::runOptimize() {
 
+	if (hasGlobalOwnership() && (getGlobalPairID() != nullptr)) reinterpret_cast<PairID*>(global_pid & ptrMask)->runOptimize();
+
     local_pid.runOptimize();
 }
 
@@ -339,6 +321,13 @@ PairID SharedPairID::toPairID() const {
 	if (getGlobalPairID() == nullptr) return local_pid;
 
 	return (*getGlobalPairID() | local_pid);
+}
+
+void SharedPairID::forceRoaringInternal() {
+
+	if (hasGlobalOwnership() && (getGlobalPairID() != nullptr)) reinterpret_cast<PairID*>(global_pid & ptrMask)->forceRoaringInternal();
+
+	local_pid.forceRoaringInternal();
 }
 
 vector<uint32_t> SharedPairID::toVector() const {
@@ -397,8 +386,8 @@ void SharedPairID::setLocalPairID(const PairID& l_pid) {
 		const size_t a_card = g_pid->cardinality();
 		const size_t b_card = l_pid.cardinality();
 
-		const size_t log2_a = b_card * l_approximate_log2(a_card);
-		const size_t log2_b = a_card * l_approximate_log2(b_card);
+		const size_t log2_a = b_card * min(l_approximate_log2(a_card), 16UL);
+		const size_t log2_b = a_card * min(l_approximate_log2(b_card), 16UL);
 
 		const size_t min_a_b = min(a_card + b_card, min(log2_a, log2_b));
 
@@ -428,8 +417,6 @@ void SharedPairID::setLocalPairID(const PairID& l_pid) {
 				const uint32_t val_b = *b_it_s;
 
 				if (val_a == val_b){
-
-					pid.add(val_b);
 
 					++a_it_s;
 					++b_it_s;

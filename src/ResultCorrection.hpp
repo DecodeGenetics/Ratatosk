@@ -129,11 +129,14 @@ class ResultCorrection {
 
 		inline size_t getLengthUncorrectedRegion(const size_t pos) const {
 
+			if (pos >= old_seq_len) return 0;
+
 			Roaring::const_iterator it = pos_corrected_old_seq.begin();
 
 			it.equalorlarger(pos);
 
-			if ((pos >= old_seq_len) || (it == pos_corrected_old_seq.end())) return 0;
+			//if ((pos >= old_seq_len) || (it == pos_corrected_old_seq.end())) return 0;
+			if (it == pos_corrected_old_seq.end()) return old_seq_len - pos;
 
 			return (min(static_cast<size_t>(*it), old_seq_len) - pos);
 		}

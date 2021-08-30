@@ -106,6 +106,51 @@ class Path {
 
 		Path() : l(0) {}
 
+		Path(const const_UnitigMap<U>& um_start, const string& ext, const const_UnitigMap<U>& um_end) {
+
+			l = 0; // Empty string
+
+			if (um_start.isEmpty) return;
+
+			const size_t k = um_start.getGraph()->getK();
+
+			if (um_end.isEmpty && (ext.length() == 0)) {
+
+				start = um_start;
+				l = um_start.len + k - 1;
+
+				return;
+			}
+
+			const_UnitigMap<U> curr = um_start;
+
+			size_t len = um_start.len + k - 1;
+
+			for (const char c : ext){
+
+				const Kmer fw(curr.getMappedTail().forwardBase(c));
+
+				curr = curr.getGraph()->find(fw, true);
+
+				if (curr.isEmpty) return;
+
+				curr.dist = 0;
+				curr.len = curr.size - k + 1;
+
+				len += curr.len;
+			}
+
+			if (!um_end.isEmpty) len += um_end.len;
+			else return;
+
+			start = um_start;
+			end = um_end;
+
+			succ = ext;
+
+			l = len;
+		}
+
 		Path(const Path<U>& o) : start(o.start), end(o.end), succ(o.succ), qual(o.qual), l(o.l) {}
 
 		Path(Path<U>&& o) : start(o.start), end(o.end), succ(move(o.succ)), qual(move(o.qual)), l(o.l) {
@@ -160,10 +205,73 @@ class Path {
 			l = 0;
 		}
 
-		inline const const_UnitigMap<U>& front() const { return start; }
-		inline const const_UnitigMap<U>& back() const { return (end.isEmpty ? start : end); }
+		Path<U> rev_comp() const {
 
-		bool replace_back(const const_UnitigMap<U>& um) {
+			Path<U> out;
+
+			if (!start.isEmpty){
+
+				out.l = l; // Length is the same
+
+				// Quality score are the same but in reverse order
+				{
+					out.qual = qual;
+					reverse(out.qual.begin(), out.qual.end());
+				}
+
+				if (end.isEmpty) {
+
+					out.start = start;
+					out.start.strand = !out.start.strand;
+				}
+				else {
+
+					out.start = end;
+					out.end = start;
+
+					out.start.strand = !out.start.strand;
+					out.end.strand = !out.end.strand;
+
+					if (succ.length() != 0) {
+
+						const size_t k = start.getGraph()->getK();
+
+						const_UnitigMap<U> curr = start;
+
+						out.succ.reserve(succ.length());
+
+						for (const char c : succ){
+
+							const Kmer fw(curr.getMappedTail().forwardBase(c));
+
+							curr = curr.getGraph()->find(fw, true);
+
+							curr.dist = 0;
+							curr.len = curr.size - k + 1;
+
+							if (curr.strand) out.succ.append(1, curr.getUnitigTail().toString()[0]);
+							else out.succ.append(1, curr.getUnitigHead().twin().toString()[0]);
+						}
+
+						out.succ = reverse_complement(out.succ);
+					}
+				}
+			}
+
+			return out;
+		}
+
+		inline const const_UnitigMap<U>& front() const {
+
+			return start;
+		}
+
+		inline const const_UnitigMap<U>& back() const {
+
+			return (end.isEmpty ? start : end);
+		}
+
+		/*bool replace_back(const const_UnitigMap<U>& um) {
 
 			if (um.isEmpty || start.isEmpty) return false;
 
@@ -181,9 +289,9 @@ class Path {
 			}
 
 			return true;
-		}
+		}*/
 
-		bool replace_back(const const_UnitigMap<U>& um, const double score) {
+		/*bool replace_back(const const_UnitigMap<U>& um, const double score) {
 
 			if (um.isEmpty || start.isEmpty) return false;
 
@@ -205,9 +313,43 @@ class Path {
 			}
 
 			return true;
+		}*/
+
+		bool replace_back(const const_UnitigMap<U>& um, const string& qual_s) {
+
+			if (um.isEmpty || start.isEmpty) return false;
+
+			const size_t k = um.getGraph()->getK();
+			const size_t um_subtr_len = um.len + k - 1;
+
+			if (end.isEmpty){
+
+				l = um_subtr_len;
+				start = um;
+
+				if (qual_s.length() == um_subtr_len) qual = qual_s;
+				else return false;
+			}
+			else {
+
+				l -= end.len;
+				l += um.len;
+
+				if (qual_s.length() == um_subtr_len) {
+
+					const size_t end_substr_len = end.len + k - 1;
+
+					qual.replace(qual.length() - end_substr_len, end_substr_len, qual_s, 0, qual_s.length());
+				}
+				else return false;
+
+				end = um;
+			}
+
+			return true;
 		}
 
-		bool extend(const const_UnitigMap<U>& um, const double score) {
+		/*bool extend(const const_UnitigMap<U>& um, const double score) {
 
 			if (um.isEmpty) return false;
 
@@ -229,6 +371,63 @@ class Path {
 			}
 
 			qual += getQual(score);
+
+			return true;
+		}*/
+
+		bool extend(const const_UnitigMap<U>& um) {
+
+			if (um.isEmpty) return false;
+
+			if (start.isEmpty){
+
+				start = um;
+				l = um.len + um.getGraph()->getK() - 1;
+			}
+			else {
+
+				if (!end.isEmpty) {
+
+					if (end.strand) succ.append(1, end.getUnitigHead().toString()[um.getGraph()->getK() - 1]);
+					else succ.append(1, end.getUnitigTail().twin().toString()[um.getGraph()->getK() - 1]);
+				}
+
+				end = um;
+				l += um.len;
+			}
+
+			return true;
+		}
+
+		bool extend(const const_UnitigMap<U>& um, const string& qual_s) {
+
+			if (um.isEmpty) return false;
+
+			const size_t k = um.getGraph()->getK();
+			const size_t um_subtr_len = um.len + k - 1;
+
+			if (start.isEmpty){
+
+				start = um;
+				l = um_subtr_len;
+
+				if (qual_s.length() == um_subtr_len) qual = qual_s;
+				else return false;
+			}
+			else {
+
+				if (!end.isEmpty) {
+
+					if (end.strand) succ.append(1, end.getUnitigHead().toString()[um.getGraph()->getK() - 1]);
+					else succ.append(1, end.getUnitigTail().twin().toString()[um.getGraph()->getK() - 1]);
+				}
+
+				end = um;
+				l += um.len;
+
+				if (qual_s.length() == um_subtr_len) qual += qual_s.substr(k-1);
+				else return false;
+			}
 
 			return true;
 		}
@@ -278,7 +477,8 @@ class Path {
 
 			l += o.l - k;
 
-			if (o.qual.length() != 0) qual.append(o.qual.substr(1));
+			//if (o.qual.length() != 0) qual.append(o.qual.substr(1));
+			if (o.qual.length() != 0) qual.append(o.qual.substr(k));
 
             return true;
 		}
@@ -293,10 +493,28 @@ class Path {
 			return l;
 		}
 
-		inline void setQuality(const char c) {
+		/*inline void setQuality(const char c) {
 
 			qual = string(size(), c);
+		}*/
+
+		inline void setQuality(const string& q) {
+
+			if (q.length() == l) qual = q;
 		}
+
+		/*inline bool setQuality(const string& q) {
+
+			if (q.length() == l) {
+
+				if (q.length() != toString().length()) return false;
+
+				qual = q;
+			}
+			else return false;
+
+			return true;
+		}*/
 
 		string toString() const {
 
@@ -323,20 +541,106 @@ class Path {
 
 				const string mapped_str = curr.mappedSequenceToString();
 
-				path_str.append(mapped_str.substr(k-1, mapped_str.length() - k + 1));
+				path_str.append(mapped_str.substr(k-1));
 			}
 
 			if (!end.isEmpty){
 
 				const string end_str = end.mappedSequenceToString();
 
-				path_str.append(end_str.substr(k-1, end_str.length() - k + 1));
+				path_str.append(end_str.substr(k-1));
 			}
 
 			return path_str;
 		}
 
-		string toQualityString() const {
+		void prunePrefix(const size_t len) {
+
+			if (start.isEmpty || (l == 0) || (len >= l)) return;
+
+			const size_t k = start.getGraph()->getK();
+			
+			if (end.isEmpty) {
+
+				if (!start.strand) start.dist += (l - len);
+
+				start.len -= (l - len);
+			}
+			else if (succ.empty()) {
+
+				if ((start.len + k - 1) >= len) {
+
+					l = start.len + k - 1;
+					end = const_UnitigMap<U>();
+
+					if (!start.strand) start.dist += l - len;
+
+					start.len -= l - len;
+				}
+				else {
+
+					if (!end.strand) end.dist += l - len;
+
+					end.len -= l - len;
+				}
+			}
+			else {
+
+				if ((start.len + k - 1) >= len) {
+
+					l = start.len + k - 1;
+					end = const_UnitigMap<U>();
+
+					if (!start.strand) start.dist += l - len;
+
+					start.len -= l - len;
+				}
+				else if (len > (l - end.len)) {
+
+					if (!end.strand) end.dist += l - len;
+
+					end.len -= l - len;
+				}
+				else {
+
+					const_UnitigMap<U> curr_um = start;
+
+					const string old_succ = move(succ);
+
+					l = start.len + k - 1;
+
+					for (const char c : old_succ) {
+
+						const Kmer fw(curr_um.getMappedTail().forwardBase(c));
+
+						curr_um = curr_um.getGraph()->find(fw, true);
+
+						curr_um.dist = 0;
+						curr_um.len = curr_um.size - k + 1;
+
+						l += curr_um.len;
+
+						if (l < len) succ += c;
+						else {
+
+							end = curr_um;
+
+							if (!end.strand) end.dist += l - len;
+
+							end.len -= l - len;
+
+							break;
+						}
+					}
+				}
+			}
+
+			l = len;
+
+			if (qual.length() != 0) qual = qual.substr(0, l);
+		}
+
+		/*string toQualityString() const {
 
 			if (qual.empty()) return string();
 			if (start.isEmpty) return string();
@@ -368,6 +672,11 @@ class Path {
 			if (!end.isEmpty) path_qual.append(end.len, qual[i++]);
 
 			return path_qual;
+		}*/
+
+		inline const string& toQualityString() const {
+
+			return qual;
 		}
 
 		PathOut toStringVector() const {
@@ -377,9 +686,9 @@ class Path {
 			if (end.isEmpty){
 
 				const string path_str = start.mappedSequenceToString();
-				const string path_qual = qual.empty() ? string() : string(path_str.length(), qual[0]);
+				//const string path_qual = qual.empty() ? string() : string(path_str.length(), qual[0]);
 
-				return PathOut(path_str, path_qual, vector<const_UnitigMap<U>>(1, start), *this);
+				return PathOut(path_str, /*path_qual*/qual, vector<const_UnitigMap<U>>(1, start), *this);
 			}
 
 			const size_t k = start.getGraph()->getK();
@@ -410,7 +719,7 @@ class Path {
 
 				const string mapped_str = curr.mappedSequenceToString();
 
-				path_str.append(mapped_str.substr(k-1, mapped_str.length() - k + 1));
+				path_str.append(mapped_str.substr(k-1));
 				v_um.push_back(curr);
 
 				++i;
@@ -420,17 +729,18 @@ class Path {
 
 				const string end_str = end.mappedSequenceToString();
 
-				path_str.append(end_str.substr(k-1, end_str.length() - k + 1));
+				path_str.append(end_str.substr(k-1));
 				v_um.push_back(end);
 			}
 
-			if (!qual.empty()){
+			/*if (!qual.empty()){
 
 				path_qual = string(v_um[0].len + k - 1, qual[0]);
 				path_qual.reserve(l);
 
 				for (i = 1; i < v_um.size(); ++i) path_qual.append(v_um[i].len, qual[i]);
-			}
+			}*/
+			path_qual = qual;
 
 			return PathOut(move(path_str), move(path_qual), move(v_um), *this);
 		}
@@ -442,9 +752,9 @@ class Path {
 			if (end.isEmpty){
 
 				const string path_str = start.mappedSequenceToString();
-				const string path_qual = qual.empty() ? string() : string(path_str.length(), qual[0]);
+				//const string path_qual = qual.empty() ? string() : string(path_str.length(), qual[0]);
 
-				return PathOut(path_str, path_qual, vector<const_UnitigMap<U>>(1, start), *this);
+				return PathOut(path_str, /*path_qual*/qual, vector<const_UnitigMap<U>>(1, start), *this);
 			}
 
 			size_t len_pref_vertices = 0;
@@ -501,7 +811,7 @@ class Path {
 
 				const string mapped_str = curr.mappedSequenceToString();
 
-				path_str.append(mapped_str.substr(k-1, mapped_str.length() - k + 1));
+				path_str.append(mapped_str.substr(k-1));
 				v_um.push_back(curr);
 			}
 
@@ -509,17 +819,18 @@ class Path {
 
 				const string end_str = end.mappedSequenceToString();
 
-				path_str.append(end_str.substr(k-1, end_str.length() - k + 1));
+				path_str.append(end_str.substr(k-1));
 				v_um.push_back(end);
 			}
 
-			if (!qual.empty()){
+			/*if (!qual.empty()){
 
 				path_qual = string(v_um[0].len + k - 1, qual[0]);
 				path_qual.reserve(l);
 
 				for (size_t i = 1; i < v_um.size(); ++i) path_qual.append(v_um[i].len, qual[i]);
-			}
+			}*/
+			path_qual = qual;
 
 			return PathOut(move(path_str), move(path_qual), move(v_um), *this);
 		}
@@ -554,11 +865,16 @@ class Path {
 			return v_um;
 		}
 
-		vector<char> toQualityVector() const {
+		/*vector<char> toQualityVector() const {
 
 			if (qual.empty() || start.isEmpty) return vector<char>();
 
 			return vector<char>(qual.begin(), qual.end()); 
+		}*/
+
+		string getMiddleCompactedPath() const {
+
+			return succ;
 		}
 
 	private:

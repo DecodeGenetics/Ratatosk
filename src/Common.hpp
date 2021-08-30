@@ -10,7 +10,7 @@
 #include "TinyBloomFilter.hpp"
 #include "SharedPairID.hpp"
 
-#define RATATOSK_VERSION "0.5.0"
+#define RATATOSK_VERSION "0.7.0"
 
 struct Correct_Opt : CDBG_Build_opt {
 
@@ -40,6 +40,9 @@ struct Correct_Opt : CDBG_Build_opt {
     size_t min_cov_vertices;
     size_t max_cov_vertices;
 
+    size_t max_km_cov;
+    double top_km_cov_ratio;
+
     size_t min_nb_km_unmapped;
 
     size_t nb_correction_rounds;
@@ -52,6 +55,7 @@ struct Correct_Opt : CDBG_Build_opt {
 
     size_t min_len_2nd_pass;
 
+    size_t buffer_sz_read2disk;
     size_t buffer_sz;
     size_t h_seed;
 
@@ -105,20 +109,25 @@ struct Correct_Opt : CDBG_Build_opt {
 	    min_cov_vertices = 2;
 	    max_cov_vertices = 128;
 
+	    max_km_cov = 128;
+	    top_km_cov_ratio = 0.001;
+
 	    nb_correction_rounds = 1;
 
 	    nb_partitions = 1000;
 	    min_bases_partition = 100000;
 
 	    max_len_weak_region1 = 1000;
-	    max_len_weak_region2 = 10000;
+	    max_len_weak_region2 = 5000;
 
 	    min_len_2nd_pass = 3000;
 
-	    buffer_sz = 1048576;
+	    buffer_sz_read2disk = 0x00000000ffffffffULL; // Read 4GB of sequence before writing to disk
+	    //buffer_sz_read2disk = 0x1000000ULL; // Read 16 MB of sequence before writing to disk -> for testing only
+	    buffer_sz = 1048576; // 1 MB reading buffers per thread
 	    h_seed = 0;
 
-	    weak_region_len_factor = 1.25;
+	    weak_region_len_factor = 0.25;
 	    large_k_factor = 1.5;
 	    min_score = 0.0;
 	    min_color_sharing = 0.5;
@@ -131,6 +140,14 @@ struct Correct_Opt : CDBG_Build_opt {
 
 	    min_nb_km_unmapped = small_k;
 	}
+};
+
+struct HashSharedPairIDptr {
+
+    size_t operator()(const SharedPairID* ptr) const {
+
+        return XXH64(ptr, sizeof(const SharedPairID*), 0);
+    }
 };
 
 struct CustomHashUint64_t {
@@ -216,7 +233,7 @@ struct pair_hash
     }
 };
 
-// This order of the nucleotide in this array is important -> DO NOT CHANGE
+// !!! This order of the nucleotide in this array is important -> DO NOT CHANGE !!!
 static const char ambiguity_c[16] = {'.', 'A', 'C', 'M', 'G', 'R', 'S', 'V', 'T', 'W', 'Y', 'H', 'K', 'D', 'B', 'N'};
 
 static const EdlibEqualityPair edlib_iupac_alpha[28] = {
@@ -242,11 +259,9 @@ double getEntropy(const char* s, const size_t len);
 size_t getMaxPaths(const double seq_entropy, const size_t max_len_path, const size_t k);
 size_t getMaxBranch(const double seq_entropy, const size_t max_len_path, const size_t k);
 
-size_t getNumberSharedPairID(const PairID& a, const PairID& b, const size_t min_shared_ids);
 size_t getNumberSharedPairID(const SharedPairID& a, const PairID& b, const size_t min_shared_ids);
 size_t getNumberSharedPairID(const SharedPairID& a, const SharedPairID& b, const size_t min_shared_ids);
 
-size_t getNumberSharedPairID(const PairID& a, const PairID& b);
 size_t getNumberSharedPairID(const SharedPairID& a, const PairID& b);
 size_t getNumberSharedPairID(const SharedPairID& a, const SharedPairID& b);
 
@@ -277,23 +292,14 @@ inline size_t countRecords(const vector<string>& v_fn, const bool unique, const 
 	size_t i = 0, n = 0;
 
     string s;
-	
-	// Count number of non-unique records
-	{
-		FileParser fp(v_fn);
 
-		while (fp.read(s, i)) ++n;
-	}
+	FileParser fp(v_fn);
 
-	if (unique) { // Count number of unique records
+	if (v_fn.empty()) return 0;
+
+	if (unique) { // Count approximate number of unique records
 
 		unordered_set<uint64_t> sh;
-
-		FileParser fp(v_fn);
-
-		sh.reserve(n);
-
-		n = 0;
 
 		while (fp.read(s, i)){
 
@@ -301,6 +307,10 @@ inline size_t countRecords(const vector<string>& v_fn, const bool unique, const 
 
 			n += static_cast<size_t>(sh.insert(h).second);
 		}
+	}
+	else {
+
+		while (fp.read(s, i)) ++n;
 	}
 
 	return n;
@@ -399,7 +409,7 @@ inline bool isValidHap(const PairID& hap_ids, const uint64_t hap_id) {
 
 inline pair<size_t, size_t> getMinMaxLength(const size_t l, const double len_factor) {
 
-	return {static_cast<size_t>(max(l / len_factor, 1.0)), static_cast<size_t>(max(l * len_factor, 1.0))};
+	return {static_cast<size_t>(max(l - (l * len_factor), 1.0)), static_cast<size_t>(max(l + (l * len_factor), 1.0))};
 }
 
 inline int count_prints(const string& s){

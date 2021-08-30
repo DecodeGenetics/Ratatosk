@@ -45,10 +45,11 @@ inline void annotateBranchingUnitigs(CompactedDBG<UnitigData>& dbg) {
 	for (auto& um : dbg) um.getData()->setBranching((um.getPredecessors().cardinality() > 1) || (um.getSuccessors().cardinality() > 1));
 }
 
-//size_t detectSTRs(CompactedDBG<UnitigData>& dbg, const size_t max_len_cycle, const size_t max_cov_km, const size_t nb_threads = 1, const bool verbose = false);
 //Roaring* createPartitions(CompactedDBG<UnitigData>& dbg, const vector<Kmer>& centroids, const double mean_len_to_neighbor, const size_t nb_threads, const bool verbose);
 //void expandConnectedComponent(CompactedDBG<UnitigData>& dbg, const size_t id_mapped, const size_t id_visited);
 
-//unordered_set<uint64_t> preprocessGraphQueries(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt);
+string phasing(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const string& s, const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_um_solid);
+
+size_t getMaxKmerCoverage(const CompactedDBG<UnitigData>& dbg, const double top_ratio);
 
 #endif

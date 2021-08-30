@@ -32,6 +32,8 @@ pair<int, int> selectBestSubstringAlignment(const char* ref, const size_t ref_le
 
 string fixSNPs(const Correct_Opt& opt, const CompactedDBG<UnitigData>& dbg, const string& s);
 
-vector<pair<size_t, const_UnitigMap<UnitigData>>> keep_non_overlap(const char* ref, const size_t k, const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v);
+vector<pair<size_t, const_UnitigMap<UnitigData>>> keep_non_overlap(const Correct_Opt& opt, const char* ref, const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v);
+
+bool test(const string& query_seq, const size_t query_len, const string& qual_seq, const size_t qual_len, const string& ref_seq, const size_t ref_len);
 
 #endif
