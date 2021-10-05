@@ -1,6 +1,8 @@
 #ifndef RATATOSK_PAIR_HPP
 #define RATATOSK_PAIR_HPP
 
+#include <random>
+
 #include "roaring.hh"
 #include "TinyBitmap.hpp"
 
