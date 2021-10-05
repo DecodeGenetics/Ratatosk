@@ -2,6 +2,7 @@
 #define RATATOSK_COMMON_HPP
 
 #include <iostream>
+#include <random
 
 #include "CompactedDBG.hpp"
 
