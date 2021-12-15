@@ -32,8 +32,6 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
 
     Path<UnitigData> tmp;
 
-    //const bool test = (s.substr(um_solid_start.first, len_weak_region).find("GGAGGCTGCTTGTACCCAGCG") != string::npos);
-
     tmp.extend(um_solid_start.second, string(um_solid_start.second.len + opt.k - 1, getQual(1.0)));
 	paths1.push_back({tmp, um_solid_start.first});
 
@@ -188,8 +186,6 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 
 	string q_bw = q_fw;
 
-	WeightsPairID lr_w_pid;
-
 	size_t prev_pos = v_um_solid[0].first;
 	size_t i_solid = 0;
 	size_t i_weak = 0;
@@ -216,113 +212,220 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 		p.second.strand = !p.second.strand;
 	}
 
-	auto chooseColors = [&](const unordered_map<const SharedPairID*, pair<const PairID*, bool>>& s_pid,
-							const pair<HapReads, HapReads>& hap_reads, const uint64_t hap_id, WeightsPairID& w_pid) {
+	auto chooseColors = [&](const unordered_map<const SharedPairID*, pair<const PairID*, bool>>& s_pid_s,
+							const unordered_map<const SharedPairID*, pair<const PairID*, bool>>& s_pid_e,
+							const unordered_map<const SharedPairID*, pair<const PairID*, bool>>& s_pid_w,
+							const pair<HapReads, HapReads>& hap_reads, const uint64_t hap_id,
+							WeightsPairID& w_pid) {
 
-		unordered_set<const PairID*> us_pid_weight, us_pid_noweight;
+		vector<const unordered_map<const SharedPairID*, pair<const PairID*, bool>>*> v_s_pid;
 
-		for (const auto it : s_pid){
+		unordered_set<const SharedPairID*> s_spid;
 
-			const SharedPairID& spids = *(it.first);
+		PairID a_pid[6];
 
-			//if (it.second.second){
-			if (it.second.second && (getNumberSharedPairID(spids, w_pid.weighted_pids, opt.min_cov_vertices) < opt.min_cov_vertices)) {
-			
-				if (hap_id == undetermined_hap_id) {
+		unordered_set<const PairID*> s_pid_ptr[6];
 
-					const pair<const PairID*, const PairID*> p_pids = spids.getPairIDs();
+		v_s_pid.push_back(&s_pid_w);
+		v_s_pid.push_back(&s_pid_e);
+		v_s_pid.push_back(&s_pid_s);
 
-					if ((p_pids.first != nullptr) && us_pid_weight.insert(p_pids.first).second) w_pid.weighted_pids |= *p_pids.first;
-					if ((p_pids.second != nullptr) && us_pid_weight.insert(p_pids.second).second) w_pid.weighted_pids |= *p_pids.second;
-				}
-				else {
+		for (size_t i = 0; i < v_s_pid.size(); ++i) {
 
-					const SharedPairID& spids = *(it.first);
+			const unordered_map<const SharedPairID*, pair<const PairID*, bool>>& s_pid = *(v_s_pid[i]);
 
-					for (const uint32_t id : spids){
+			for (const auto& it : s_pid){
 
-						if (phased_reads.contains(id)) w_pid.weighted_pids.add(id);
-					}
-				}
+				const int shift = i + (static_cast<size_t>(it.second.second) * 3);
+
+				const pair<const PairID*, const PairID*> p_pids = it.first->getPairIDs();
+
+				if (p_pids.first != nullptr) s_pid_ptr[shift].insert(p_pids.first);
+				else if (p_pids.second != nullptr) s_pid_ptr[shift].insert(p_pids.second);
+
+				if (it.first->cardinality() >= opt.min_cov_vertices) s_spid.insert(it.first);
 			}
 		}
 
-		for (const auto it : s_pid){
+		for (int i = 5; i >= 0; --i) {
 
-			const SharedPairID& spids = *(it.first);
+			const vector<const PairID*> v_pid_ptr(s_pid_ptr[i].begin(), s_pid_ptr[i].end());
 
-			// For all branching nodes with insufficient unique reads coverage
-			if (!it.second.second && (getNumberSharedPairID(spids, w_pid.weighted_pids, opt.min_cov_vertices) < opt.min_cov_vertices)) {
+			a_pid[i] = PairID::fastunion(v_pid_ptr.size(), &(v_pid_ptr.front()));
 
-				if (hap_id == undetermined_hap_id) {
+			if (hap_id != undetermined_hap_id) a_pid[i] &= phased_reads;
 
-					const pair<const PairID*, const PairID*> p_pids = spids.getPairIDs();
+			a_pid[i] = a_pid[i].forceRoaringInternal();
+			a_pid[i].runOptimize();
+		}
 
-					if ((p_pids.first != nullptr) && us_pid_noweight.insert(p_pids.first).second) w_pid.noWeight_pids |= *p_pids.first;
-					if ((p_pids.second != nullptr) && us_pid_noweight.insert(p_pids.second).second) w_pid.noWeight_pids |= *p_pids.second;
-				}
-				else {
+		{
+			const PairID a_pid_pos[3] = {a_pid[0] | a_pid[3], a_pid[1] | a_pid[4], a_pid[2] | a_pid[5]};
 
-					for (const uint32_t id : spids){
+			const PairID a_pid_01 = (a_pid_pos[0] & a_pid_pos[1]);
+			const PairID a_pid_12 = (a_pid_pos[1] & a_pid_pos[2]);
+			const PairID a_pid_02 = (a_pid_pos[0] & a_pid_pos[2]);
 
-						if (phased_reads.contains(id)) w_pid.noWeight_pids.add(id);
+			const PairID* a_pid_nobranch_ptr[3] = {&a_pid[3], &a_pid[4], &a_pid[5]};
+
+			PairID a_pid_inter2, a_pid_inter3;
+			PairID a_pid_branch, a_pid_nobranch, a_pid_nobranch_cpy;
+
+			a_pid_nobranch = PairID::fastunion(3, a_pid_nobranch_ptr);
+			a_pid_nobranch_cpy = a_pid_nobranch;
+
+			{
+				const size_t cov = 30;
+
+				size_t nb_unselected = s_spid.size();
+
+				PairID a_pid2[6];
+
+				vector<pair<const SharedPairID*, int>> v_spids;
+
+				for (const auto spid_ptr : s_spid) v_spids.push_back({spid_ptr, min(cov, spid_ptr->cardinality())});
+
+			    auto cmpCard = [](const pair<const SharedPairID*, int>& a, const pair<const SharedPairID*, int>& b) {
+
+			    	return (a.first->cardinality() < b.first->cardinality());
+			    };
+
+			    sort(v_spids.begin(), v_spids.end(), cmpCard);
+
+				for (int i = 5; i >= 0; --i) {
+
+					if (nb_unselected > 0) {
+
+						if (i == 5) {
+
+							a_pid_inter3 = a_pid_01 & a_pid_12;
+
+							a_pid2[5] = a_pid_nobranch & a_pid_inter3; // Contains reads mapping to non-branching unitigs and occurring before, after and in the region to correct
+							a_pid2[5].runOptimize();
+						}
+						else if (i == 4) {
+
+							const PairID* a_pid_ptr[3] = {&a_pid_01, &a_pid_12, &a_pid_02};
+
+							a_pid_inter2 = PairID::fastunion(3, a_pid_ptr);
+							a_pid_nobranch -= a_pid2[5];
+
+							a_pid2[4] = a_pid_nobranch & a_pid_inter2; // Contains reads mapping to non-branching unitigs and occurring before and after the region to correct
+							a_pid2[4].runOptimize();
+						}
+						else if (i == 3) {
+
+							a_pid_nobranch -= a_pid2[4];
+
+							a_pid2[3] = move(a_pid_nobranch); // Contains reads mapping to non-branching unitigs and occurring either before, after or in the region to correct
+							a_pid2[3].runOptimize();
+						}
+						else if (i == 2) {
+
+							const PairID* a_pid_ptr[3] = {&a_pid[0], &a_pid[1], &a_pid[2]};
+
+							a_pid_branch = PairID::fastunion(3, a_pid_ptr);
+							a_pid_branch -= a_pid_nobranch_cpy;
+
+							a_pid2[2] = a_pid_branch & a_pid_inter3; // Contains reads mapping to branching unitigs and occurring before, after and in the region to correct
+							a_pid2[2].runOptimize();
+						}
+						else if (i == 1) {
+
+							a_pid_branch -= a_pid2[2];
+
+							a_pid2[1] = a_pid_branch & a_pid_inter2; // Contains reads mapping to branching unitigs and occurring before and after the region to correct
+							a_pid2[1].runOptimize();
+						}
+						else {
+
+							a_pid_branch -= a_pid2[1];
+
+							a_pid2[0] = move(a_pid_branch); // Contains reads mapping to branching unitigs and occurring either before, after or in the region to correct
+							a_pid2[0].runOptimize();
+						}
+					}
+					else break;
+
+					if (!a_pid2[i].isEmpty()) {
+
+						nb_unselected = 0;
+
+						PairID curr_pid = a_pid2[i];
+
+						for (auto& p_spid : v_spids) {
+
+							if ((p_spid.second > 0) && ((i == 0) || (getNumberSharedPairID(*p_spid.first, curr_pid, 1) >= 1))) {
+
+								const size_t min_cov = min(cov, p_spid.first->cardinality());
+
+								p_spid.second = min_cov - min(getNumberSharedPairID(*p_spid.first, w_pid.all_pids, min_cov), min_cov);
+
+								if (p_spid.second > 0) {
+
+									const size_t all_pids_card = w_pid.all_pids.cardinality();
+
+									const pair<const PairID*, const PairID*> p_pids = p_spid.first->getPairIDs();
+
+									PairID pid;
+
+									if (p_pids.first != nullptr) pid |= *p_pids.first & curr_pid;
+									if (p_pids.second != nullptr) pid |= *p_pids.second & curr_pid;
+
+									if (pid.cardinality() > p_spid.second) {
+
+										PairID pid_tmp;
+										PairID::const_iterator its = pid.begin();
+
+										for (size_t j = 0; j < p_spid.second; ++j, ++its) pid_tmp.add(*its);
+
+										pid = move(pid_tmp);
+									}
+
+									w_pid.all_pids |= pid;
+									curr_pid -= pid;
+									p_spid.second -= min(static_cast<int>(w_pid.all_pids.cardinality() - all_pids_card), p_spid.second);
+								}
+							}
+
+							nb_unselected += static_cast<size_t>(p_spid.second > 0);
+						}
 					}
 				}
 			}
-		}
 
-		if (hap_id != undetermined_hap_id) {
-
-			for (const auto it : s_pid){
-
-				const SharedPairID& spids = *(it.first);
-				const PairID& hap_ids = *(it.second.first);
-
-				if (it.second.second && (getNumberSharedPairID(spids, w_pid.weighted_pids, opt.min_cov_vertices) < opt.min_cov_vertices)){
-
-					for (const uint32_t id : spids){
-						
-						if (hap_reads.first.hap2unphasedReads.contains(id)) w_pid.weighted_pids.add(id);
-					}
-				}
+			// All pids
+			{
+				w_pid.all_pids = w_pid.all_pids.forceRoaringInternal();
+				w_pid.all_pids.runOptimize();
 			}
 
-			for (const auto it : s_pid){
+			// Weighted IDs
+			{
+				w_pid.weighted_pids = w_pid.all_pids & a_pid_nobranch_cpy;
+				w_pid.weighted_pids = w_pid.weighted_pids.forceRoaringInternal();
+				w_pid.weighted_pids.runOptimize();
+			}
 
-				const SharedPairID& spids = *(it.first);
-				const PairID& hap_ids = *(it.second.first);
+			// Unweighted IDs
+			{
+				w_pid.noWeight_pids = w_pid.all_pids - w_pid.weighted_pids;
+				w_pid.noWeight_pids = w_pid.noWeight_pids.forceRoaringInternal();
+				w_pid.noWeight_pids.runOptimize();
+			}
 
-				if (!it.second.second && (getNumberSharedPairID(spids, w_pid.weighted_pids, opt.min_cov_vertices) < opt.min_cov_vertices)){
+			// Compute weights
+			{
+				// Reads mapping to non-branching unitigs weights twice as much as the other reads
+				if (!w_pid.weighted_pids.isEmpty()) {
 
-					for (const uint32_t id : spids){
-						
-						if (hap_reads.first.hap2unphasedReads.contains(id)) w_pid.noWeight_pids.add(id);
-					}
+					w_pid.weight = 2.0 * max(static_cast<double>(w_pid.noWeight_pids.cardinality()) / static_cast<double>(w_pid.weighted_pids.cardinality()), 1.0);
 				}
+				else w_pid.weight = 2.0;
+
+				w_pid.sum_pids_weights = w_pid.weight * static_cast<double>(w_pid.weighted_pids.cardinality()) + static_cast<double>(w_pid.noWeight_pids.cardinality());
 			}
 		}
-
-		w_pid.noWeight_pids -= w_pid.weighted_pids;
-
-		w_pid.weighted_pids = w_pid.weighted_pids.forceRoaringInternal();
-		w_pid.noWeight_pids = w_pid.noWeight_pids.forceRoaringInternal();
-		
-		w_pid.all_pids = w_pid.noWeight_pids | w_pid.weighted_pids;
-
-		w_pid.weighted_pids.runOptimize();
-		w_pid.noWeight_pids.runOptimize();
-		w_pid.all_pids.runOptimize();
-
-		// Reads mapping to non-branching unitigs weights twice as much as the other reads
-		if (w_pid.weighted_pids.cardinality() >= opt.min_cov_vertices) {
-
-			w_pid.weight = 2.0 * max(static_cast<double>(w_pid.noWeight_pids.cardinality()) / static_cast<double>(w_pid.weighted_pids.cardinality()), 1.0);
-		}
-		else w_pid.weight = 2.0;
-
-		//w_pid.sum_pids_weights = static_cast<double>(w_pid.weighted_pids.cardinality()) * w_pid.weight + static_cast<double>(w_pid.noWeight_pids.cardinality());
-		w_pid.sum_pids_weights = w_pid.weight * min(static_cast<double>(w_pid.weighted_pids.cardinality()), static_cast<double>(opt.min_cov_vertices));
-		w_pid.sum_pids_weights += min(static_cast<double>(w_pid.noWeight_pids.cardinality()), static_cast<double>(opt.min_cov_vertices));
 	};
 
 	auto correct = [&] (const string& s, const string& q,
@@ -351,12 +454,7 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 		vector<pair<size_t, char>> v_ambiguity;
 		vector<pair<size_t, const_UnitigMap<UnitigData>>> l_v_w;
 
-		Roaring r_id_part_solid;
-		Roaring r_id_neighbors;
-
 		WeightsPairID w_pid;
-
-		//const bool test = (string(s_start, len_weak_region).find("GGAGGCTGCTTGTACCCAGCG") != string::npos);
 
 		auto setUncorrected = [&](const size_t pos, const size_t len, const size_t qual){
 
@@ -372,108 +470,143 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 
 		if (rc == nullptr){
 			
-			unordered_map<const SharedPairID*, pair<const PairID*, bool>> s_pid_all, s_pid_weak;
-			unordered_map<const SharedPairID*, pair<const PairID*, bool>> s_pid_solid_s, s_pid_solid_e;
+			unordered_map<const SharedPairID*, pair<const PairID*, bool>> s_spid_l, s_spid_m, s_spid_r;
 
-			for (size_t i_s_s = i_s; (i_s_s > 0) && (v_s[i_s_s].first > min_start); --i_s_s){
+			// Left side (left solid anchors)
+			{
+				size_t nb_branching = 0;
 
-				const const_UnitigMap<UnitigData>& um = v_s[i_s_s].second;
-				const UnitigData* ud = um.getData();
+				for (int64_t i_s_s = i_s; (i_s_s >= 0) && (v_s[i_s_s].first > min_start); --i_s_s){
 
-				const SharedPairID& p_ids = ud->getPairID();
-				const PairID& hap_ids = ud->get_hapID();
+					const const_UnitigMap<UnitigData>& um = v_s[i_s_s].second;
+					const UnitigData* ud = um.getData();
+					const SharedPairID& p_ids = ud->getPairID();
+					const PairID& hap_ids = ud->get_hapID();
 
-				if (((i_s_s == i_s) || !um.isSameReferenceUnitig(v_s[i_s_s + 1].second)) && (ud->getKmerCoverage(um) < max_km_cov)) {
+					//if (ud->getKmerCoverage(um) < max_km_cov) s_spid_l.insert({&p_ids, {&hap_ids, !ud->isBranching()}});
+					if ((ud->getKmerCoverage(um) < max_km_cov) && (!ud->isBranching() || (nb_branching < 5))) {
 
-					s_pid_solid_s.insert({&p_ids, {&hap_ids, !ud->isBranching()}});
+						const bool unseen_um = s_spid_l.insert({&p_ids, {&hap_ids, !ud->isBranching()}}).second;
+						nb_branching += static_cast<size_t>(unseen_um && ud->isBranching());
+					}
+				}
+
+				{
+					const size_t v_w_sz = v_w.size();
+
+					size_t i_w_s = i_w - static_cast<size_t>((i_w != 0) && (i_w >= v_w_sz));
+
+					while ((i_w_s > 0) && (v_w[i_w_s].first > min_start)) --i_w_s;
+
+					for (; (i_w_s < v_w_sz) && (v_w[i_w_s].first < v_s[i_s].first); ++i_w_s){
+
+						const const_UnitigMap<UnitigData>& um = v_w[i_w_s].second;
+						const UnitigData* ud = um.getData();
+						const SharedPairID& p_ids = ud->getPairID();
+						const PairID& hap_ids = ud->get_hapID();
+
+						//if (ud->getKmerCoverage(um) < max_km_cov) s_spid_l.insert({&p_ids, {&hap_ids, !ud->isBranching()}});
+						if ((ud->getKmerCoverage(um) < max_km_cov) && (!ud->isBranching() || (nb_branching < 5))) {
+
+							const bool unseen_um = s_spid_l.insert({&p_ids, {&hap_ids, !ud->isBranching()}}).second;
+							nb_branching += static_cast<size_t>(unseen_um && ud->isBranching());
+						}
+					}
 				}
 			}
 
-			if (has_end_pt) {
+			if (has_end_pt) { // Right side if there is one (right solid anchors)
 
-				for (size_t i_s_e = i_s + 1; (i_s_e < v_s.size()) && (v_s[i_s_e].first < min_end); ++i_s_e){
+				const size_t v_s_sz = v_s.size();
+
+				size_t nb_branching = 0;
+
+				for (size_t i_s_e = i_s + 1; (i_s_e < v_s_sz) && (v_s[i_s_e].first < min_end); ++i_s_e){
 
 					const const_UnitigMap<UnitigData>& um = v_s[i_s_e].second;
 					const UnitigData* ud = um.getData();
-
 					const SharedPairID& p_ids = ud->getPairID();
 					const PairID& hap_ids = ud->get_hapID();
 
-					if (((i_s_e == i_s + 1) || !um.isSameReferenceUnitig(v_s[i_s_e - 1].second)) && (ud->getKmerCoverage(um) < max_km_cov)) {
+					//if (ud->getKmerCoverage(um) < max_km_cov) s_spid_r.insert({&p_ids, {&hap_ids, !ud->isBranching()}});
+					if ((ud->getKmerCoverage(um) < max_km_cov) && (!ud->isBranching() || (nb_branching < 5))) {
 
-						s_pid_solid_e.insert({&p_ids, {&hap_ids, !ud->isBranching()}});
+						const bool unseen_um = s_spid_r.insert({&p_ids, {&hap_ids, !ud->isBranching()}}).second;
+						nb_branching += static_cast<size_t>(unseen_um && ud->isBranching());
+					}
+				}
+
+				{
+					const size_t v_w_sz = v_w.size();
+
+					size_t i_w_s = i_w - static_cast<size_t>((i_w != 0) && (i_w >= v_w_sz));
+
+					while ((i_w_s < v_w_sz) && (v_w[i_w_s].first < v_s[i_s + 1].first)) ++i_w_s;
+
+					for (; (i_w_s < v_w_sz) && (v_w[i_w_s].first < min_end); ++i_w_s){
+
+						const const_UnitigMap<UnitigData>& um = v_w[i_w_s].second;
+						const UnitigData* ud = um.getData();
+						const SharedPairID& p_ids = ud->getPairID();
+						const PairID& hap_ids = ud->get_hapID();
+
+						//if (ud->getKmerCoverage(um) < max_km_cov) s_spid_r.insert({&p_ids, {&hap_ids, !ud->isBranching()}});
+						if ((ud->getKmerCoverage(um) < max_km_cov) && (!ud->isBranching() || (nb_branching < 5))) {
+
+							const bool unseen_um = s_spid_r.insert({&p_ids, {&hap_ids, !ud->isBranching()}}).second;
+							nb_branching += static_cast<size_t>(unseen_um && ud->isBranching());
+						}
 					}
 				}
 			}
 
-			if (!v_w.empty()) {
+			if (!v_w.empty()) { // "Middle" (semi-solid anchors in region to correct)
 
-				size_t i_w_s = i_w - static_cast<size_t>(i_w >= v_w.size());
-				size_t i_w_e = i_w - static_cast<size_t>(i_w >= v_w.size());
+				const size_t pos_end = has_end_pt ? v_s[i_s+1].first : s.length();
+				const size_t v_w_sz = v_w.size();
+
+				size_t i_w_s = i_w - static_cast<size_t>((i_w != 0) && (i_w >= v_w_sz));
 
 				// Establish boundaries of semi-solid k-mers we want to use
-				while ((i_w_s > 0) && (v_w[i_w_s].first > min_start)) --i_w_s;
+				while ((i_w_s < v_w_sz) && (v_w[i_w_s].first < v_s[i_s].first)) ++i_w_s;
 
-				i_w_s += static_cast<size_t>(((i_w_s < v_w.size()) && (v_w[i_w_s].first < min_start)));
-				i_w_e = i_w_s;
+				for (; (i_w_s < v_w_sz) && (v_w[i_w_s].first < pos_end); ++i_w_s){
 
-				while ((i_w_e < v_w.size()) && (v_w[i_w_e].first < min_end)) ++i_w_e;
-
-				l_v_w.insert(l_v_w.end(), v_w.begin() + i_w_s, v_w.begin() + i_w_e);
-
-				for (size_t i_w_s = 0; i_w_s < l_v_w.size(); ++i_w_s){
-
-					const const_UnitigMap<UnitigData>& um = l_v_w[i_w_s].second;
+					const const_UnitigMap<UnitigData>& um = v_w[i_w_s].second;
 					const UnitigData* ud = um.getData();
-
 					const SharedPairID& p_ids = ud->getPairID();
 					const PairID& hap_ids = ud->get_hapID();
 
-					if (((i_w_s == 0) || !um.isSameReferenceUnitig(l_v_w[i_w_s - 1].second)) && (ud->getKmerCoverage(um) < max_km_cov)) {
-						
-						s_pid_weak.insert({&p_ids, {&hap_ids, !ud->isBranching()}});
-					}
+					l_v_w.push_back(v_w[i_w_s]);
+
+					//if ((ud->getKmerCoverage(um) < max_km_cov) && !ud->isBranching()) s_spid_m.insert({&p_ids, {&hap_ids, !ud->isBranching()}});
+					if (ud->getKmerCoverage(um) < max_km_cov) s_spid_m.insert({&p_ids, {&hap_ids, !ud->isBranching()}});
 				}
 			}
 
-			s_pid_all = move(s_pid_solid_s);
-
-			s_pid_all.insert(s_pid_solid_e.begin(), s_pid_solid_e.end());
-			s_pid_all.insert(s_pid_weak.begin(), s_pid_weak.end());
-			
-			chooseColors(s_pid_all, hap_reads, hap_id, w_pid);
-
-			if (long_read_correct && (w_pid.weighted_pids.cardinality() < opt.min_cov_vertices)) {
-
-				w_pid = lr_w_pid;
-
-				chooseColors(s_pid_all, hap_reads, hap_id, w_pid);
-			}
+			chooseColors(s_spid_l, s_spid_r, s_spid_m, hap_reads, hap_id, w_pid);
 
 			res_corrected.setWeightsPairID(w_pid);
 		}
 		else {
 
-			if (!v_w.empty()) { // Select weak anchors but no need to recompute colors
+			if (!v_w.empty()) { // Select semi-solid anchors but no need to recompute colors
 
-				size_t i_w_s = i_w - static_cast<size_t>(i_w >= v_w.size());
-				size_t i_w_e = i_w - static_cast<size_t>(i_w >= v_w.size());
+				const size_t pos_end = has_end_pt ? v_s[i_s+1].first : s.length();
+				const size_t v_w_sz = v_w.size();
+
+				size_t i_w_s = i_w - static_cast<size_t>((i_w != 0) && (i_w >= v_w_sz));
 
 				// Establish boundaries of semi-solid k-mers we want to use
-				while ((i_w_s > 0) && (v_w[i_w_s].first > min_start)) --i_w_s;
+				while ((i_w_s < v_w_sz) && (v_w[i_w_s].first < v_s[i_s].first)) ++i_w_s;
 
-				i_w_s += static_cast<size_t>(((i_w_s < v_w.size()) && (v_w[i_w_s].first < min_start)));
-				i_w_e = i_w_s;
-
-				while ((i_w_e < v_w.size()) && (v_w[i_w_e].first < min_end)) ++i_w_e;
-
-				l_v_w.insert(l_v_w.end(), v_w.begin() + i_w_s, v_w.begin() + i_w_e);
+				for (; (i_w_s < v_w_sz) && (v_w[i_w_s].first < pos_end); ++i_w_s) l_v_w.push_back(v_w[i_w_s]);
 			}
 
 			w_pid = rc->getWeightsPairID();
 		}
 
-		const size_t card_pids = w_pid.weighted_pids.cardinality() + w_pid.noWeight_pids.cardinality();
+		const size_t card_pids = w_pid.all_pids.cardinality();
 
 		pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> paths1;
 
@@ -619,7 +752,7 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 		return res_corrected;
 	};
 
-	if (long_read_correct) {
+	/*if (long_read_correct) {
 		
 		unordered_map<const SharedPairID*, pair<const PairID*, bool>> s_pid_solid;
 
@@ -638,7 +771,7 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 		}
 		
 		chooseColors(s_pid_solid, hap_reads, hap_id, lr_w_pid);
-	}
+	}*/
 
     if (v_um_solid[0].first != 0){ // Read starts with a semi-solid region (no left solid region)
 
@@ -822,4 +955,63 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 	}
 
     return {corrected_s.str(), corrected_q.str()};
+}
+
+unordered_map<size_t, pair<PairID, PairID>, CustomHashSize_t> indexReadIDs(	const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_um_solid,
+																			const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_um_weak,
+																			const size_t max_km_cov) {
+
+	unordered_map<size_t, pair<PairID, PairID>, CustomHashSize_t> m_id_um;
+
+	const pair<PairID, PairID> empty_pids;
+
+	// Solid
+	{
+		unordered_set<Kmer, KmerHash> s_km;
+
+		for (size_t i = 0; i < v_um_solid.size(); ++i) {
+
+			const const_UnitigMap<UnitigData>& um = v_um_solid[i].second;
+
+			if (um.getData()->getKmerCoverage(um) < max_km_cov) {
+
+				const SharedPairID& spid = um.getData()->getPairID();
+
+				for (const auto id : spid) {
+
+					const pair<unordered_map<size_t, pair<PairID, PairID>, CustomHashSize_t>::iterator, bool> it = m_id_um.insert(pair<size_t, pair<PairID, PairID>>(id, empty_pids));
+
+					it.first->second.first.add(i);
+				}
+			}
+		}
+
+		for (auto& it : m_id_um) it.second.first.runOptimize();
+	}
+
+	// Weak
+	{
+		unordered_set<Kmer, KmerHash> s_km;
+
+		for (size_t i = 0; i < v_um_weak.size(); ++i) {
+
+			const const_UnitigMap<UnitigData>& um = v_um_weak[i].second;
+
+			if (um.getData()->getKmerCoverage(um) < max_km_cov) {
+
+				const SharedPairID& spid = um.getData()->getPairID();
+
+				for (const auto id : spid) {
+
+					const pair<unordered_map<size_t, pair<PairID, PairID>, CustomHashSize_t>::iterator, bool> it = m_id_um.insert(pair<size_t, pair<PairID, PairID>>(id, empty_pids));
+
+					it.first->second.second.add(i);
+				}
+			}
+		}
+
+		for (auto& it : m_id_um) it.second.second.runOptimize();
+	}
+
+	return m_id_um;
 }

@@ -27,17 +27,6 @@ struct info_traversal {
 	info_traversal() : l(0) {};
 };
 
-/*struct info_traversal {
-
-	Path<UnitigData> p;
-	PairID pid;
-
-	info_traversal() {};
-	info_traversal(const Path<UnitigData>& p_) : p(p_) {};
-	info_traversal(const SharedPairID& spid) : pid(spid.toPairID()) {};
-	info_traversal(const Path<UnitigData>& p_, const SharedPairID& spid) : p(p_), pid(spid.toPairID()) {};
-};*/
-
 struct local_graph_traversal {
 
 	unordered_map<Kmer, const SharedPairID*, KmerHash> m_km;
@@ -63,9 +52,9 @@ pair<double, double> exploreSubGraphLong(	const Correct_Opt& opt, const WeightsP
 											vector<Path<UnitigData>>& terminal_paths, vector<Path<UnitigData>>& non_terminal_paths, const uint64_t hap_id,
 											unordered_map<const SharedPairID*, pair<double, bool>, HashSharedPairIDptr>& m_pid);
 
-pair<double, double> getScorePath(	const Path<UnitigData>& path, const char* ref, const size_t ref_len, const bool terminal, const WeightsPairID& w_pid, const double max_er);
-pair<double, double> getScorePath(	const Path<UnitigData>& path, const char* ref, const size_t ref_len, const bool terminal, const WeightsPairID& w_pid, const double max_er,
-									const size_t min_pid_sharing, unordered_map<const SharedPairID*, pair<double, bool>, HashSharedPairIDptr>& m_pid);
+pair<double, double> getScorePath(const Correct_Opt& opt, const Path<UnitigData>& path, const char* ref, const size_t ref_len, const bool terminal, const WeightsPairID& w_pid);
+pair<double, double> getScorePath(	const Correct_Opt& opt, const Path<UnitigData>& path, const char* ref, const size_t ref_len, const bool terminal, const WeightsPairID& w_pid,
+									unordered_map<const SharedPairID*, pair<double, bool>, HashSharedPairIDptr>& m_pid);
 
 string getScorePath(const Correct_Opt& opt, const Path<UnitigData>& path, const char* ref, const size_t ref_len, const double score_best, const double score_second_best);
 
@@ -80,7 +69,5 @@ vector<pair<size_t, char>> getAmbiguityVector(const Path<UnitigData>::PathOut& p
 bool isValidSNPcandidate(local_graph_traversal& lgt_fw, local_graph_traversal& lgt_bw,
 						const const_UnitigMap<UnitigData>& um_a, const const_UnitigMap<UnitigData>& um_b,
 						const size_t min_cov = 2, const size_t limit_sz_stack = 65536);
-
-//void annotateConnectedComponents(CompactedDBG<UnitigData>& dbg);
 
 #endif

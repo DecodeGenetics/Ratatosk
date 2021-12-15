@@ -16,6 +16,12 @@
 #include "TinyBloomFilter.hpp"
 #include "UnitigData.hpp"
 
+struct RegionReadIDs {
+
+	unordered_map<size_t, size_t> m_pos_s, m_pos_w;
+	vector<PairID> v_pids;
+};
+
 pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	const Correct_Opt& opt, const string& s, const WeightsPairID& w_pid,
 																				const pair<size_t, const_UnitigMap<UnitigData>>& um_solid_start,
 																				const pair<size_t, const_UnitigMap<UnitigData>>& um_solid_end, 
@@ -26,6 +32,10 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 										const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_um_solid, const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_um_weak,
 										const bool long_read_correct, const Roaring* all_partitions, const uint64_t hap_id, const pair<HapReads, HapReads>& hap_reads,
 										const size_t max_km_cov);
+
+unordered_map<size_t, pair<PairID, PairID>, CustomHashSize_t> indexReadIDs(	const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_um_solid,
+																			const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_um_weak,
+																			const size_t max_km_cov);
 
 inline bool hasUniquePosition(const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v, const size_t pos){
 

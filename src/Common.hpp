@@ -11,13 +11,16 @@
 #include "TinyBloomFilter.hpp"
 #include "SharedPairID.hpp"
 
-#define RATATOSK_VERSION "0.7.0"
+#define RATATOSK_VERSION "0.7.5"
 
 struct Correct_Opt : CDBG_Build_opt {
 
 	vector<string> filenames_long_in; // Long reads to correct
+	vector<string> filenames_long_raw; // Raw long reads to correct. This is the same as "filenames_long_in" during pass 1.
+
 	vector<string> filenames_helper_long_in; // Accurate long reads helping with coloring on the 2nd round
 	vector<string> filenames_short_all; // Unmapped short reads
+
 	vector<string> filenames_long_phase; // Phasing files long reads
 	vector<string> filenames_short_phase; // Phasing files short reads
 
@@ -79,6 +82,7 @@ struct Correct_Opt : CDBG_Build_opt {
 	void clear() {
 
 		filenames_long_in.clear();
+		filenames_long_raw.clear();
 		filenames_helper_long_in.clear();
 		filenames_short_all.clear();
 		filenames_long_phase.clear();
@@ -156,6 +160,14 @@ struct CustomHashUint64_t {
     size_t operator()(const uint64_t v) const {
 
         return XXH64(&v, sizeof(uint64_t), 0);
+    }
+};
+
+struct CustomHashSize_t {
+
+    size_t operator()(const size_t v) const {
+
+        return XXH64(&v, sizeof(size_t), 0);
     }
 };
 
@@ -267,6 +279,8 @@ size_t getNumberSharedPairID(const SharedPairID& a, const PairID& b);
 size_t getNumberSharedPairID(const SharedPairID& a, const SharedPairID& b);
 
 PairID getSharedPairID(const SharedPairID& a, const SharedPairID& b, const size_t min_shared);
+PairID getSharedPairID(const SharedPairID& a, const PairID& b, const size_t min_shared);
+PairID getSharedPairID(const PairID& a, const PairID& b, const size_t min_shared);
 
 PairID subsample(const SharedPairID& spid, const size_t nb_id_out);
 PairID subsample(const PairID& spid, const size_t nb_id_out);
@@ -422,5 +436,28 @@ size_t approximate_log2(size_t v);
 
 bool check_files(vector<string>& v_fn, const bool check_files_format, const bool verbose = false);
 bool check_files(const string& fn, const bool check_files_format, const bool verbose = false);
+
+// From https://stackoverflow.com/questions/9345087/choose-m-elements-randomly-from-a-vector-containing-n-elements
+// This is a Fisher-Yates shuffle, similar to random_Shuffle, except it stops after n iterations
+// Note that this function modifies the input vector
+template<class BidiIter>
+BidiIter random_unique(BidiIter begin, BidiIter end, size_t n) {
+
+    size_t left = std::distance(begin, end);
+
+    while (n--) {
+
+        BidiIter r = begin;
+
+        std::advance(r, rand()%left);
+        std::swap(*begin, *r);
+
+        ++begin;
+        --left;
+    }
+
+    return begin;
+}
+
 
 #endif

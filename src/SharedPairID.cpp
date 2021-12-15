@@ -134,11 +134,11 @@ SharedPairID& SharedPairID::operator|=(const PairID& rhs) {
 			const size_t log2_a = b_card * min(l_approximate_log2(a_card), 16UL);
 			const size_t log2_b = a_card * min(l_approximate_log2(b_card), 16UL);
 
-			const size_t min_a_b = min(a_card + b_card, min(log2_a, log2_b));
+			const size_t min_ab_card = min(a_card + b_card, min(log2_a, log2_b));
 
 			PairID pid;
 			
-			if (min_a_b == log2_a) {
+			if (min_ab_card == log2_a) {
 
 				PairID::const_iterator b_it_s = rhs.begin(), b_it_e = rhs.end();
 
@@ -151,7 +151,7 @@ SharedPairID& SharedPairID::operator|=(const PairID& rhs) {
 			}
 			else {
 
-				SharedPairID::const_iterator a_it_s = begin(), a_it_e = end();
+				SharedPairID::const_iterator a_it_s = begin(rhs.minimum()), a_it_e = end();
 				PairID::const_iterator b_it_s = rhs.begin(), b_it_e = rhs.end();
 
 				while ((a_it_s != a_it_e) && (b_it_s != b_it_e)){
@@ -211,11 +211,11 @@ SharedPairID& SharedPairID::operator|=(const SharedPairID& rhs) {
 			const size_t log2_a = b_card * l_approximate_log2(a_card);
 			const size_t log2_b = a_card * l_approximate_log2(b_card);
 
-			const size_t min_a_b = min(a_card + b_card, min(log2_a, log2_b));
+			const size_t min_ab_card = min(a_card + b_card, min(log2_a, log2_b));
 
 			PairID pid;
 			
-			if (min_a_b == log2_a) {
+			if (min_ab_card == log2_a) {
 
 				SharedPairID::const_iterator b_it_s = rhs.begin(), b_it_e = rhs.end();
 
@@ -228,7 +228,7 @@ SharedPairID& SharedPairID::operator|=(const SharedPairID& rhs) {
 			}
 			else {
 
-				SharedPairID::const_iterator a_it_s = begin(), a_it_e = end();
+				SharedPairID::const_iterator a_it_s = begin(rhs.minimum()), a_it_e = end();
 				SharedPairID::const_iterator b_it_s = rhs.begin(), b_it_e = rhs.end();
 
 				while ((a_it_s != a_it_e) && (b_it_s != b_it_e)){
@@ -482,6 +482,11 @@ SharedPairID::const_iterator SharedPairID::begin() const {
     return const_iterator(this, true);
 }
 
+SharedPairID::const_iterator SharedPairID::begin(const size_t id) const {
+
+    return const_iterator(this, true, id);
+}
+
 SharedPairID::const_iterator SharedPairID::end() const {
 
     return const_iterator(this, false);
@@ -492,7 +497,7 @@ SharedPairID::SharedPairID_const_iterator::SharedPairID_const_iterator() {
 	clear();
 }
 
-SharedPairID::SharedPairID_const_iterator::SharedPairID_const_iterator(const SharedPairID* spid, const bool begin) {
+SharedPairID::SharedPairID_const_iterator::SharedPairID_const_iterator(const SharedPairID* spid, const bool begin, const size_t start_id) {
 
 	if (spid == nullptr) clear();
 	else {
@@ -500,7 +505,11 @@ SharedPairID::SharedPairID_const_iterator::SharedPairID_const_iterator(const Sha
 		{
 			local_pid = &(spid->local_pid);
 
-			if (begin) local_pid_it = local_pid->begin();
+			if (begin) {
+
+				if (start_id == 0) local_pid_it = local_pid->begin();
+				else local_pid_it = local_pid->begin(start_id);
+			}
 			else local_pid_it = local_pid->end();
 
 			l_valid = (local_pid_it != local_pid->end());
@@ -517,7 +526,11 @@ SharedPairID::SharedPairID_const_iterator::SharedPairID_const_iterator(const Sha
 			}
 			else {
 
-				if (begin) global_pid_it = global_pid->begin();
+				if (begin) {
+
+					if (start_id == 0) global_pid_it = global_pid->begin();
+					else global_pid_it = global_pid->begin(start_id);
+				}
 				else global_pid_it = global_pid->end();
 
 				g_valid = (global_pid_it != global_pid->end());

@@ -71,7 +71,7 @@ void PrintUsage(const Correct_Opt& opt) {
         cout << "   > Optional with required argument:" << endl << endl <<
         "   -m, --min-conf-snp-corr         Minimum confidence threshold to correct a SNP (default: " << opt.min_confidence_snp_corr << ")" << endl <<
         "   -M, --min-conf-color2           Minimum confidence threshold to color vertices for 2nd pass (default: " << opt.min_confidence_2nd_pass << ")" << endl <<
-        "   -L, --min-len-color2            Minimum length of a long read to color vertices for 2nd pass (default: " << opt.min_len_2nd_pass << ")" << endl <<
+        "   -C, --min-len-color2            Minimum length of a long read to color vertices for 2nd pass (default: " << opt.min_len_2nd_pass << ")" << endl <<
         "   -i, --insert-sz                 Insert size of the input paired-end short reads (default: " << opt.insert_sz << ")" << endl <<
         "   -k, --k1                        Length of short k-mers for 1st pass (default: " << opt.small_k << ")" << endl <<
         "   -K, --k2                        Length of long k-mers for 2nd pass (default: " << opt.k << ")" << endl <<
@@ -83,7 +83,9 @@ void PrintUsage(const Correct_Opt& opt) {
 
         cout << "[EXPERIMENTAL PARAMETERS]:" << endl << endl;
         cout << "   > Optional with required argument:" << endl << endl <<
-        "   -r, --correction-rounds         Number of short read correction rounds (default: " << opt.nb_correction_rounds << ")" << endl <<
+        //"   -r, --correction-rounds         Number of short read correction rounds (default: " << opt.nb_correction_rounds << ")" << endl <<
+        "   -L, --in-long_raw               Input long read file from 1st pass (FASTA/FASTQ possibly gzipped)" << endl <<
+        "                                   List of input long read files to correct (one file per line)" << endl <<
         "   -p, --in-short-phase            Input short read phasing file (diploid only)" << endl <<
         "                                   List of input short read phasing files (one file per line)" << endl <<
         "   -P, --in-long-phase             Input long read phasing file (diploid only)" << endl <<
@@ -119,7 +121,7 @@ void PrintUsage(const Correct_Opt& opt) {
         cout << "[ADVANCED PARAMETERS]:" << endl << endl;
         cout << "   > Optional with required argument:" << endl << endl <<
         "   -M, --min-conf-color2           Minimum confidence threshold to color vertices for 2nd pass (default: " << opt.min_confidence_2nd_pass << ")" << endl <<
-        "   -L, --min-len-color2            Minimum length of a long read to color vertices for 2nd pass (default: " << opt.min_len_2nd_pass << ")" << endl <<
+        "   -C, --min-len-color2            Minimum length of a long read to color vertices for 2nd pass (default: " << opt.min_len_2nd_pass << ")" << endl <<
         "   -i, --insert-sz                 Insert size of the input paired-end short reads (default: " << opt.insert_sz << ")" << endl <<
         "   -k, --k1                        Length of short k-mers for 1st pass (default: " << opt.small_k << ")" << endl <<
         "   -K, --k2                        Length of long k-mers for 2nd pass (default: " << opt.k << ")" << endl << endl;
@@ -130,7 +132,7 @@ int parse_ProgramOptions(int argc, char **argv, Correct_Opt& opt) {
 
     int option_index = 0, c;
 
-    const char* opt_string = "s:l:o:c:S:t:u:a:g:d:m:M:L:i:k:K:w:W:r:p:P:12fv";
+    const char* opt_string = "s:l:o:c:S:t:u:a:g:d:m:M:C:i:k:K:w:W:r:L:p:P:12fv";
 
     static struct option long_options[] = {
 
@@ -146,13 +148,14 @@ int parse_ProgramOptions(int argc, char **argv, Correct_Opt& opt) {
         {"in-unitig-data",          required_argument,  0, 'd'},
         {"min-conf-snp-corr",       required_argument,  0, 'm'},
         {"min-conf-color2",         required_argument,  0, 'M'},
-        {"min-len-color2",          required_argument,  0, 'L'},
+        {"min-len-color2",          required_argument,  0, 'C'},
         {"insert-sz",               required_argument,  0, 'i'},
         {"k1",                      required_argument,  0, 'k'},
         {"k2",                      required_argument,  0, 'K'},
         {"max-len-weak1",           required_argument,  0, 'w'},
         {"max-len-weak2",           required_argument,  0, 'W'},
         {"correction-rounds",       required_argument,  0, 'r'},
+        {"in-long-raw",             required_argument,  0, 'L'},
         {"in-short-phase",          required_argument,  0, 'p'},
         {"in-long-phase",           required_argument,  0, 'P'},
         {"1st-pass-only",           no_argument,        0, '1'},
@@ -220,7 +223,7 @@ int parse_ProgramOptions(int argc, char **argv, Correct_Opt& opt) {
             case 'M':
                 opt.min_confidence_2nd_pass = atof(optarg);
                 break;
-            case 'L':
+            case 'C':
                 opt.min_len_2nd_pass = atoi(optarg);
                 break;
             case 'i':
@@ -234,6 +237,9 @@ int parse_ProgramOptions(int argc, char **argv, Correct_Opt& opt) {
                 break;
             case 'r':
                 opt.nb_correction_rounds = atoi(optarg);
+                break;
+            case 'L':
+                opt.filenames_long_raw.push_back(string(optarg));
                 break;
             case 'w':
                 opt.max_len_weak_region1 = atoi(optarg);
@@ -429,6 +435,7 @@ bool check_ProgramOptions(Correct_Opt& opt) {
 
     if (!opt.filenames_helper_long_in.empty()) ret = ret && check_files(opt.filenames_helper_long_in, true, true);
     if (!opt.filenames_short_all.empty()) ret = ret && check_files(opt.filenames_short_all, true, true);
+    if (!opt.filenames_long_raw.empty()) ret = ret && check_files(opt.filenames_long_raw, true, true);
     if (!opt.filenames_short_phase.empty()) ret = ret && check_files(opt.filenames_short_phase, true, true);
     if (!opt.filenames_long_phase.empty()) ret = ret && check_files(opt.filenames_long_phase, true, true);
 
@@ -457,9 +464,11 @@ bool check_ProgramOptions(Correct_Opt& opt) {
     return ret;
 }
 
-void writeCorrectedOutput(ostream& out, const string& name_str, const string& seq_str, const string& qual_str, const int k, const int trim = 0){
+size_t writeCorrectedOutput(ostream& out, const string& name_str, const string& seq_str, const string& qual_str, const int k, const int trim = 0){
 
     const char header_1st_c = '@';
+
+    const streampos spos_b = out.tellp();
 
     if (trim == 0){
 
@@ -506,6 +515,8 @@ void writeCorrectedOutput(ostream& out, const string& name_str, const string& se
             out << "+" << "\n" << qual_str.substr(start_pos, len) << "\n";
         }
     }
+
+    return static_cast<size_t>(out.tellp() - spos_b);
 }
 
 void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const bool long_read_correct, const Roaring* partitions, const pair<HapReads, HapReads>& hap_reads) {
@@ -517,6 +528,8 @@ void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const b
 
     ofstream outfile;
     ostream out(0);
+
+    vector<pair<size_t, streampos>> v_block_w; // Blocks order and position if reordering needed
 
     FileParser fp(opt.filenames_long_in);
 
@@ -588,18 +601,9 @@ void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const b
                     l_opt.weak_region_len_factor = opt.weak_region_len_factor - (opt.nb_correction_rounds - j - 1) * step_weak_region_len_factor;
                     l_opt.max_len_weak_region1 = (j+1) * step_max_len_weak_region1;
 
-                    //const auto start = std::chrono::high_resolution_clock::now();
-
                     const pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> p = getSeeds(l_opt, dbg, in_read, in_qual, long_read_correct, hap_id, m_km_um, (j+1) != opt.nb_correction_rounds);
 
-                    //const auto middle = std::chrono::high_resolution_clock::now();
-
                     pair<string, string> correction = correctSequence(dbg, l_opt, in_read, in_qual, p.first, p.second, long_read_correct, partitions, hap_id, hap_reads, max_km_cov);
-
-                    //const auto end = std::chrono::high_resolution_clock::now();
-
-                    //cout << std::chrono::duration_cast<std::chrono::milliseconds>(middle - start).count() << " " << std::chrono::duration_cast<std::chrono::milliseconds>(end - middle).count()
-                    //<< " " << (static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(end - middle).count()) / static_cast<double>(in_read.length())) << endl;
 
                     in_read = move(correction.first);
                     in_qual = move(correction.second);
@@ -611,11 +615,12 @@ void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const b
             if (opt.verbose) cout << fp.getNameString() << ", " << in_len << " bp raw, " << in_read.length() << " bp corrected" << endl;
         }
     }
-    else {
+    /*else {
 
         bool stop = false;
 
         size_t nb_reads_proc = 0;
+        size_t ticket_dispenser = 0;
 
         vector<thread> workers; // need to keep track of threads so we can join them
 
@@ -633,6 +638,7 @@ void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const b
                     string in_read;
 
                     size_t in_read_len = 0;
+                    size_t ticket_id = 0;
 
                     while (true) {
 
@@ -644,6 +650,8 @@ void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const b
                             return;
                         }
                         else {
+
+                            ticket_id = ticket_dispenser++;
 
                             while (in_read_len < opt.buffer_sz) {
 
@@ -723,7 +731,13 @@ void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const b
 
                                 mutex_file_out.acquire();
 
-                                for (size_t i = 0; i < v_in_read.size(); ++i) writeCorrectedOutput(out, v_in_name[i], v_in_read[i], v_in_qual[i], k, (long_read_correct ? opt.trim_qual : 0));
+                                size_t block_sz = 0;
+
+                                const streampos sp = out.tellp();
+
+                                for (size_t i = 0; i < v_in_read.size(); ++i) block_sz += writeCorrectedOutput(out, v_in_name[i], v_in_read[i], v_in_qual[i], k, (long_read_correct ? opt.trim_qual : 0));
+
+                                v_block_w.push_back({(ticket_id << 32) | block_sz, sp});
 
                                 mutex_file_out.release();
                             }
@@ -742,10 +756,270 @@ void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const b
         }
 
         for (auto& t : workers) t.join();
+    }*/
+    else {
+
+        bool stop = false;
+
+        size_t nb_reads_proc = 0;
+        size_t ticket_dispenser = 0;
+        size_t file_id_raw = 0;
+
+        vector<thread> workers; // need to keep track of threads so we can join them
+
+        SpinLock mutex_file_in;
+        SpinLock mutex_file_out;
+
+        FileParser fp_raw(long_read_correct ? opt.filenames_long_raw : opt.filenames_long_in);
+
+        for (size_t t = 0; t < opt.nb_threads; ++t){
+
+            workers.emplace_back(
+
+                [&, t]{
+
+                    vector<string> v_in_read, v_in_name, v_in_qual;
+
+                    string in_read;
+
+                    vector<string> v_in_read_raw, v_in_name_raw;
+
+                    string in_read_raw;
+
+                    size_t in_read_len = 0;
+                    size_t ticket_id = 0;
+
+                    while (true) {
+
+                        mutex_file_in.acquire();
+
+                        if (stop){
+
+                            mutex_file_in.release();
+                            return;
+                        }
+                        else {
+
+                            ticket_id = ticket_dispenser++;
+
+                            while (in_read_len < opt.buffer_sz) {
+
+                                stop = !fp.read(in_read, file_id);
+
+                                if (!stop){
+
+                                    in_read_len += in_read.length();
+
+                                    v_in_read.push_back(move(in_read));
+                                    v_in_name.push_back(string(fp.getNameString()));
+                                    v_in_qual.push_back((fp.getQualityScoreString() != nullptr) ? string(fp.getQualityScoreString()) : string());
+
+                                    if (opt.verbose && (++nb_reads_proc % 1000 == 0)) cout << "Ratatosk::correct(): Processed " << nb_reads_proc << " reads " << endl;
+                                }
+                                else break;
+                            }
+
+                            if (long_read_correct) {
+
+                                while (v_in_read_raw.size() < v_in_read.size()) {
+
+                                    if (fp_raw.read(in_read_raw, file_id_raw)) {
+
+                                        v_in_read_raw.push_back(move(in_read_raw));
+                                        v_in_name_raw.push_back(string(fp_raw.getNameString()));
+                                    }
+                                    else break;
+                                }
+
+                                if (v_in_read_raw.size() != v_in_read.size()) {
+
+                                    cerr << "Ratatosk::correct(): Corrected read file is not in the same order as input long read file. Abort." << endl;
+                                    exit(1);
+                                }
+                                else {
+
+                                    for (size_t i = 0; i < v_in_read.size(); ++i) {
+
+                                        if (v_in_name[i].compare(1, v_in_name[i].length() - 1, v_in_name_raw[i], 1, v_in_name_raw[i].length() - 1) != 0) {
+
+                                            cerr << "Ratatosk::correct(): Corrected read file is not in the same order as input long read file. Abort." << endl;
+                                            exit(1);
+                                        }
+                                    }
+                                }
+                            }
+
+                            mutex_file_in.release();
+
+                            if (!v_in_read.empty()){
+
+                                for (size_t i = 0; i < v_in_read.size(); ++i){
+
+                                    uint64_t hap_id = 0xffffffffffffffffULL;
+
+                                    unordered_map<Kmer, vector<const_UnitigMap<UnitigData>>, KmerHash> m_km_um;
+
+                                    std::transform(v_in_read[i].begin(), v_in_read[i].end(), v_in_read[i].begin(), ::toupper); // Read sequence in upper case characters
+
+                                    if (!long_read_correct && !v_in_qual[i].empty()) getStdQual(v_in_qual[i]); // Set all quality score from 0 to 40
+
+                                    if (!hap_reads.second.read2hap.empty()){ // Fetch the haploblock ID of that read, if it exists or the read has one
+
+                                        const uint64_t in_name_h = XXH64(v_in_name[i].c_str(), v_in_name[i].length(), opt.h_seed);
+                                        const unordered_map<uint64_t, uint64_t, CustomHashUint64_t>::const_iterator it_read2hap = hap_reads.second.read2hap.find(in_name_h);
+
+                                        if (it_read2hap != hap_reads.second.read2hap.end()) hap_id = it_read2hap->second;
+                                    }
+
+                                    if (long_read_correct){
+
+                                        if (opt.force_unres_snp_corr) v_in_read[i] = fixSNPs(opt, dbg, v_in_read[i]);
+
+                                        // ========== TEST ==========
+                                        {
+                                            pair<string, string> new_reads = phasing(dbg, opt, v_in_read_raw[i], v_in_read[i], v_in_qual[i]);
+
+                                            v_in_read[i] = move(new_reads.first);
+                                            v_in_qual[i] = move(new_reads.second);
+                                        }
+                                        // ========== TEST ==========
+
+                                        const pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> p = getSeeds(opt, dbg, v_in_read[i], v_in_qual[i], long_read_correct, hap_id, m_km_um, false);
+
+                                        pair<string, string> correction = correctSequence(dbg, opt, v_in_read[i], v_in_qual[i], p.first, p.second, long_read_correct, partitions, hap_id, hap_reads, max_km_cov);
+
+                                        v_in_read[i] = move(correction.first);
+                                        v_in_qual[i] = move(correction.second);
+                                    }
+                                    else {
+
+                                        const double step_min_score = 1.00 / static_cast<double>(opt.nb_correction_rounds);
+                                        const double step_weak_region_len_factor = (opt.nb_correction_rounds == 1) ? 0.0 : ((opt.weak_region_len_factor - 0.10) / static_cast<double>(opt.nb_correction_rounds - 1));
+                                        const size_t step_max_len_weak_region1 = opt.max_len_weak_region1 / opt.nb_correction_rounds;
+
+                                        for (size_t j = 0; j < opt.nb_correction_rounds; ++j) {
+
+                                            Correct_Opt l_opt = opt;
+
+                                            l_opt.min_score = 1.00 - (j+1) * step_min_score;
+                                            l_opt.weak_region_len_factor = opt.weak_region_len_factor - (opt.nb_correction_rounds - j - 1) * step_weak_region_len_factor;
+                                            l_opt.max_len_weak_region1 = (j+1) * step_max_len_weak_region1;
+
+                                            const pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, const_UnitigMap<UnitigData>>>> p = getSeeds(l_opt, dbg, v_in_read[i], v_in_qual[i], long_read_correct, hap_id, m_km_um, (j+1) != opt.nb_correction_rounds);
+
+                                            pair<string, string> correction = correctSequence(dbg, l_opt, v_in_read[i], v_in_qual[i], p.first, p.second, long_read_correct, partitions, hap_id, hap_reads, max_km_cov);
+
+                                            v_in_read[i] = move(correction.first);
+                                            v_in_qual[i] = move(correction.second);
+                                        }
+                                    }
+                                }
+
+                                mutex_file_out.acquire();
+
+                                size_t block_sz = 0;
+
+                                const streampos sp = out.tellp();
+
+                                for (size_t i = 0; i < v_in_read.size(); ++i) block_sz += writeCorrectedOutput(out, v_in_name[i], v_in_read[i], v_in_qual[i], k, (long_read_correct ? opt.trim_qual : 0));
+
+                                v_block_w.push_back({(ticket_id << 32) | block_sz, sp});
+
+                                mutex_file_out.release();
+                            }
+
+                            in_read_len = 0;
+
+                            v_in_read.clear();
+                            v_in_qual.clear();
+                            v_in_name.clear();
+
+                            v_in_read_raw.clear();
+                            v_in_name_raw.clear();
+
+                            in_read.clear();
+                            in_read_raw.clear();
+                        }
+                    }
+                }
+            );
+        }
+
+        for (auto& t : workers) t.join();
+
+        fp_raw.close();
     }
 
     outfile.close();
     fp.close();
+
+    // File reordering -> makes sure output reads are in the same order as input reads. It's more IO but meh, what can I do...
+    if (!long_read_correct && (opt.nb_threads != 1)) { // If one thread used, output file is same order as input file so no reordering needed
+
+        if (opt.verbose) cout << "Ratatosk::search(): Reordering reads" << endl;
+
+        const string fn_tmp_out = fn_out + ".tmp";
+
+        ofstream outfile;
+        ostream out(0);
+
+        ifstream infile;
+        istream in(0);
+
+        size_t max_block_sz = 0;
+
+        char* buffer = nullptr;
+
+        auto cmpBlocks = [](const pair<size_t, streampos>& a, const pair<size_t, streampos>& b) {
+
+            return ((a.first >> 32) < (b.first >> 32)); // 32 bits shifting is not necessary here but kept for readability
+        };
+
+        sort(v_block_w.begin(), v_block_w.end(), cmpBlocks);
+
+        outfile.open(fn_tmp_out.c_str());
+        out.rdbuf(outfile.rdbuf());
+
+        if (check_files(fn_out, false, false)) {
+
+            infile.open(fn_out.c_str(), std::ifstream::in);
+            in.rdbuf(infile.rdbuf());
+        }
+        else {
+
+            cerr << "Ratatosk::search(): Reordering could not happen because input file " << fn_out << " could not be open. Abort." << endl;
+            exit(1);
+        }
+
+        for (const auto p : v_block_w) max_block_sz = max(max_block_sz, static_cast<size_t>(p.first & 0x00000000ffffffffULL));
+
+        buffer = new char[max_block_sz];
+
+        for (const auto p : v_block_w) {
+
+            const size_t block_sz = p.first & 0x00000000ffffffffULL;
+
+            in.seekg(p.second);
+            in.read(buffer, block_sz);
+            out.write(buffer, block_sz);
+        }
+
+        delete buffer;
+
+        outfile.close();
+        infile.close();
+
+        if (remove(fn_out.c_str()) != 0) {
+
+            cerr << "Ratatosk::search(): Reordering could not happen because file " << fn_out << " could not be removed. Abort." << endl;
+            exit(1);
+        }
+        else if (rename(fn_tmp_out.c_str(), fn_out.c_str()) != 0) {
+
+            cerr << "Ratatosk::search(): Reordering could not happen because file " << fn_tmp_out << " could not be renamed. Abort." << endl;
+            exit(1);
+        }
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -887,6 +1161,8 @@ int main(int argc, char *argv[]) {
 
                         if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Correcting long reads (1/2)." << endl;
 
+                        //opt_pass1.nb_threads = 1;
+
                         search(dbg, opt_pass1, false, partitions, hapPass1);
                     }
                     else if (opt_pass1.verbose) cout << "Ratatosk::Ratatosk(): Graph is empty, no correction can be done. Output uncorrected reads." << endl;
@@ -982,6 +1258,15 @@ int main(int argc, char *argv[]) {
                         else { // correct
 
                             if (opt_pass2.verbose) cout << "Ratatosk::Ratatosk(): Correcting long reads (2/2)." << endl;
+
+                            /*{
+                                const string long_in_tmp = string(opt_pass2.filename_long_out + ".tmp");
+
+                                phasing_test(dbg, opt_pass2, vector<string>(1, string("/nfs/odinn/tmp/guillaumeh/data/ont/test6/HG002_ONT.fq")), opt_pass2.filenames_long_in, long_in_tmp);
+
+                                opt_pass2.filenames_long_in.clear();
+                                opt_pass2.filenames_long_in.push_back(long_in_tmp);
+                            }*/
 
                             search(dbg, opt_pass2, true, nullptr, hapPass2);
                         }

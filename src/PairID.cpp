@@ -158,19 +158,19 @@ PairID& PairID::operator|=(const PairID& rhs) {
             if ((flag == r_flag) && ((flag == ptrBitmap) || (flag == localBitVector))) {
 
                 if (flag == ptrBitmap) getPtrBitmap()->r |= rhs.getConstPtrBitmap()->r;
-                if (flag == localBitVector) setBits |= rhs.setBits;
+                else setBits |= rhs.setBits;
             }
             else {
 
                 const size_t max_a = maximum(), min_a = minimum();
                 const size_t max_b = rhs.maximum(), min_b = rhs.minimum();
 
-                const_iterator it = begin(), it_end = end();
-                const_iterator r_it = rhs.begin(), r_it_end = rhs.end();
-
                 vector<uint32_t> new_ids;
 
                 if ((min_a <= max_b) && (min_b <= max_a)) { // Check that range overlaps (both bitmaps must be non empty!)
+
+                    const_iterator it = begin(min_b), it_end = end();
+                    const_iterator r_it = rhs.begin(), r_it_end = rhs.end();
 
                     new_ids.reserve(cardinality() + rhs.cardinality());
 
@@ -215,29 +215,80 @@ PairID PairID::operator-(const PairID& rhs) const {
 
 PairID& PairID::operator-=(const PairID& rhs) {
 
-    if ((&rhs != this) && (rhs.cardinality() != 0)) {
+    const size_t a_card = cardinality();
+    const size_t b_card = rhs.cardinality();
 
-        const_iterator it = begin(), it_end = end();
-        const_iterator r_it = rhs.begin(), r_it_end = rhs.end();
+    if ((&rhs != this) && (a_card != 0) && (b_card != 0)) {
 
-        vector<uint32_t> old_ids;
+        const uintptr_t flag = setBits & flagMask;
+        const uintptr_t r_flag = rhs.setBits & flagMask;
 
-        old_ids.reserve(cardinality());
+        if ((flag == r_flag) && ((flag == ptrBitmap) || (flag == localBitVector))) {
 
-        while ((it != it_end) && (r_it != r_it_end)){
+            if (flag == ptrBitmap) getPtrBitmap()->r -= rhs.getConstPtrBitmap()->r;
+            if (flag == localBitVector) setBits -= (setBits & rhs.setBits & pointerMask);
+        }
+        else if (flag == localSingleInt) {
 
-            if (*it > *r_it) ++r_it;
-            else if (*it < *r_it) ++it;
-            else {
+            if (rhs.contains(setBits >> shiftMaskBits)) clear();
+        }
+        else {
 
-                old_ids.push_back(*r_it);
+            const size_t max_a = maximum(), min_a = minimum();
+            const size_t max_b = rhs.maximum(), min_b = rhs.minimum();
 
-                ++it;
-                ++r_it;
+            if ((min_a <= max_b) && (min_b <= max_a)) { // Check that range overlaps (both bitmaps must be non empty!)
+
+                const size_t log2_a = b_card * min(l_approximate_log2(a_card), 16UL);
+                const size_t log2_b = a_card * min(l_approximate_log2(b_card), 16UL);
+
+                const size_t min_ab_card = min(a_card + b_card, min(log2_a, log2_b));
+                const size_t max_ab = max(min_a, min_b);
+
+                const_iterator it = begin(max_ab), it_end = end();
+                const_iterator r_it = rhs.begin(max_ab), r_it_end = rhs.end();
+
+                vector<uint32_t> old_ids;
+
+                old_ids.reserve(min(a_card, b_card));
+
+                if (min_ab_card == (a_card + b_card)) {
+
+                    while ((it != it_end) && (r_it != r_it_end)){
+
+                        if (*it > *r_it) ++r_it;
+                        else if (*it < *r_it) ++it;
+                        else {
+
+                            old_ids.push_back(*r_it);
+
+                            ++it;
+                            ++r_it;
+                        }
+                    }
+                }
+                else if (min_ab_card == log2_a){
+
+                    while ((r_it != r_it_end) && (*r_it <= max_a)){
+
+                        if (contains(*r_it)) old_ids.push_back(*r_it);
+
+                        ++r_it;
+                    }
+                }
+                else {
+
+                    while ((it != it_end) && (*it <= max_b)){
+
+                        if (rhs.contains(*it)) old_ids.push_back(*it);
+
+                        ++it;
+                    }
+                }
+
+                removeSortedVector(old_ids);
             }
         }
-
-        removeSortedVector(old_ids);
     }
 
     return *this;
@@ -276,17 +327,18 @@ PairID& PairID::operator&=(const PairID& rhs) {
 
                 if ((min_a <= max_b) && (min_b <= max_a)) { // Check that range overlaps (both bitmaps must be non empty!)
 
-                    const size_t log2_a = b_card * l_approximate_log2(a_card);
-                    const size_t log2_b = a_card * l_approximate_log2(b_card);
+                    const size_t log2_a = b_card * min(l_approximate_log2(a_card), 16UL);
+                    const size_t log2_b = a_card * min(l_approximate_log2(b_card), 16UL);
 
-                    const size_t min_a_b = min(a_card + b_card, min(log2_a, log2_b));
+                    const size_t min_ab_card = min(a_card + b_card, min(log2_a, log2_b));
+                    const size_t max_ab = max(min_a, min_b);
 
                     PairID out_pid;
 
-                    if (min_a_b == (a_card + b_card)) {
+                    PairID::const_iterator a_it_s = begin(max_ab), a_it_e = end();
+                    PairID::const_iterator b_it_s = rhs.begin(max_ab), b_it_e = rhs.end();
 
-                        PairID::const_iterator a_it_s = begin(), a_it_e = end();
-                        PairID::const_iterator b_it_s = rhs.begin(), b_it_e = rhs.end();
+                    if (min_ab_card == (a_card + b_card)) {
 
                         while ((a_it_s != a_it_e) && (b_it_s != b_it_e)){
 
@@ -304,11 +356,7 @@ PairID& PairID::operator&=(const PairID& rhs) {
                             else ++b_it_s;
                         }
                     }
-                    else if (min_a_b == log2_a){
-
-                        PairID::const_iterator b_it_s = rhs.begin(), b_it_e = rhs.end();
-
-                        while ((b_it_s != b_it_e) && (*b_it_s < min_a)) ++b_it_s;
+                    else if (min_ab_card == log2_a){
 
                         while ((b_it_s != b_it_e) && (*b_it_s <= max_a)){
 
@@ -318,10 +366,6 @@ PairID& PairID::operator&=(const PairID& rhs) {
                         }
                     }
                     else {
-
-                        PairID::const_iterator a_it_s = begin(), a_it_e = end();
-
-                        while ((a_it_s != a_it_e) && (*a_it_s < min_b)) ++a_it_s;
 
                         while ((a_it_s != a_it_e) && (*a_it_s <= max_b)){
 
@@ -354,29 +398,19 @@ size_t PairID::and_cardinality(const PairID& rhs) const {
 
         if ((flag == r_flag) && ((flag == ptrBitmap) || (flag == localBitVector))) {
 
-            //cout << "HERE1: { ";
-            //for (const auto& id : getPtrBitmap()->r) cout << id << ", ";
-            //cout << "} " << endl;
-
             if (flag == ptrBitmap) return getPtrBitmap()->r.and_cardinality(rhs.getConstPtrBitmap()->r);
             
             return __builtin_popcountll(pointerMask & setBits & rhs.setBits);
         }
         else if (flag == localSingleInt) {
 
-            //cout << "HERE2" << endl;
-
             return static_cast<size_t>(rhs.contains(setBits >> shiftMaskBits));
         }
         else if (r_flag == localSingleInt) {
 
-            //cout << "HERE3" << endl;
-
             return static_cast<size_t>(contains(rhs.setBits >> shiftMaskBits));
         }
         else {
-
-            //cout << "HERE4" << endl;
 
             const size_t max_a = maximum(), min_a = minimum();
             const size_t max_b = rhs.maximum(), min_b = rhs.minimum();
@@ -386,17 +420,15 @@ size_t PairID::and_cardinality(const PairID& rhs) const {
                 const size_t log2_a = b_card * min(l_approximate_log2(a_card), 16UL);
                 const size_t log2_b = a_card * min(l_approximate_log2(b_card), 16UL);
 
-                const size_t min_a_b = min(a_card + b_card, min(log2_a, log2_b));
+                const size_t min_ab_card = min(a_card + b_card, min(log2_a, log2_b));
+                const size_t max_ab = max(min_a, min_b);
 
                 size_t nb_shared = 0;
 
-                if (min_a_b == (a_card + b_card)) {
+                PairID::const_iterator a_it_s = begin(max_ab), a_it_e = end();
+                PairID::const_iterator b_it_s = rhs.begin(max_ab), b_it_e = rhs.end();
 
-                    PairID::const_iterator a_it_s = begin(), a_it_e = end();
-                    PairID::const_iterator b_it_s = rhs.begin(), b_it_e = rhs.end();
-
-                    while ((a_it_s != a_it_e) && (*a_it_s < min_b)) ++a_it_s;
-                    while ((b_it_s != b_it_e) && (*b_it_s < min_a)) ++b_it_s;
+                if (min_ab_card == (a_card + b_card)) {
 
                     while ((a_it_s != a_it_e) && (b_it_s != b_it_e)){
 
@@ -413,11 +445,7 @@ size_t PairID::and_cardinality(const PairID& rhs) const {
                         else ++b_it_s;
                     }
                 }
-                else if (min_a_b == log2_a){
-
-                    PairID::const_iterator b_it_s = rhs.begin(), b_it_e = rhs.end();
-
-                    while ((b_it_s != b_it_e) && (*b_it_s < min_a)) ++b_it_s;
+                else if (min_ab_card == log2_a){
 
                     while ((b_it_s != b_it_e) && (*b_it_s <= max_a)){
 
@@ -426,10 +454,6 @@ size_t PairID::and_cardinality(const PairID& rhs) const {
                     }
                 }
                 else {
-
-                    PairID::const_iterator a_it_s = begin(), a_it_e = end();
-
-                    while ((a_it_s != a_it_e) && (*a_it_s < min_b)) ++a_it_s;
 
                     while ((a_it_s != a_it_e) && (*a_it_s <= max_b)){
 
@@ -474,17 +498,15 @@ size_t PairID::and_cardinality(const PairID& rhs, const uint64_t min_shared) con
                 const size_t log2_a = b_card * min(l_approximate_log2(a_card), 16UL);
                 const size_t log2_b = a_card * min(l_approximate_log2(b_card), 16UL);
 
-                const size_t min_a_b = min(a_card + b_card, min(log2_a, log2_b));
+                const size_t min_ab_card = min(a_card + b_card, min(log2_a, log2_b));
+                const size_t max_ab = max(min_a, min_b);
 
                 size_t nb_shared = 0;
 
-                if (min_a_b == (a_card + b_card)) {
+                PairID::const_iterator a_it_s = begin(max_ab), a_it_e = end();
+                PairID::const_iterator b_it_s = rhs.begin(max_ab), b_it_e = rhs.end();
 
-                    PairID::const_iterator a_it_s = begin(), a_it_e = end();
-                    PairID::const_iterator b_it_s = rhs.begin(), b_it_e = rhs.end();
-
-                    while ((a_it_s != a_it_e) && (*a_it_s < min_b)) ++a_it_s;
-                    while ((b_it_s != b_it_e) && (*b_it_s < min_a)) ++b_it_s;
+                if (min_ab_card == (a_card + b_card)) {
 
                     while ((a_it_s != a_it_e) && (b_it_s != b_it_e) && (nb_shared < min_shared)){
 
@@ -501,11 +523,7 @@ size_t PairID::and_cardinality(const PairID& rhs, const uint64_t min_shared) con
                         else ++b_it_s;
                     }
                 }
-                else if (min_a_b == log2_a){
-
-                    PairID::const_iterator b_it_s = rhs.begin(), b_it_e = rhs.end();
-
-                    while ((b_it_s != b_it_e) && (*b_it_s < min_a)) ++b_it_s;
+                else if (min_ab_card == log2_a){
 
                     while ((b_it_s != b_it_e) && (*b_it_s <= max_a) && (nb_shared < min_shared)){
 
@@ -514,10 +532,6 @@ size_t PairID::and_cardinality(const PairID& rhs, const uint64_t min_shared) con
                     }
                 }
                 else {
-
-                    PairID::const_iterator a_it_s = begin(), a_it_e = end();
-
-                    while ((a_it_s != a_it_e) && (*a_it_s < min_b)) ++a_it_s;
 
                     while ((a_it_s != a_it_e) && (*a_it_s <= max_b) && (nb_shared < min_shared)){
 
@@ -690,11 +704,14 @@ void PairID::addSortedVector(const vector<uint32_t>& v) { // Private, assumes ve
 
     size_t i = 0;
 
+    const uint32_t v_back = v.back();
+    const bool sameUpper16bits = ((v.front() >> 16) == (v_back >> 16));
+
     if (flag == localSingleInt){
 
         const uintptr_t setBits_tmp = setBits >> shiftMaskBits;
 
-        if ((setBits_tmp < maxBitVectorIDs) && (v[v.size() - 1] < maxBitVectorIDs)){
+        if ((setBits_tmp < maxBitVectorIDs) && (v_back < maxBitVectorIDs)){
 
             setBits = (1ULL << (setBits_tmp + shiftMaskBits)) | localBitVector;
         }
@@ -702,7 +719,7 @@ void PairID::addSortedVector(const vector<uint32_t>& v) { // Private, assumes ve
 
             TinyBitmap t_bmp;
 
-            if (t_bmp.add(setBits_tmp)) setBits = (reinterpret_cast<uintptr_t>(t_bmp.detach()) & pointerMask) | localTinyBitmap;
+            if (sameUpper16bits && t_bmp.add(setBits_tmp)) setBits = (reinterpret_cast<uintptr_t>(t_bmp.detach()) & pointerMask) | localTinyBitmap;
             else {
 
                 t_bmp.clear();
@@ -720,8 +737,8 @@ void PairID::addSortedVector(const vector<uint32_t>& v) { // Private, assumes ve
 
     if (flag == localBitVector){
 
-        if ((setBits == localBitVector) && (v.size() == 1)) setBits = (v[0] << shiftMaskBits) | localSingleInt;
-        else if (v[v.size() - 1] < maxBitVectorIDs){
+        if ((setBits == localBitVector) && (v.size() == 1)) setBits = (v.front() << shiftMaskBits) | localSingleInt;
+        else if (v_back < maxBitVectorIDs){
 
             for (const uint32_t id : v) setBits |= 1ULL << (id + shiftMaskBits);
         }
@@ -732,7 +749,7 @@ void PairID::addSortedVector(const vector<uint32_t>& v) { // Private, assumes ve
 
             TinyBitmap t_bmp;
 
-            bool add_ok = true;
+            bool add_ok = sameUpper16bits;
 
             for (size_t j = 0; (setBits_tmp_tb != 0) && add_ok; ++j, setBits_tmp_tb >>= 1) {
 
@@ -764,7 +781,7 @@ void PairID::addSortedVector(const vector<uint32_t>& v) { // Private, assumes ve
 
         TinyBitmap t_bmp(&setPtrTinyBmp);
 
-        bool add_ok = (v.size() < 65536) && ((t_bmp.size() == 0) || ((v[v.size() - 1] >> 16) == (*(t_bmp.begin()) >> 16)));
+        bool add_ok = sameUpper16bits && ((t_bmp.size() == 0) || ((v_back >> 16) == (*(t_bmp.begin()) >> 16)));
 
         for (i = 0; (i < v.size()) && add_ok; ++i) add_ok = t_bmp.add(v[i]);
 
@@ -1233,17 +1250,24 @@ PairID PairID::subsample(const uint64_t nb) const {
     }
     else {
 
-        const vector<uint32_t> v_ids = toVector();
+        PairID p_pos;
 
         std::random_device rd; // Seed
         std::default_random_engine generator(rd()); // Random number generator
         std::uniform_int_distribution<> distribution(0, card - 1); // Distribution on which to apply the generator
 
-        for (size_t i = 0; i < nb; ++i) {
+        for (size_t i = 0; i < nb; ++i) p_pos.add(distribution(generator));
 
-            const int pos = distribution(generator);
+        PairID::const_iterator it_pos = p_pos.begin(), it_pos_e = p_pos.end();
+        PairID::const_iterator it = begin();
 
-            pid.add(v_ids[pos]);
+        for (size_t i = 0; (it_pos != it_pos_e); ++i, ++it) {
+
+            if (i == *it_pos) {
+
+                pid.add(*it);
+                ++it_pos;
+            }
         }
     }
 
@@ -1255,7 +1279,40 @@ PairID PairID::subsample(const uint64_t nb) const {
 PairID::const_iterator PairID::begin() const {
 
     const_iterator it(this, true);
+
     return ++it;
+}
+
+PairID::const_iterator PairID::begin(const size_t id) const {
+
+    const_iterator it(this, true);
+    const_iterator it_e(this, false);
+
+    if (isEmpty()) return it_e;
+
+    if (it.flag == ptrBitmap) {
+
+        const Roaring& roar = it.cs->getConstPtrBitmap()->r;
+
+        it.it_roar.equalorlarger(id);
+
+        if (it.it_roar != roar.end()) {
+
+            it.ck_id = *(it.it_roar);
+            it.it_setBits = roar.rank(it.ck_id) - 1;
+        }
+        else return it_e;
+    }
+    else {
+
+        ++it;
+
+        if ((it.flag == localTinyBitmap) && ((it.ck_id >> 16) != (id >> 16))) return it_e;
+
+        while ((it != it_e) && (*it < id)) ++it;
+    }
+
+    return it;
 }
 
 PairID::const_iterator PairID::end() const {

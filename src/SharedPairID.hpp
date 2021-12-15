@@ -30,7 +30,7 @@ class SharedPairID {
 
             private:
 
-            	SharedPairID_const_iterator(const SharedPairID* spid, const bool begin);
+            	SharedPairID_const_iterator(const SharedPairID* spid, const bool begin, const size_t start_id = 0);
 
             	PairID::const_iterator global_pid_it, local_pid_it;
 
@@ -118,6 +118,7 @@ class SharedPairID {
         void forceRoaringInternal();
 
 		SharedPairID::const_iterator begin() const;
+        SharedPairID::const_iterator begin(const size_t id) const;
 		SharedPairID::const_iterator end() const;
 
         inline size_t cardinality() const {

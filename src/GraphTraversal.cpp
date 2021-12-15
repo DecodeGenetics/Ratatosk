@@ -510,7 +510,7 @@ pair<double, double> exploreSubGraph(	const Correct_Opt& opt, const WeightsPairI
 
 					    if (path.length() <= max_len_path) { //Terminal path is not too large
 
-							const pair<double, double> scores = getScorePath(path, ref, ref_len, true, w_pid, opt.weak_region_len_factor, opt.min_cov_vertices, l_m_pid);
+							const pair<double, double> scores = getScorePath(opt, path, ref, ref_len, true, w_pid/*, l_m_pid*/);
 
 							if (scores.first >= score_t1) {
 
@@ -535,7 +535,7 @@ pair<double, double> exploreSubGraph(	const Correct_Opt& opt, const WeightsPairI
 					if (i_t.l != 0) stck.push(info_traversal(path, i_t.l - 1));
 					else if (succ.getSuccessors().cardinality() > 0) {
 
-						const pair<double, double> scores = getScorePath(path, ref, ref_len, false, w_pid, opt.weak_region_len_factor, opt.min_cov_vertices, l_m_pid);
+						const pair<double, double> scores = getScorePath(opt, path, ref, ref_len, false, w_pid/*, l_m_pid*/);
 
 						if (scores.first >= score_nt1) {
 
@@ -643,7 +643,7 @@ pair<double, double> exploreSubGraphLong(	const Correct_Opt& opt, const WeightsP
 
 					    if (path.length() <= max_len_path) { //Terminal path is not too large
 
-							const pair<double, double> scores = getScorePath(path, ref, ref_len, true, w_pid, opt.weak_region_len_factor, opt.min_cov_vertices, l_m_pid);
+							const pair<double, double> scores = getScorePath(opt, path, ref, ref_len, true, w_pid/*, l_m_pid*/);
 
 							if (scores.first >= score_t1) {
 
@@ -668,7 +668,7 @@ pair<double, double> exploreSubGraphLong(	const Correct_Opt& opt, const WeightsP
 					if (path.length() < max_len_subpath) stck.push(info_traversal(path));
 					else if (succ.getSuccessors().cardinality() > 0) {
 
-						const pair<double, double> scores = getScorePath(path, ref, ref_len, false, w_pid, opt.weak_region_len_factor, opt.min_cov_vertices, l_m_pid);
+						const pair<double, double> scores = getScorePath(opt, path, ref, ref_len, false, w_pid/*, l_m_pid*/);
 
 						if (scores.first >= score_nt1) {
 
@@ -771,7 +771,8 @@ string getScorePath(const Correct_Opt& opt, const Path<UnitigData>& path, const 
 	return qual_out;
 }
 
-pair<double, double> getScorePath(const Path<UnitigData>& path, const char* ref, const size_t ref_len, const bool terminal, const WeightsPairID& w_pid, const double max_er){
+pair<double, double> getScorePath(	const Correct_Opt& opt, const Path<UnitigData>& path, const char* ref, const size_t ref_len, const bool terminal,
+									const WeightsPairID& w_pid, unordered_map<const SharedPairID*, pair<double, bool>, HashSharedPairIDptr>& m_pid){
 
 	double score = 0.0;
 	double score_align = 0.0;
@@ -805,84 +806,7 @@ pair<double, double> getScorePath(const Path<UnitigData>& path, const char* ref,
 				}
 				else {
 
-					const size_t l_ref_len = min(ref_len, static_cast<size_t>(path_str.length() * (1.0 + max_er)));
-
-					align = edlibAlign(path_str.c_str(), path_str.length(), ref, l_ref_len, config);
-					score_align = 1.0 - (static_cast<double>(align.editDistance) / path_str.length());
-				}
-			}
-
-			edlibFreeAlignResult(align);
-		}
-
-		if (w_pid.weighted_pids.isEmpty() && w_pid.noWeight_pids.isEmpty()) score = 0.0;
-		else {
-
-			for (const auto& um : v_um){
-
-				const SharedPairID& pids = um.getData()->getPairID();
-
-				if (!pids.isEmpty()) {
-
-					const double shared_weighted = static_cast<double>(getNumberSharedPairID(pids, w_pid.weighted_pids));
-					const double shared_noWeight = static_cast<double>(getNumberSharedPairID(pids, w_pid.noWeight_pids));
-
-					score_pids += (shared_weighted * w_pid.weight) + shared_noWeight;
-				}
-			}
-
-			score_pids /= (w_pid.sum_pids_weights * v_um.size());
-
-			// Conflation
-			score = score_pids * score_align; // Conflate the two probabilities (1/2)
-			score /= score + ((1.0 - score_pids) * (1.0 - score_align)); // Conflate the two probabilities (2/2)
-
-			score = (std::isnan(score) ? 0.0 : score); // Conflation can return nan (not a number) -> replace by 0.0
-			score = min(max(score, 0.0), 1.0); // Make sure score is >= 0.0 and <= 1.0 because of double precision side effect (1.00000...0001)
-		}
-
-		score_align = min(max(score_align, 0.0), 1.0);
-	}
-
-	return pair<double, double>(score, score_align);
-}
-
-pair<double, double> getScorePath(	const Path<UnitigData>& path, const char* ref, const size_t ref_len, const bool terminal, const WeightsPairID& w_pid, const double max_er,
-									const size_t min_pid_sharing, unordered_map<const SharedPairID*, pair<double, bool>, HashSharedPairIDptr>& m_pid){
-
-	double score = 0.0;
-	double score_align = 0.0;
-	double score_pids = 0.0;
-
-	if (path.length() != 0){
-
-		const Path<UnitigData>::PathOut path_str_um = path.toStringVector();
-		const string& path_str = path_str_um.toString();
-		const vector<const_UnitigMap<UnitigData>>& v_um = path_str_um.toVector();
-
-		// Compute alignment score
-		{
-			EdlibAlignResult align;
-
-			if (terminal) {
-
-				const EdlibAlignConfig config(edlibNewAlignConfig(-1, EDLIB_MODE_NW, EDLIB_TASK_DISTANCE, edlib_iupac_alpha, sz_edlib_iupac_alpha));
-
-				align = edlibAlign(path_str.c_str(), path_str.length(), ref, ref_len, config);
-				score_align = 1.0 - (static_cast<double>(align.editDistance) / path_str.length());
-			}
-			else {
-
-				const EdlibAlignConfig config(edlibNewAlignConfig(-1, EDLIB_MODE_HW, EDLIB_TASK_DISTANCE, edlib_iupac_alpha, sz_edlib_iupac_alpha));
-
-				if (path_str.length() >= ref_len){
-
-					align = edlibAlign(ref, ref_len, path_str.c_str(), path_str.length(), config);
-					score_align = 1.0 - (static_cast<double>(align.editDistance) / ref_len);
-				}
-				else {
-
-					const size_t l_ref_len = min(ref_len, static_cast<size_t>(path_str.length() * (1.0 + max_er)));
+					const size_t l_ref_len = min(ref_len, static_cast<size_t>(path_str.length() * (1.0 + opt.weak_region_len_factor)));
 
 					align = edlibAlign(path_str.c_str(), path_str.length(), ref, l_ref_len, config);
 					score_align = 1.0 - (static_cast<double>(align.editDistance) / path_str.length());
@@ -894,8 +818,7 @@ pair<double, double> getScorePath(	const Path<UnitigData>& path, const char* ref
 			score_align = min(max(score_align, 0.0), 1.0);
 		}
 
-		if (w_pid.weighted_pids.isEmpty() && w_pid.noWeight_pids.isEmpty()) score = 0.0;
-		//if (w_pid.weighted_pids.isEmpty() && w_pid.noWeight_pids.isEmpty()) score = score_align;
+		if (w_pid.all_pids.cardinality() < opt.min_cov_vertices) score = 0.0;
 		else  { // Final score is max. bounded by the alignment or PairID scores
 
 			for (size_t i = 0; i < v_um.size(); ++i){
@@ -909,13 +832,11 @@ pair<double, double> getScorePath(	const Path<UnitigData>& path, const char* ref
 
 					if (it_m_pid.second || (it_m_pid.first->second.first == -1.0)){
 
-						//const double shared_weighted = static_cast<double>(getNumberSharedPairID(pids, w_pid.weighted_pids));
-						//const double shared_noWeight = static_cast<double>(getNumberSharedPairID(pids, w_pid.noWeight_pids));
-						const double shared_weighted = min(static_cast<double>(getNumberSharedPairID(pids, w_pid.weighted_pids, min_pid_sharing)), static_cast<double>(min_pid_sharing));
-						const double shared_noWeight = min(static_cast<double>(getNumberSharedPairID(pids, w_pid.noWeight_pids, min_pid_sharing)), static_cast<double>(min_pid_sharing));
+						const double shared_weighted = static_cast<double>(getNumberSharedPairID(pids, w_pid.weighted_pids));
+						const double shared_noWeight = static_cast<double>(getNumberSharedPairID(pids, w_pid.noWeight_pids));
 
 						it_m_pid.first->second.first = (shared_weighted * w_pid.weight) + shared_noWeight;
-						it_m_pid.first->second.second = (static_cast<size_t>(shared_weighted + shared_noWeight) >= min_pid_sharing);
+						it_m_pid.first->second.second = (static_cast<size_t>(shared_weighted + shared_noWeight) >= opt.min_cov_vertices);
 					}
 
 					score_pids += it_m_pid.first->second.first;
@@ -925,15 +846,15 @@ pair<double, double> getScorePath(	const Path<UnitigData>& path, const char* ref
 			score_pids /= (w_pid.sum_pids_weights * v_um.size());
 
 			// Conflation
-			/*if (score_pids != 0.0) {
-
-				score = score_pids * score_align; // Conflate the two probabilities (1/2)
-				score /= score + ((1.0 - score_pids) * (1.0 - score_align)); // Conflate the two probabilities (2/2)
-
-				score = (std::isnan(score) ? 0.0 : score); // Conflation can return nan (not a number) -> replace by 0.0
-				score = min(max(score, 0.0), 1.0); // Make sure score is >= 0.0 and <= 1.0 because of double precision side effect (1.00000...0001)
-			}
-			else score = 0.0;*/
+			//if (score_pids != 0.0) {
+			//
+			//	score = score_pids * score_align; // Conflate the two probabilities (1/2)
+			//	score /= score + ((1.0 - score_pids) * (1.0 - score_align)); // Conflate the two probabilities (2/2)
+			//
+			//	score = (std::isnan(score) ? 0.0 : score); // Conflation can return nan (not a number) -> replace by 0.0
+			//	score = min(max(score, 0.0), 1.0); // Make sure score is >= 0.0 and <= 1.0 because of double precision side effect (1.00000...0001)
+			//}
+			//else score = 0.0;
 
 			//Mean
 			score = (score_pids + score_align) / 2.0;
@@ -941,6 +862,50 @@ pair<double, double> getScorePath(	const Path<UnitigData>& path, const char* ref
 	}
 
 	return pair<double, double>(score, score_align);
+}
+
+pair<double, double> getScorePath(const Correct_Opt& opt, const Path<UnitigData>& path, const char* ref, const size_t ref_len, const bool terminal, const WeightsPairID& w_pid) {
+
+	double score = 0.0;
+
+	if (path.length() != 0){
+
+		const string& path_str = path.toString();
+
+		// Compute alignment score
+		EdlibAlignResult align;
+
+		if (terminal) {
+
+			const EdlibAlignConfig config(edlibNewAlignConfig(-1, EDLIB_MODE_NW, EDLIB_TASK_DISTANCE, edlib_iupac_alpha, sz_edlib_iupac_alpha));
+
+			align = edlibAlign(path_str.c_str(), path_str.length(), ref, ref_len, config);
+			score = 1.0 - (static_cast<double>(align.editDistance) / path_str.length());
+		}
+		else {
+
+			const EdlibAlignConfig config(edlibNewAlignConfig(-1, EDLIB_MODE_HW, EDLIB_TASK_DISTANCE, edlib_iupac_alpha, sz_edlib_iupac_alpha));
+
+			if (path_str.length() >= ref_len){
+
+				align = edlibAlign(ref, ref_len, path_str.c_str(), path_str.length(), config);
+				score = 1.0 - (static_cast<double>(align.editDistance) / ref_len);
+			}
+			else {
+
+				const size_t l_ref_len = min(ref_len, static_cast<size_t>(path_str.length() * (1.0 + opt.weak_region_len_factor)));
+
+				align = edlibAlign(path_str.c_str(), path_str.length(), ref, l_ref_len, config);
+				score = 1.0 - (static_cast<double>(align.editDistance) / path_str.length());
+			}
+		}
+
+		edlibFreeAlignResult(align);
+
+		score = min(max(score, 0.0), 1.0);
+	}
+
+	return {score, score};
 }
 
 vector<Path<UnitigData>> selectMostContiguous(const vector<Path<UnitigData>>& v_paths, const WeightsPairID& w_pid) {
@@ -1098,6 +1063,8 @@ bool isValidSNPcandidate(	local_graph_traversal& lgt_fw, local_graph_traversal& 
 		const SharedPairID& spid_a = um_a.getData()->getPairID();
 		const SharedPairID& spid_b = um_b.getData()->getPairID();
 
+		const size_t k = um_a.getGraph()->getK();
+
 		if ((spid_a.cardinality() < min_cov) || (spid_b.cardinality() < min_cov)) return false;
 
 		if (lgt.m_km.empty()) {
@@ -1115,14 +1082,17 @@ bool isValidSNPcandidate(	local_graph_traversal& lgt_fw, local_graph_traversal& 
 
 			for (const auto& um_neigh : um.getSuccessors()){
 
-				const SharedPairID& spid = um_neigh.getData()->getPairID();
+				if (um.getData()->getSharedPids(um.strand, um_neigh.getMappedHead().toString()[k-1])) {
 
-				if (lgt.m_km.insert({um_neigh.getMappedHead(), &spid}).second){ // Unitig hasn't been visited so far
+					const SharedPairID& spid = um_neigh.getData()->getPairID();
 
-					if (getNumberSharedPairID(spid, spid_a, min_cov) >= min_cov){ // Unitig shares enough reads with start unitig
+					if (lgt.m_km.insert({um_neigh.getMappedHead(), &spid}).second){ // Unitig hasn't been visited so far
 
-						if (getNumberSharedPairID(spid, spid_b, min_cov) >= min_cov) return true;
-						else lgt.q_um.push(um_neigh);
+						if (getNumberSharedPairID(spid, spid_a, min_cov) >= min_cov){ // Unitig shares enough reads with start unitig
+
+							if (getNumberSharedPairID(spid, spid_b, min_cov) >= min_cov) return true;
+							else lgt.q_um.push(um_neigh);
+						}
 					}
 				}
 			}

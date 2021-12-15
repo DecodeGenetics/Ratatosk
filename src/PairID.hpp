@@ -130,6 +130,7 @@ class PairID {
         size_t getSizeInBytes() const;
 
         const_iterator begin() const;
+        const_iterator begin(const size_t id) const;
         const_iterator end() const;
 
         void runOptimize();
@@ -137,18 +138,35 @@ class PairID {
         Roaring toRoaring() const;
         vector<uint32_t> toVector() const;
 
-        static PairID fastunion(const size_t sz, const PairID** p_id) {
+        static PairID fastunion(const size_t sz, const PairID* const* p_id) {
 
-            PairID p;
+            PairID pid_out;
 
-            if (sz > 0){
+            {
+                vector<const Roaring*> v_roar_ptr;
 
-                p = *(p_id[0]);
+                for (size_t i = 0; i < sz; ++i) {
 
-                for (size_t i = 1; i < sz; ++i) p |= *(p_id[i]);
+                    if (p_id[i]->isBitmap()) v_roar_ptr.push_back(&(p_id[i]->getConstPtrBitmap()->r));
+                }
+
+                const size_t card_roaring = v_roar_ptr.size();
+
+                if (card_roaring > 0) {
+
+                    Bitmap* bitm = new Bitmap;
+
+                    bitm->r = Roaring::fastunion(card_roaring, &(v_roar_ptr.front()));
+                    pid_out.setBits = (reinterpret_cast<uintptr_t>(bitm) & pointerMask) | ptrBitmap;
+                }
             }
 
-            return p;
+            for (size_t i = 0; i < sz; ++i) {
+
+                if (!p_id[i]->isBitmap()) pid_out |= *(p_id[i]);
+            }
+
+            return pid_out;
         }
 
         PairID forceRoaringInternal() const;

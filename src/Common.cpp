@@ -139,14 +139,15 @@ PairID getSharedPairID(const SharedPairID& a, const SharedPairID& b, const size_
 				const size_t log2_a = b_card * min(approximate_log2(a_card), 16UL);
 				const size_t log2_b = a_card * min(approximate_log2(b_card), 16UL);
 
-				const size_t min_a_b = min(a_card + b_card, min(log2_a, log2_b));
+				const size_t min_ab_card = min(a_card + b_card, min(log2_a, log2_b));
+				const size_t max_ab = max(min_a, min_b);
 
 				size_t nb_shared = 0;
 
-				if (min_a_b == (a_card + b_card)) {
+				if (min_ab_card == (a_card + b_card)) {
 
-					SharedPairID::const_iterator a_it_s = a.begin(), a_it_e = a.end();
-					SharedPairID::const_iterator b_it_s = b.begin(), b_it_e = b.end();
+					SharedPairID::const_iterator a_it_s = a.begin(max_ab), a_it_e = a.end();
+					SharedPairID::const_iterator b_it_s = b.begin(max_ab), b_it_e = b.end();
 
 					while ((a_it_s != a_it_e) && (b_it_s != b_it_e) && (nb_shared < min_shared)){
 
@@ -165,11 +166,11 @@ PairID getSharedPairID(const SharedPairID& a, const SharedPairID& b, const size_
 						else ++b_it_s;
 					}
 				}
-				else if (min_a_b == log2_a){
+				else if (min_ab_card == log2_a){
 
-					SharedPairID::const_iterator b_it_s = b.begin(), b_it_e = b.end();
+					SharedPairID::const_iterator b_it_s = b.begin(max_ab), b_it_e = b.end();
 
-					while ((b_it_s != b_it_e) && (nb_shared < min_shared)) {
+					while ((b_it_s != b_it_e) && (*b_it_s <= max_a) && (nb_shared < min_shared)) {
 
 						if (a.contains(*b_it_s)) {
 
@@ -182,9 +183,9 @@ PairID getSharedPairID(const SharedPairID& a, const SharedPairID& b, const size_
 				}
 				else {
 
-					SharedPairID::const_iterator a_it_s = a.begin(), a_it_e = a.end();
+					SharedPairID::const_iterator a_it_s = a.begin(max_ab), a_it_e = a.end();
 
-					while ((a_it_s != a_it_e)  && (nb_shared < min_shared)){
+					while ((a_it_s != a_it_e) && (*a_it_s <= max_b) && (nb_shared < min_shared)){
 
 						if (b.contains(*a_it_s)) {
 
@@ -199,7 +200,165 @@ PairID getSharedPairID(const SharedPairID& a, const SharedPairID& b, const size_
 		}
 	}
 
-	if (pid.cardinality() < min_shared) pid.clear();
+	return pid;
+}
+
+PairID getSharedPairID(const SharedPairID& a, const PairID& b, const size_t min_shared) {
+
+	PairID pid;
+
+	const size_t a_card = a.cardinality();
+	const size_t b_card = b.cardinality();
+
+	if ((a_card >= min_shared) && (b_card >= min_shared)) {
+
+		const size_t max_a = a.maximum(), min_a = a.minimum();
+		const size_t max_b = b.maximum(), min_b = b.minimum();
+
+		if ((min_a <= max_b) && (min_b <= max_a)) { // Check that range overlaps (both bitmaps must be non empty!)
+
+			const size_t log2_a = b_card * min(approximate_log2(a_card), 16UL);
+			const size_t log2_b = a_card * min(approximate_log2(b_card), 16UL);
+
+			const size_t min_ab_card = min(a_card + b_card, min(log2_a, log2_b));
+			const size_t max_ab = max(min_a, min_b);
+
+			size_t nb_shared = 0;
+
+			if (min_ab_card == (a_card + b_card)) {
+
+				SharedPairID::const_iterator a_it_s = a.begin(max_ab), a_it_e = a.end();
+				PairID::const_iterator b_it_s = b.begin(max_ab), b_it_e = b.end();
+
+				while ((a_it_s != a_it_e) && (b_it_s != b_it_e) && (nb_shared < min_shared)){
+
+					const uint32_t val_a = *a_it_s;
+					const uint32_t val_b = *b_it_s;
+
+					if (val_a == val_b){
+
+						pid.add(val_a);
+
+						++nb_shared;
+						++a_it_s;
+						++b_it_s;
+					}
+					else if (val_a < val_b) ++a_it_s;
+					else ++b_it_s;
+				}
+			}
+			else if (min_ab_card == log2_a){
+
+				PairID::const_iterator b_it_s = b.begin(max_ab), b_it_e = b.end();
+
+				while ((b_it_s != b_it_e) && (*b_it_s <= max_a) && (nb_shared < min_shared)) {
+
+					if (a.contains(*b_it_s)) {
+
+						pid.add(*b_it_s);
+						++nb_shared;
+					}
+
+					++b_it_s;
+				}
+			}
+			else {
+
+				SharedPairID::const_iterator a_it_s = a.begin(max_ab), a_it_e = a.end();
+
+				while ((a_it_s != a_it_e) && (*a_it_s <= max_b) && (nb_shared < min_shared)){
+
+					if (b.contains(*a_it_s)) {
+
+						pid.add(*a_it_s);
+						++nb_shared;
+					}
+
+					++a_it_s;
+				}
+			}
+		}
+	}
+
+	return pid;
+}
+
+PairID getSharedPairID(const PairID& a, const PairID& b, const size_t min_shared) {
+
+	PairID pid;
+
+	const size_t a_card = a.cardinality();
+	const size_t b_card = b.cardinality();
+
+	if ((a_card >= min_shared) && (b_card >= min_shared)) {
+
+		const size_t max_a = a.maximum(), min_a = a.minimum();
+		const size_t max_b = b.maximum(), min_b = b.minimum();
+
+		if ((min_a <= max_b) && (min_b <= max_a)) { // Check that range overlaps (both bitmaps must be non empty!)
+
+			const size_t log2_a = b_card * min(approximate_log2(a_card), 16UL);
+			const size_t log2_b = a_card * min(approximate_log2(b_card), 16UL);
+
+			const size_t min_ab_card = min(a_card + b_card, min(log2_a, log2_b));
+			const size_t max_ab = max(min_a, min_b);
+
+			size_t nb_shared = 0;
+
+			if (min_ab_card == (a_card + b_card)) {
+
+				PairID::const_iterator a_it_s = a.begin(max_ab), a_it_e = a.end();
+				PairID::const_iterator b_it_s = b.begin(max_ab), b_it_e = b.end();
+
+				while ((a_it_s != a_it_e) && (b_it_s != b_it_e) && (nb_shared < min_shared)){
+
+					const uint32_t val_a = *a_it_s;
+					const uint32_t val_b = *b_it_s;
+
+					if (val_a == val_b){
+
+						pid.add(val_a);
+
+						++nb_shared;
+						++a_it_s;
+						++b_it_s;
+					}
+					else if (val_a < val_b) ++a_it_s;
+					else ++b_it_s;
+				}
+			}
+			else if (min_ab_card == log2_a){
+
+				PairID::const_iterator b_it_s = b.begin(max_ab), b_it_e = b.end();
+
+				while ((b_it_s != b_it_e) && (*b_it_s <= max_a) && (nb_shared < min_shared)) {
+
+					if (a.contains(*b_it_s)) {
+
+						pid.add(*b_it_s);
+						++nb_shared;
+					}
+
+					++b_it_s;
+				}
+			}
+			else {
+
+				PairID::const_iterator a_it_s = a.begin(max_ab), a_it_e = a.end();
+
+				while ((a_it_s != a_it_e) && (*a_it_s <= max_b) && (nb_shared < min_shared)){
+
+					if (b.contains(*a_it_s)) {
+
+						pid.add(*a_it_s);
+						++nb_shared;
+					}
+
+					++a_it_s;
+				}
+			}
+		}
+	}
 
 	return pid;
 }

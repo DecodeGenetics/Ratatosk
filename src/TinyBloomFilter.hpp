@@ -192,11 +192,36 @@ class TinyBloomFilter {
 			return pop;
 		}
 
-		inline bool isEmpty() const {
+		pair<TinyBloomFilter, bool> and_bits(const TinyBloomFilter& o) const {
 
-			bool isEmpty = (table != nullptr);
+			pair<TinyBloomFilter, bool> out;
 
-			for (uint64_t i = 0; (i < sz_h) && isEmpty; ++i) isEmpty = (table[i] != 0);
+			if (o.sz_h == sz_h){
+
+				if ((table != nullptr) && (o.table != nullptr)) {
+
+					const uint64_t sz_table = (sz_h >> 8) / 64;
+
+					out.first = *this;
+
+					for (uint64_t i = 0; i != sz_table; ++i) out.first.table[i] &= o.table[i];
+				}
+
+				out.second = true;
+			}
+			else out.second = false;
+
+			return out;
+		}
+
+		inline bool empty() const {
+
+			const bool isEmpty = true;
+
+			if (table != nullptr) {
+
+				for (uint64_t i = 0; (i < sz_h) && isEmpty; ++i) isEmpty = (table[i] == 0);
+			}
 
 			return isEmpty;
 		}

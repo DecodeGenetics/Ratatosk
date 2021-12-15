@@ -48,8 +48,9 @@ inline void annotateBranchingUnitigs(CompactedDBG<UnitigData>& dbg) {
 //Roaring* createPartitions(CompactedDBG<UnitigData>& dbg, const vector<Kmer>& centroids, const double mean_len_to_neighbor, const size_t nb_threads, const bool verbose);
 //void expandConnectedComponent(CompactedDBG<UnitigData>& dbg, const size_t id_mapped, const size_t id_visited);
 
-string phasing(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const string& s, const vector<pair<size_t, const_UnitigMap<UnitigData>>>& v_um_solid);
-
 size_t getMaxKmerCoverage(const CompactedDBG<UnitigData>& dbg, const double top_ratio);
+
+pair<string, string> phasing(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const string& s_raw, const string& s_corr, const string& q_corr);
+void phasing_test(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const vector<string>& v_fn_long_raw, const vector<string>& v_fn_long_corr, const string& fn_long_out);
 
 #endif
