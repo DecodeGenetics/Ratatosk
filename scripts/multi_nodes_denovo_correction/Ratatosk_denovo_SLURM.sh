@@ -178,7 +178,7 @@ do
 
 	if [ $i -lt ${NB_LINES_LR} ]
 	then
-		echo "Ratatosk correct -v -1 -c ${MIN_NB_THREADS} -g ${PREFIX_PATH_SEG}/sample.index.k31.fasta -d ${PREFIX_PATH_SEG}/sample.index.k31.rtsk -l ${PREFIX_PATH_SEG}/sample.fastq.part_${j} -o ${PREFIX_PATH_SEG}/sample.corrected.part_${j}; rm -rf ${PREFIX_PATH_SEG}/sample.fastq.part_${j};" >> ${PREFIX_FILE_BIN1}
+		echo "Ratatosk correct -v -1 -c ${MIN_NB_THREADS} -g ${PREFIX_PATH_SEG}/sample.index.k31.fasta -d ${PREFIX_PATH_SEG}/sample.index.k31.rtsk -l ${PREFIX_PATH_SEG}/sample.fastq.part_${j} -o ${PREFIX_PATH_SEG}/sample.corrected.part_${j};" >> ${PREFIX_FILE_BIN1}
 		i=$((i+NB_LINES_SEGMENT))
 	else
 		break
@@ -200,7 +200,7 @@ fi
 CMD="ls -lh ${PREFIX_PATH_SEG}/sample.corrected.part_*.2.fastq | awk '{print \$9}' > ${PREFIX_PATH_SEG}/parts.txt;" # List all 1st pass corrected batches
 CMD="${CMD} Ratatosk index -v -2 -c ${MAX_NB_THREADS} -g ${PREFIX_PATH_SEG}/sample.index.k63.fasta -l ${PREFIX_PATH_SEG}/parts.txt -o ${PREFIX_PATH_SEG}/sample;" # Build Ratatosk index for 2nd correction pass
 
-SLURM_OUT=$(sbatch -p ${PARTITION} -J Ratatosk_buildIndex2 --dependency=afterok:${JOB_ID} --mem=150G --cpus-per-task=${MAX_NB_THREADS} -t 2-0:0 -o ${PREFIX_PATH_LOG}/buildIndex2.slurm.out -e ${PREFIX_PATH_LOG}/buildIndex2.slurm.err --wrap="${CMD}")
+SLURM_OUT=$(sbatch -p ${PARTITION} -J Ratatosk_buildIndex2 --dependency=afterok:${JOB_ID} --mem=200G --cpus-per-task=${MAX_NB_THREADS} -t 2-0:0 -o ${PREFIX_PATH_LOG}/buildIndex2.slurm.out -e ${PREFIX_PATH_LOG}/buildIndex2.slurm.err --wrap="${CMD}")
 
 # Extract job ID from SLURM output.
 if ! echo ${SLURM_OUT} | grep -q "[1-9][0-9]*$"; then
@@ -231,7 +231,7 @@ do
 
 	if [ $i -lt ${NB_LINES_LR} ]
 	then
-		echo "Ratatosk correct -v -2 -c ${MIN_NB_THREADS} -g ${PREFIX_PATH_SEG}/sample.index.k63.fasta -d ${PREFIX_PATH_SEG}/sample.index.k63.rtsk -l ${PREFIX_PATH_SEG}/sample.corrected.part_${j}.2.fastq -o ${PREFIX_PATH_SEG}/sample.corrected.part_${j}; rm -rf ${PREFIX_PATH_SEG}/sample.corrected.part_${j}.2.fastq;" >> ${PREFIX_FILE_BIN2}
+		echo "Ratatosk correct -v -2 -c ${MIN_NB_THREADS} -g ${PREFIX_PATH_SEG}/sample.index.k63.fasta -d ${PREFIX_PATH_SEG}/sample.index.k63.rtsk -l ${PREFIX_PATH_SEG}/sample.corrected.part_${j}.2.fastq -L ${PREFIX_PATH_SEG}/sample.fastq.part_${j} -o ${PREFIX_PATH_SEG}/sample.corrected.part_${j}; rm -rf ${PREFIX_PATH_SEG}/sample.corrected.part_${j}.2.fastq ${PREFIX_PATH_SEG}/sample.fastq.part_${j};" >> ${PREFIX_FILE_BIN2}
 		i=$((i+NB_LINES_SEGMENT))
 	else
 		break

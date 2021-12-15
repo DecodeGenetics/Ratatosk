@@ -1,6 +1,6 @@
 # Ratatosk
 
-### Phased hybrid error correction of long reads using colored de Bruijn graphs
+### Hybrid error correction of long reads using colored de Bruijn graphs
 
 Ratatosk is a *de novo* error correction tool for erroneous long reads designed for accurate variant calling and assembly. It is based on a compacted and colored de Bruijn graph built from accurate short reads. Short and long reads color paths in the graph while vertices are annotated with candidate *de novo* SNPs. We demonstrate that Ratatosk can reduce the raw error rate of ONT reads 6-fold on average with a median error rate as low as 0.28%. Ratatosk corrected data maintain nearly 99% accurate SNP calls and increase indel call accuracy by up to about 40% compared to the raw data. An assembly of the Ashkenazi individual HG002 created from Ratatosk corrected ONT reads yields a contig N50 of 43.22 Mbp and less misassemblies than an assembly created from PacBio HiFi reads.
 
@@ -82,8 +82,8 @@ Ratatosk corrects (`Ratatosk correct`) the long read file (`-l long_reads.fastq`
 
 The correction can be split in 2 steps (which can be run on different compute nodes):
 ```
-Ratatosk correct -1 -v -c 16 -s short_reads.fastq -l long_reads.fastq -o out_long_reads
-Ratatosk correct -2 -v -c 16 -s short_reads.fastq -l out_long_reads.2.fastq -o out_long_reads
+Ratatosk correct -1 -v -c 16 -s short_reads.fastq -l long_reads.fastq -o long_reads.corrected
+Ratatosk correct -2 -v -c 16 -s short_reads.fastq -l long_reads.corrected.2.fastq -L long_reads.fastq -o long_reads.corrected
 ```
 It can also be split in more than steps (see [multiple machines de novo correction](scripts/multi_nodes_denovo_correction));
 
@@ -91,15 +91,7 @@ It can also be split in more than steps (see [multiple machines de novo correcti
 
 See [multiple machines de novo correction](scripts/multi_nodes_denovo_correction).
 
-### Reference-guided correction (single and multiple nodes)
-
-See [reference-guided preprocessing](scripts/reference_guided_correction).
-
 ### Options
-
-- **Phasing** (`-p` and `-P`)
-
-  See [Phasing](phasing.md) (experimental, single node only).
 
 - **Insert size** (`-i`)
 
@@ -108,10 +100,6 @@ See [reference-guided preprocessing](scripts/reference_guided_correction).
 - **Trimming/Splitting** (`-t`)
 
   By default, Ratatosk outputs all bases (corrected and uncorrected). By using `-t`, bases with a low correction quality score are trimmed and split. Specifically, given a minimum quality score *Q* (`-t Q`), only subsequences of the corrected long reads for which the bases have a correction quality score equal to or larger than *Q* are output. Each output subsequence will have `@name/i` as name where `name` is the input name of the long read and `i` is an integer subsequence ID for read `name`. Note that only subsequences larger than the *k2*-mer size in Ratatosk (63) are output.
-
-- **Correction rounds** (`-r`)
-
-  By default, Ratatosk only performs one correction round (`-r 1`) during the 1st correction pass but multiple correction rounds can also be performed to improve the reads accuracy. We advise to use 4 rounds of correction (`-r 4`) which is twice as slow as one correction round.
 
 ### Advanced options
 

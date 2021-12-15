@@ -11,7 +11,7 @@ The following describes how to perform *de novo* correction of a long read data 
 5. Each batch of corrected long reads is re-corrected using the previously built index (multiple nodes)
 6. Batches of corrected long reads are put back into one file (single node)
 
-Steps 2 and 4 are the most memory and time consuming as they can only be performed on single nodes.
+Steps 2 and 4 are the most memory consuming but can only be performed on single nodes.
 
 ## Requirements
 
@@ -37,7 +37,7 @@ bash Ratatosk_denovo_SLURM.sh -c <MIN_NB_THREADS> -C <MAX_NB_THREADS> -n <MAX_NB
 -m [SLURM_PARTITION]: Slurm partition (default: nomosix).
 ```
 
-The memory and time requirements must be adapted in the script to fit the genome size and coverage of your input data set. The current requirements are for a 60x short reads and 80x long reads human genome data set.
+The memory and time requirements must be adapted in the script to fit the genome size and coverage of your input data set. The current requirements are for a 60x short reads human genome data set.
 
 Corrected long reads are available in `<OUTPUT_PATH>/ratatosk/sample_corrected.fastq` when all jobs are finished. You can check the status of the jobs with:
 ```
