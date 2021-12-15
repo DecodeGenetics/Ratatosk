@@ -2,7 +2,7 @@
 
 ### Hybrid error correction of long reads using colored de Bruijn graphs
 
-Ratatosk is a *de novo* error correction tool for erroneous long reads designed for accurate variant calling and assembly. It is based on a compacted and colored de Bruijn graph built from accurate short reads. Short and long reads color paths in the graph while vertices are annotated with candidate *de novo* SNPs. We demonstrate that Ratatosk can reduce the raw error rate of ONT reads 6-fold on average with a median error rate as low as 0.28%. Ratatosk corrected data maintain nearly 99% accurate SNP calls and increase indel call accuracy by up to about 40% compared to the raw data. An assembly of the Ashkenazi individual HG002 created from Ratatosk corrected ONT reads yields a contig N50 of 43.22 Mbp and less misassemblies than an assembly created from PacBio HiFi reads.
+Ratatosk is a *de novo* error correction tool for erroneous long reads designed for accurate variant calling and assembly. It is based on a compacted and colored de Bruijn graph built from accurate short reads. Reads color paths in the graph while vertices are annotated with candidate *de novo* SNPs and short repeats. We demonstrate that Ratatosk can reduce the raw error rate of ONT reads several fold on average with a mean error rate as low as 1.4%. Variant calling on Ratatosk corrected data shows 99.8% and 79.9% accuracy for SNP and indels respectively. An assembly of the Ashkenazi individual HG002 created from Ratatosk corrected ONT reads yields a contig N50 of 39.7 Mbp and a quality value of 48.5.
 
 ## Table of Contents
 
@@ -73,23 +73,36 @@ By default, the installation creates:
 - Ratatosk works best with paired-end short reads in input (`-s`): **reads from the same pair must have the same FASTA/FASTQ name** (if the reads are extracted from a BAM file, use `samtools bam2fq -n`).
 - Several temporary files are written in the same repository has the output file (`-o`) so make sure the output folder has plenty of free space.
 
-### ***de novo*** correction (single node)
+### Single node - one step
 
 ```
-Ratatosk correct -v -c 16 -s short_reads.fastq -l long_reads.fastq -o out_long_reads
+Ratatosk correct -v -c 16 -s short_reads.fastq -l in_long_reads.fastq -o out_long_reads
 ```
-Ratatosk corrects (`Ratatosk correct`) the long read file (`-l long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-i short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads.fastq* (`-o out_long_reads`).
+Ratatosk corrects (`Ratatosk correct`) the long read file (`-l in_long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-i short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads.fastq* (`-o out_long_reads`).
 
-The correction can be split in 2 steps (which can be run on different compute nodes):
+### Single node - two steps
+
+The correction can be split in two steps which can be run on different compute nodes in the order given below. It can be beneficial if there is a time limit on the used compute nodes.
 ```
-Ratatosk correct -1 -v -c 16 -s short_reads.fastq -l long_reads.fastq -o long_reads.corrected
-Ratatosk correct -2 -v -c 16 -s short_reads.fastq -l long_reads.corrected.2.fastq -L long_reads.fastq -o long_reads.corrected
+Ratatosk correct -1 -v -c 16 -s short_reads.fastq -l in_long_reads.fastq -o out_long_reads
+Ratatosk correct -2 -v -c 16 -s short_reads.fastq -l out_long_reads.2.fastq -L in_long_reads.fastq -o out_long_reads
 ```
-It can also be split in more than steps (see [multiple machines de novo correction](scripts/multi_nodes_denovo_correction));
+These commands split the correction in the two different correction passes of Ratatosk (`-1` and `-2`). The first command is likely to be the most memory and time consuming of the two.
 
-### ***de novo*** correction (multiple nodes)
+### Single node - four steps
 
-See [multiple machines de novo correction](scripts/multi_nodes_denovo_correction).
+The correction can be split in four steps which can be run on different compute nodes in the order given below. It is sometimes beneficial if there is a time limit on the used compute nodes.
+```
+Ratatosk index -1 -v -c 16 -s short_reads.fastq -l in_long_reads.fastq -o out_long_reads
+Ratatosk correct -1 -v -c 16 -g out_long_reads.index.k31.fasta -d out_long_reads.index.k31.rtsk -l in_long_reads.fastq -o out_long_reads
+Ratatosk index -2 -v -c 16 -g out_long_reads.index.k63.fasta -l out_long_reads.2.fastq -o out_long_reads
+Ratatosk correct -2 -v -c 16 -g out_long_reads.index.k63.fasta -d out_long_reads.index.k63.rtsk -l out_long_reads.2.fastq -L in_long_reads.fastq -o out_long_reads
+```
+These commands split the correction in the two different correction passes of Ratatosk (`-1` and `-2`) and each correction pass is split into its indexing part (`index`) and correction part (`correct`).
+
+### Multiple nodes
+
+See [multiple machines de novo correction](scripts/multi_nodes_denovo_correction) to split the correction over multiple compute nodes.
 
 ### Options
 
@@ -133,7 +146,7 @@ Usage: Ratatosk --cite
 Use "Ratatosk [COMMAND] --help" to get a specific command help
 ```
 
-Two commands are available: `correct` and `index`. Command `index` is only useful when correcting a data set using multiple machines (see [multiple machines de novo correction](scripts/multi_nodes_denovo_correction)).
+Two commands are available: `correct` and `index`. Command `index` is only useful when correcting a data set in multiple steps or over multiple compute nodes (see [multiple machines de novo correction](scripts/multi_nodes_denovo_correction)).
 
 ```
 Ratatosk correct --help
@@ -185,11 +198,12 @@ Usage: Ratatosk --cite
 
    -m, --min-conf-snp-corr         Minimum confidence threshold to correct a SNP (default: 0.9)
    -M, --min-conf-color2           Minimum confidence threshold to color vertices for 2nd pass (default: 0)
+   -C, --min-len-color2            Minimum length of a long read to color vertices for 2nd pass (default: 3000)
    -i, --insert-sz                 Insert size of the input paired-end short reads (default: 500)
    -k, --k1                        Length of short k-mers for 1st pass (default: 31)
    -K, --k2                        Length of long k-mers for 2nd pass (default: 63)
    -w, --max-len-weak1             Do not correct non-solid regions >= w bases during 1st pass (default: 1000)
-   -W, --max-len-weak2             Do not correct non-solid regions >= w bases during 2nd pass (default: 10000)
+   -W, --max-len-weak2             Do not correct non-solid regions >= w bases during 2nd pass (default: 5000)
 
    > Optional with no argument:
 
@@ -200,7 +214,8 @@ Usage: Ratatosk --cite
 
    > Optional with required argument:
 
-   -r, --correction-rounds         Number of short read correction rounds (default: 1)
+   -L, --in-long_raw               Input long read file from 1st pass (FASTA/FASTQ possibly gzipped)
+                                   List of input long read files to correct (one file per line)
    -p, --in-short-phase            Input short read phasing file (diploid only)
                                    List of input short read phasing files (one file per line)
    -P, --in-long-phase             Input long read phasing file (diploid only)
@@ -259,6 +274,7 @@ Usage: Ratatosk --cite
    > Optional with required argument:
 
    -M, --min-conf-color2           Minimum confidence threshold to color vertices for 2nd pass (default: 0)
+   -C, --min-len-color2            Minimum length of a long read to color vertices for 2nd pass (default: 3000)
    -i, --insert-sz                 Insert size of the input paired-end short reads (default: 500)
    -k, --k1                        Length of short k-mers for 1st pass (default: 31)
    -K, --k2                        Length of long k-mers for 2nd pass (default: 63)
@@ -292,7 +308,7 @@ Yes (the *k*-mers overlapping these characters will be discarded).
 
 **Why does Ratatosk outputs non-{A,C,G,T} characters?**
 
-Ratatosk automatically detects heterozygous SNP candidates from the input short and long reads. If Ratatosk corrects a SNP candidate site in a long read but cannot establish with enough confidence which of the possible bases is correct, a IUPAC character is output to represent the ambiguity. For example, character `N` represents all possible bases while character `R` only represents `A` or `G`.
+Ratatosk automatically detects heterozygous SNP candidates from the input short and long reads. If Ratatosk corrects a SNP candidate site in a long read but cannot establish with enough confidence which of the possible bases is the right one, a IUPAC character is output to represent the ambiguity. For example, character `N` represents all possible bases while character `R` only represents `A` or `G`.
 
 **My downstream pipeline does not handle the non-{A,C,G,T} characters output be Ratatosk, what should I do?**
 
@@ -300,7 +316,7 @@ Replace these characters by random {A,C,G,T} characters. The python script `scri
 
 **What are the quality scores output by Ratatosk?**
 
-Ratatosk outputs a quality score for each corrected base indicating how confident is Ratatosk in the correction of that base. A score of 0 means the base is left uncorrected, a score of 1 means the base was corrected with a very low confidence while a score of 40 means that Ratatosk is very sure of the correction. The scores are output in the Phred33 format but the scoring scale is linear (rather than logarithmic for Phred33).
+Ratatosk outputs a quality score for each corrected base indicating how confident is Ratatosk in the correction of that base. A score of 0 means the base is left uncorrected, a score of 1 means the base was corrected with a very low confidence while a score of 40 means that Ratatosk is very confident of the correction. The scores are output in the Phred33 format but the scoring scale is linear (rather than logarithmic for Phred33).
 
 ## Troubleshooting
 
