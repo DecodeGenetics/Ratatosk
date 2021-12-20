@@ -435,9 +435,11 @@ bool check_ProgramOptions(Correct_Opt& opt) {
 
     if (!opt.filenames_helper_long_in.empty()) ret = ret && check_files(opt.filenames_helper_long_in, true, true);
     if (!opt.filenames_short_all.empty()) ret = ret && check_files(opt.filenames_short_all, true, true);
-    if (!opt.filenames_long_raw.empty()) ret = ret && check_files(opt.filenames_long_raw, true, true);
     if (!opt.filenames_short_phase.empty()) ret = ret && check_files(opt.filenames_short_phase, true, true);
     if (!opt.filenames_long_phase.empty()) ret = ret && check_files(opt.filenames_long_phase, true, true);
+    
+    if (!opt.filenames_long_raw.empty()) ret = ret && check_files(opt.filenames_long_raw, true, true);
+    else opt.filenames_long_raw = opt.filenames_long_in;
 
     if (opt.filename_long_out.length() == 0){
 
