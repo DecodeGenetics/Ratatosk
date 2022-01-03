@@ -73,14 +73,14 @@ By default, the installation creates:
 - Ratatosk works best with paired-end short reads in input (`-s`): **reads from the same pair must have the same FASTA/FASTQ name** (if the reads are extracted from a BAM file, use `samtools bam2fq -n`).
 - Several temporary files are written in the same repository has the output file (`-o`) so make sure the output folder has plenty of free space.
 
-### Single node - one step
+### Single compute node - one step
 
 ```
 Ratatosk correct -v -c 16 -s short_reads.fastq -l in_long_reads.fastq -o out_long_reads
 ```
-Ratatosk corrects (`Ratatosk correct`) the long read file (`-l in_long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-i short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads.fastq* (`-o out_long_reads`).
+Ratatosk corrects (`Ratatosk correct`) the long read file (`-l in_long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-s short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads.fastq* (`-o out_long_reads`).
 
-### Single node - two steps
+### Single compute node - two steps
 
 The correction can be split in two steps which can be run on different compute nodes in the order given below. It can be beneficial if there is a time limit on the used compute nodes.
 ```
@@ -89,7 +89,7 @@ Ratatosk correct -2 -v -c 16 -s short_reads.fastq -l out_long_reads.2.fastq -L i
 ```
 These commands split the correction in the two different correction passes of Ratatosk (`-1` and `-2`). The first command is likely to be the most memory and time consuming of the two.
 
-### Single node - four steps
+### Single compute node - four steps
 
 The correction can be split in four steps which can be run on different compute nodes in the order given below. It is sometimes beneficial if there is a time limit on the used compute nodes.
 ```
@@ -100,7 +100,7 @@ Ratatosk correct -2 -v -c 16 -g out_long_reads.index.k63.fasta -d out_long_reads
 ```
 These commands split the correction in the two different correction passes of Ratatosk (`-1` and `-2`) and each correction pass is split into its indexing part (`index`) and correction part (`correct`).
 
-### Multiple nodes
+### Multiple compute nodes
 
 See [multiple machines de novo correction](scripts/multi_nodes_denovo_correction) to split the correction over multiple compute nodes.
 
