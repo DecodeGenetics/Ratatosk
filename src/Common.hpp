@@ -11,7 +11,7 @@
 #include "TinyBloomFilter.hpp"
 #include "SharedPairID.hpp"
 
-#define RATATOSK_VERSION "0.7.5"
+#define RATATOSK_VERSION "0.7.6"
 
 struct Correct_Opt : CDBG_Build_opt {
 
@@ -151,7 +151,7 @@ struct HashSharedPairIDptr {
 
     size_t operator()(const SharedPairID* ptr) const {
 
-        return XXH64(ptr, sizeof(const SharedPairID*), 0);
+        return wyhash(&ptr, sizeof(const SharedPairID*), 0, _wyp);
     }
 };
 
@@ -159,7 +159,7 @@ struct CustomHashUint64_t {
 
     size_t operator()(const uint64_t v) const {
 
-        return XXH64(&v, sizeof(uint64_t), 0);
+        return wyhash(&v, sizeof(uint64_t), 0, _wyp);
     }
 };
 
@@ -167,7 +167,7 @@ struct CustomHashSize_t {
 
     size_t operator()(const size_t v) const {
 
-        return XXH64(&v, sizeof(size_t), 0);
+        return wyhash(&v, sizeof(size_t), 0, _wyp);
     }
 };
 
@@ -175,7 +175,7 @@ struct CustomHashString {
 
     size_t operator()(const string& s) const {
 
-        return XXH64(s.c_str(), s.length(), 0);
+        return wyhash(s.c_str(), s.length(), 0, _wyp);
     }
 };
 
@@ -318,7 +318,7 @@ inline size_t countRecords(const vector<string>& v_fn, const bool unique, const 
 
 		while (fp.read(s, i)){
 
-			const uint64_t h = XXH64(fp.getNameString(), strlen(fp.getNameString()), seed);
+			const uint64_t h = wyhash(fp.getNameString(), strlen(fp.getNameString()), seed, _wyp);
 
 			n += static_cast<size_t>(sh.insert(h).second);
 		}

@@ -247,7 +247,7 @@ pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, cons
 
 		    size_t operator()(const pair<size_t, size_t>& p) const {
 
-		        return XXH64(&p, sizeof(pair<size_t, size_t>), 0);
+		        return wyhash(&p, sizeof(pair<size_t, size_t>), 0, _wyp);
 		    }
 		};
 
@@ -756,7 +756,7 @@ bool readGraphData(const string& input_filename, CompactedDBG<UnitigData>& dbg, 
 	    		if (pids.first != nullptr) { // IF there is a global PairID
 
 	    			const vector<uint32_t> v_id = pids.first->toVector();
-	    			const uint64_t h = XXH64(&v_id[0], v_id.size() * sizeof(uint32_t), 0); // Compute a hash from the global ids
+	    			const uint64_t h = wyhash(&v_id[0], v_id.size() * sizeof(uint32_t), 0, _wyp); // Compute a hash from the global ids
 
 	    			// Insert <hash, global PairID pointer>
 	    			pair<unordered_map<uint64_t, const PairID*, CustomHashUint64_t>::iterator, bool> p = m_sz.insert(pair<uint64_t, const PairID*>(h, pids.first));
@@ -1797,7 +1797,7 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
 
                 	if (pos_read == 0){ // New read
 
-		            	const uint64_t h_name = XXH64(fp.getNameString(), strlen(fp.getNameString()), opt.h_seed);
+		            	const uint64_t h_name = wyhash(fp.getNameString(), strlen(fp.getNameString()), opt.h_seed, _wyp);
 			        	const pair<unordered_map<uint64_t, uint64_t, CustomHashUint64_t>::const_iterator, bool> p = name_hmap.insert({h_name, nextID});
 
 			        	last_id = p.second ? nextID : p.first->second;
@@ -1879,7 +1879,7 @@ void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads
 		        		}
 		        	}
 
-                	name_hash_buf[it_name_hash_buf++] = XXH64(fp.getNameString(), strlen(fp.getNameString()), opt.h_seed);
+                	name_hash_buf[it_name_hash_buf++] = wyhash(fp.getNameString(), strlen(fp.getNameString()), opt.h_seed, _wyp);
 
                     if ((thread_seq_buf_sz - seq_buf_sz - 1) < (len_read - pos_read)){
 
@@ -3134,7 +3134,7 @@ void addPhasing(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads&
 
                 if (len_read >= k){
 
-                	const uint64_t h_name = XXH64(fp.getNameString(), strlen(fp.getNameString()), opt.h_seed);
+                	const uint64_t h_name = wyhash(fp.getNameString(), strlen(fp.getNameString()), opt.h_seed, _wyp);
                 	const unordered_map<uint64_t, uint64_t, CustomHashUint64_t>::const_iterator it_read2hap = hap_r.read2hap.find(h_name);
 
                 	if ((it_read2hap != hap_r.read2hap.end()) && (it_read2hap->second != off_limit_id)){
@@ -3262,7 +3262,7 @@ void addPhasing(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads&
 							    	const pair<unordered_map<string, uint64_t, CustomHashString>::const_iterator, bool> p_type = hap_r.hapType2id.insert({haplotype_str, hap_r.type_id});
 
 							    	const uint64_t hap_block_type = (p_block.first->second << 1) + p_type.first->second;
-							    	const uint64_t h_record = XXH64(l_buffer, haplotype_cstr - l_buffer, opt.h_seed);
+							    	const uint64_t h_record = wyhash(l_buffer, haplotype_cstr - l_buffer, opt.h_seed, _wyp);
 
 							    	hap_r.block_id += static_cast<size_t>(p_block.second);
 							    	hap_r.type_id += static_cast<size_t>(p_type.second);
@@ -3479,8 +3479,6 @@ pair<BlockedBloomFilter, unordered_set<uint64_t, CustomHashUint64_t>> buildBBF(c
                 s_str = s.c_str();
 
                 if (len_read >= k){
-
-                	//if (pos_read == 0) name_hset.insert(XXH64(fp.getNameString(), strlen(fp.getNameString()), opt.h_seed));
 
                     if ((opt.buffer_sz - seq_buf_sz - 1) < (len_read - pos_read)){
 
@@ -3714,77 +3712,34 @@ string retrieveMissingReads(const Correct_Opt& opt){
 	            const int len = strlen(seq_buf);
 	            const int len_km = len - k + 1;
 
-	            //const uint64_t name_h = XXH64(v_read_names[i].c_str(), v_read_names[i].length(), opt.h_seed);
-
 	            size_t nb_km = 0;
 	            size_t remaining_len_km = len_km;
 
 	            toUpperCase(seq_buf, len); // Put characters in upper case
 
-				/*if (p_bf_sr.second.find(name_h) != p_bf_sr.second.end()) {
+	            KmerHashIterator<RepHash> it_kmer_h(seq_buf, len, k), it_kmer_h_end;
+	        	minHashIterator<RepHash> it_min(seq_buf, len, k, g, RepHash(), true);
+
+	            for (; (it_kmer_h != it_kmer_h_end) && (nb_km < opt.min_nb_km_unmapped) && (nb_km + remaining_len_km >= opt.min_nb_km_unmapped); ++it_kmer_h) {
+
+	                const pair<uint64_t, int> p = *it_kmer_h; // <k-mer hash, k-mer position in sequence>
+
+	                it_min += (p.second - it_min.getKmerPosition()); //If one or more k-mer were jumped because contained non-ACGT char.
+
+	                const uint64_t min_hr = it_min.getHash();
+
+	                nb_km += static_cast<size_t>(!p_bf_sr.first.contains(p.first, min_hr) && bf_lr.contains(p.first, min_hr));
+	                remaining_len_km = len_km - p.second;
+	            }
+
+	            if (nb_km >= opt.min_nb_km_unmapped) {
 
 	        		++l_nb_reads_added;
 
 	        		unique_lock<mutex> lock(mutex_file_out);
 
 	        		out << '>' << v_read_names[i] << '\n' << string(seq_buf) << '\n';
-				}
-				else {*/
-
-		            KmerHashIterator<RepHash> it_kmer_h(seq_buf, len, k), it_kmer_h_end;
-		        	minHashIterator<RepHash> it_min(seq_buf, len, k, g, RepHash(), true);
-
-		            for (; (it_kmer_h != it_kmer_h_end) && (nb_km < opt.min_nb_km_unmapped) && (nb_km + remaining_len_km >= opt.min_nb_km_unmapped); ++it_kmer_h) {
-
-		                const pair<uint64_t, int> p = *it_kmer_h; // <k-mer hash, k-mer position in sequence>
-
-		                it_min += (p.second - it_min.getKmerPosition()); //If one or more k-mer were jumped because contained non-ACGT char.
-
-		                const uint64_t min_hr = it_min.getHash();
-
-		                nb_km += static_cast<size_t>(!p_bf_sr.first.contains(p.first, min_hr) && bf_lr.contains(p.first, min_hr));
-		                remaining_len_km = len_km - p.second;
-		            }
-
-		            if (nb_km >= opt.min_nb_km_unmapped) {
-
-		        		++l_nb_reads_added;
-
-		        		unique_lock<mutex> lock(mutex_file_out);
-
-		        		out << '>' << v_read_names[i] << '\n' << string(seq_buf) << '\n';
-		            }
-
-					/*KmerHashIterator<RepHash> it_kmer_h(seq_buf, len, k), it_kmer_h_end;
-		        	minHashIterator<RepHash> it_min(seq_buf, len, k, g, RepHash(), true);
-
-		        	size_t max_len_run = 0;
-
-		            for (; (it_kmer_h != it_kmer_h_end); ++it_kmer_h) {
-
-		                const pair<uint64_t, int> p = *it_kmer_h; // <k-mer hash, k-mer position in sequence>
-
-		                it_min += (p.second - it_min.getKmerPosition()); //If one or more k-mer were jumped because contained non-ACGT char.
-
-		                const uint64_t min_hr = it_min.getHash();
-
-	                	if (p_bf_sr.first.contains(p.first, min_hr) || bf_lr.contains(p.first, min_hr)) ++nb_km;
-	                	else {
-
-	                		max_len_run = max(max_len_run, nb_km);
-	                		nb_km = 0;
-	                	}
-		            }
-
-		            if (max_len_run >= opt.min_nb_km_unmapped) {
-
-		        		++l_nb_reads_added;
-
-		        		unique_lock<mutex> lock(mutex_file_out);
-
-		        		out << '>' << v_read_names[i] << '\n' << string(seq_buf) << '\n';
-		            }*/
-	        	//}
+	            }
 
 	            seq_buf += len + 1;
 	            ++i;

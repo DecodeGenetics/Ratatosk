@@ -120,10 +120,10 @@ class TinyBloomFilter {
 
 			const uint64_t nb_h = sz_h & 0x00000000000000ffULL;
 			const uint64_t mask = (sz_h >> 8) - 1;
-			const uint64_t hv_2 = XXH64(&elem, sizeof(T), r_2);
+			const uint64_t hv_2 = wyhash(&elem, sizeof(T), r_2, _wyp);
 
 			uint64_t i = 0;
-			uint64_t hv_1 = XXH64(&elem, sizeof(T), r_1);
+			uint64_t hv_1 = wyhash(&elem, sizeof(T), r_1, _wyp);
 
 			for (; i != nb_h; ++i){
 
@@ -142,10 +142,10 @@ class TinyBloomFilter {
 
 			const uint64_t nb_h = sz_h & 0x00000000000000ffULL;
 			const uint64_t mask = (sz_h >> 8) - 1;
-			const uint64_t hv_2 = XXH64(&elem, sizeof(T), r_2);
+			const uint64_t hv_2 = wyhash(&elem, sizeof(T), r_2, _wyp);
 
 			uint64_t i = 0;
-			uint64_t hv_1 = XXH64(&elem, sizeof(T), r_1);
+			uint64_t hv_1 = wyhash(&elem, sizeof(T), r_1, _wyp);
 
 			for (; i != nb_h; ++i){
 

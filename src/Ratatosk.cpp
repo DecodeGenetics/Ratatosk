@@ -435,9 +435,10 @@ bool check_ProgramOptions(Correct_Opt& opt) {
 
     if (!opt.filenames_helper_long_in.empty()) ret = ret && check_files(opt.filenames_helper_long_in, true, true);
     if (!opt.filenames_short_all.empty()) ret = ret && check_files(opt.filenames_short_all, true, true);
+
     if (!opt.filenames_short_phase.empty()) ret = ret && check_files(opt.filenames_short_phase, true, true);
     if (!opt.filenames_long_phase.empty()) ret = ret && check_files(opt.filenames_long_phase, true, true);
-    
+
     if (!opt.filenames_long_raw.empty()) ret = ret && check_files(opt.filenames_long_raw, true, true);
     else opt.filenames_long_raw = opt.filenames_long_in;
 
@@ -563,7 +564,7 @@ void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const b
 
             if (!hap_reads.second.read2hap.empty()){
 
-                const uint64_t in_name_h = XXH64(in_name.c_str(), in_name.length(), opt.h_seed);
+                const uint64_t in_name_h = wyhash(in_name.c_str(), in_name.length(), opt.h_seed, _wyp);
                 const unordered_map<uint64_t, uint64_t, CustomHashUint64_t>::const_iterator it_read2hap = hap_reads.second.read2hap.find(in_name_h);
 
                 if (it_read2hap != hap_reads.second.read2hap.end()) hap_id = it_read2hap->second;
@@ -867,7 +868,7 @@ void search(const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, const b
 
                                     if (!hap_reads.second.read2hap.empty()){ // Fetch the haploblock ID of that read, if it exists or the read has one
 
-                                        const uint64_t in_name_h = XXH64(v_in_name[i].c_str(), v_in_name[i].length(), opt.h_seed);
+                                        const uint64_t in_name_h = wyhash(v_in_name[i].c_str(), v_in_name[i].length(), opt.h_seed, _wyp);
                                         const unordered_map<uint64_t, uint64_t, CustomHashUint64_t>::const_iterator it_read2hap = hap_reads.second.read2hap.find(in_name_h);
 
                                         if (it_read2hap != hap_reads.second.read2hap.end()) hap_id = it_read2hap->second;
