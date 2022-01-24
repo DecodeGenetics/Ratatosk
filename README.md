@@ -9,7 +9,7 @@ Ratatosk is a *de novo* error correction tool for erroneous long reads designed 
 * [Requirements](#requirements)
 * [Installation](#installation)
 * [Usage](#usage)
-* [Variant calling](#variant_calling)
+* [Variant calling](#variant calling)
 * [Interface](#interface)
 * [FAQ](#faq)
 * [Troubleshooting](#troubleshooting)
@@ -125,7 +125,7 @@ In this example, the maximum *k1*/*k2*-mer length allowed is 95.
 
 ## Variant calling
 
-See [Variant calling](variant_calling) to call SNP and indels from Ratatosk-corrected long reads.
+See [Variant calling](variant_calling.md) to call SNP and indels from Ratatosk-corrected long reads.
 
 ## Interface
 
