@@ -1,6 +1,6 @@
 # Variant calling
 
-Variant calling on ONT reads Illumina-corrected with Ratatosk can be performed with the Pepper-MARGIN-DeepVariant pipeline. Pepper-MARGIN-DeepVariant models are now provided for ONT reads from R9.4 flowcells, basecalled with Guppy 5+ SUP model and corrected with Ratatosk 0.7.5. Using these models on reads from a different type of flowcell or basecalled with a different version of Guppy will work but the result won't be optimal.
+Variant calling on ONT reads Illumina-corrected with Ratatosk can be performed with the Pepper-MARGIN-DeepVariant pipeline. Pepper-MARGIN-DeepVariant models are now provided for ONT reads from R9.4 flowcells, basecalled with Guppy 5+ SUP model and corrected with Ratatosk 0.7.5. Using these models on reads from a different type of flowcell or basecalled with a different version of Guppy will work but the call accuracy will be suboptimal.
 
 ## Requirements
 
