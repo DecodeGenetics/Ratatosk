@@ -9,7 +9,7 @@ Ratatosk is a *de novo* error correction tool for erroneous long reads designed 
 * [Requirements](#requirements)
 * [Installation](#installation)
 * [Usage](#usage)
-* [Variant calling](#variant calling)
+* [Variant calling](#variantcalling)
 * [Interface](#interface)
 * [FAQ](#faq)
 * [Troubleshooting](#troubleshooting)
