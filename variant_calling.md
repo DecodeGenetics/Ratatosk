@@ -15,7 +15,7 @@ tar -xvzf R9_GUPPY_SUP_MODELS.tar.gz
 ```
 
 The output should be 5 files:
-```
+```bash
 ls -lh
 # R9_GUPPY_SUP_DEEPVARIANT.data-00000-of-00001
 # R9_GUPPY_SUP_DEEPVARIANT.index
@@ -33,7 +33,7 @@ The corrected long reads must be mapped to a reference genome. We recommend [Win
 
 ## Usage
 
-```
+```bash
 singularity exec --bind /usr/lib/locale/ \
 pepper_deepvariant_r0.7.sif \
 run_pepper_margin_deepvariant call_variant \
