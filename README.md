@@ -2,13 +2,14 @@
 
 ### Hybrid error correction of long reads using colored de Bruijn graphs
 
-Ratatosk is a *de novo* error correction tool for erroneous long reads designed for accurate variant calling and assembly. It is based on a compacted and colored de Bruijn graph built from accurate short reads. Reads color paths in the graph while vertices are annotated with candidate *de novo* SNPs and short repeats. We demonstrate that Ratatosk can reduce the raw error rate of ONT reads several fold on average with a mean error rate as low as 1.4%. Variant calling on Ratatosk corrected data shows 99.8% and 79.9% accuracy for SNP and indels respectively. An assembly of the Ashkenazi individual HG002 created from Ratatosk corrected ONT reads yields a contig N50 of 39.7 Mbp and a quality value of 48.5.
+Ratatosk is a *de novo* error correction tool for erroneous long reads designed for accurate variant calling and assembly. It is based on a compacted and colored de Bruijn graph built from accurate short reads. Reads color paths in the graph while vertices are annotated with candidate *de novo* SNPs and short repeats. We demonstrate that Ratatosk can reduce the raw error rate of ONT reads several fold on average with a mean error rate as low as 1.4%. Variant calling on Ratatosk corrected data shows 99.91% and 95.88% F1 for SNP and indels respectively. An assembly of the Ashkenazi individual HG002 created from Ratatosk corrected ONT reads yields a contig N50 of 39.7 Mbp and a quality value of 48.5.
 
 ## Table of Contents
 
 * [Requirements](#requirements)
 * [Installation](#installation)
 * [Usage](#usage)
+* [Variant calling](#variant-calling)
 * [Interface](#interface)
 * [FAQ](#faq)
 * [Troubleshooting](#troubleshooting)
@@ -121,6 +122,10 @@ The default *k1*/*k2*-mer lengths (1st/2nd correction passes) are 31/63. To work
 cmake -DMAX_KMER_SIZE=96 ..
 ```
 In this example, the maximum *k1*/*k2*-mer length allowed is 95.
+
+## Variant calling
+
+See [Variant calling](variant_calling.md) to call SNP and indels from Ratatosk-corrected long reads.
 
 ## Interface
 
@@ -350,7 +355,7 @@ For any question, feedback or problem, please feel free to file an issue on this
 
 ## License
 
-* The xxHash library is BSD licensed (https://github.com/Cyan4973/xxHash)
+* The wyhash library is Unlicense licensed (https://github.com/wangyi-fudan/wyhash)
 * The popcount library is BSD licensed (https://github.com/kimwalisch/libpopcnt)
 * The libdivide library is zlib licensed (https://github.com/ridiculousfish/libdivide)
 * The kseq library is copyrighted by Heng Li and released under the MIT license (http://lh3lh3.users.sourceforge.net/kseq.shtml)
