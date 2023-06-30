@@ -411,7 +411,7 @@ bool check_files(vector<string>& v_fn, const bool check_files_format, const bool
 
             const int format = FileParser::getFileFormat(file.c_str());
 
-            if (format >= 0) v_fn_tmp.push_back(file); // File is FASTA/FASTQ/GFA
+            if (format >= 0) v_fn_tmp.push_back(file); // File is (gzipped) FASTA/FASTQ/GFA or Bifrost binary
             else {
 
                 FILE* fp = fopen(file.c_str(), "r");

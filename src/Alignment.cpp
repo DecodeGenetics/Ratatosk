@@ -534,10 +534,10 @@ void fixAmbiguity(	const CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, 
 		const size_t quality_len = quality.length();
 		const size_t query_len = query.length();
 
-		const char q_max_corr = getQual(1.0, opt.out_qual);
-		const char q_min_corr = getQual(0.0, opt.out_qual);
+		const char q_max_corr = getQual(1.0, opt.out_qual, opt.max_qual);
+		const char q_min_corr = getQual(0.0, opt.out_qual, opt.max_qual);
 
-		const char q_min_conf_corr = getQual(opt.min_confidence_snp_corr);
+		const char q_min_conf_corr = getQual(opt.min_confidence_snp_corr, 0, opt.max_qual);
 
 		const size_t k = dbg.getK();
 

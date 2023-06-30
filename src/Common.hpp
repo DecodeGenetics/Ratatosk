@@ -11,7 +11,7 @@
 #include "TinyBloomFilter.hpp"
 #include "SharedPairID.hpp"
 
-#define RATATOSK_VERSION "0.7.6"
+#define RATATOSK_VERSION "0.9.0"
 
 struct Correct_Opt : CDBG_Build_opt {
 
@@ -37,6 +37,7 @@ struct Correct_Opt : CDBG_Build_opt {
 
 	int out_qual;
     int trim_qual;
+    int max_qual;
 
     size_t small_k;
     size_t insert_sz;
@@ -73,6 +74,10 @@ struct Correct_Opt : CDBG_Build_opt {
     double min_confidence_2nd_pass;
 
     bool force_unres_snp_corr;
+    bool force_no_snp_corr;
+    bool force_io_order;
+    bool force_no_graph_index;
+    bool compress_out;
 
 	Correct_Opt() {
 
@@ -105,6 +110,7 @@ struct Correct_Opt : CDBG_Build_opt {
 		pass1_only = false;
 		pass2_only = false;
 
+		max_qual = 40;
 		out_qual = 1;
 	    trim_qual = 0;
 
@@ -142,6 +148,10 @@ struct Correct_Opt : CDBG_Build_opt {
 	    min_confidence_2nd_pass = 0.0;
 
 	    force_unres_snp_corr = false;
+	    force_no_snp_corr = false;
+	    force_io_order = false;
+	    force_no_graph_index = false;
+	    compress_out = false;
 
 	    min_nb_km_unmapped = small_k;
 	}
@@ -388,29 +398,29 @@ inline void getAmbiguityRev(const char nuc_ambiguity, bool& nuc_a, bool& nuc_c, 
 	return;
 }
 
-inline void getStdQual(string& s) {
+inline void getStdQual(string& s, const size_t qv_max = 40) {
 
 	for (auto& c : s){
 
 		if (c < static_cast<char>(33)) c = static_cast<char>(33);
-		if (c > static_cast<char>(73)) c = static_cast<char>(73);
+		if (c > static_cast<char>(33+qv_max)) c = static_cast<char>(33+qv_max);
 	}
 }
 
-inline char getQual(const double score, const size_t qv_min = 0) {
+inline char getQual(const double score, const size_t qv_min = 0, const size_t qv_max = 40) {
 
 	const char phred_base_std = static_cast<char>(33);
-	const char phred_scale_std = static_cast<char>(40);
+	const char phred_scale_std = static_cast<char>(qv_max);
 
 	const double qv_score = min(score, 1.0) * static_cast<double>(phred_scale_std - qv_min);
 
 	return static_cast<char>(qv_score + phred_base_std + qv_min);
 }
 
-inline double getScore(const char c, const size_t qv_min = 0) {
+inline double getScore(const char c, const size_t qv_min = 0, const size_t qv_max = 40) {
 
 	const char phred_base_std =  static_cast<char>(33);
-	const char phred_scale_std =  static_cast<char>(40);
+	const char phred_scale_std =  static_cast<char>(qv_max);
 
 	const double qv_score = static_cast<double>(c - phred_base_std - qv_min);
 

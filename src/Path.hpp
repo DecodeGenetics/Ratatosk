@@ -271,50 +271,6 @@ class Path {
 			return (end.isEmpty ? start : end);
 		}
 
-		/*bool replace_back(const const_UnitigMap<U>& um) {
-
-			if (um.isEmpty || start.isEmpty) return false;
-
-			if (end.isEmpty){
-
-				l = um.len + um.getGraph()->getK() - 1;
-				start = um;
-			}
-			else {
-
-				l -= end.len;
-				l += um.len;
-
-				end = um;
-			}
-
-			return true;
-		}*/
-
-		/*bool replace_back(const const_UnitigMap<U>& um, const double score) {
-
-			if (um.isEmpty || start.isEmpty) return false;
-
-			if (end.isEmpty){
-
-				l = um.len + um.getGraph()->getK() - 1;
-				start = um;
-
-				qual[0] = getQual(score);
-			}
-			else {
-
-				l -= end.len;
-				l += um.len;
-
-				end = um;
-
-				qual[qual.length()-1] = getQual(score);
-			}
-
-			return true;
-		}*/
-
 		bool replace_back(const const_UnitigMap<U>& um, const string& qual_s) {
 
 			if (um.isEmpty || start.isEmpty) return false;
@@ -348,32 +304,6 @@ class Path {
 
 			return true;
 		}
-
-		/*bool extend(const const_UnitigMap<U>& um, const double score) {
-
-			if (um.isEmpty) return false;
-
-			if (start.isEmpty){
-
-				start = um;
-				l = um.len + um.getGraph()->getK() - 1;
-			}
-			else {
-
-				if (!end.isEmpty) {
-
-					if (end.strand) succ.append(1, end.getUnitigHead().toString()[um.getGraph()->getK() - 1]);
-					else succ.append(1, end.getUnitigTail().twin().toString()[um.getGraph()->getK() - 1]);
-				}
-
-				end = um;
-				l += um.len;
-			}
-
-			qual += getQual(score);
-
-			return true;
-		}*/
 
 		bool extend(const const_UnitigMap<U>& um) {
 

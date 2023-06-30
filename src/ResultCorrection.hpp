@@ -141,13 +141,13 @@ class ResultCorrection {
 			return (min(static_cast<size_t>(*it), old_seq_len) - pos);
 		}
 
-		inline double getMeanQualityScore(const size_t start, const size_t end) const {
+		inline double getMeanQualityScore(const size_t start, const size_t end, const size_t qv_max) const {
 
 			double score = 0.0;
 
 			if (start < end) {
 
-				for (size_t pos = start; pos < end; ++pos) score += getScore(qual[pos]);
+				for (size_t pos = start; pos < end; ++pos) score += getScore(qual[pos], 0, qv_max);
 
 				score /= static_cast<double>(end - start);
 			}

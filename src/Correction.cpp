@@ -32,7 +32,7 @@ pair<vector<Path<UnitigData>>, vector<Path<UnitigData>>> extractSemiWeakPaths(	c
 
     Path<UnitigData> tmp;
 
-    tmp.extend(um_solid_start.second, string(um_solid_start.second.len + opt.k - 1, getQual(1.0)));
+    tmp.extend(um_solid_start.second, string(um_solid_start.second.len + opt.k - 1, getQual(1.0, 0, opt.max_qual)));
 	paths1.push_back({tmp, um_solid_start.first});
 
 	while ((i_weak < v_um_weak.size()) && (v_um_weak[i_weak].first < um_solid_start.first)) ++i_weak;
@@ -165,9 +165,9 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 	if ((s_fw.length() <= dbg.getK()) || v_um_solid.empty() || (v_um_solid.size() == s_fw.length() - opt.k + 1)) {
 
 		if (long_read_correct) return {s_fw, q_fw};
-		else if (v_um_solid.size() == s_fw.length() - opt.k + 1) return {s_fw, string(s_fw.length(), getQual(1.0))};
+		else if (v_um_solid.size() == s_fw.length() - opt.k + 1) return {s_fw, string(s_fw.length(), getQual(1.0, 0, opt.max_qual))};
 
-		return {s_fw, string(s_fw.length(), getQual(0.0))};
+		return {s_fw, string(s_fw.length(), getQual(0.0, 0, opt.max_qual))};
 	}
 
 	const size_t seq_len = s_fw.length();
@@ -181,8 +181,8 @@ pair<string, string> correctSequence(	const CompactedDBG<UnitigData>& dbg, const
 	const PairID dummy_pids;
 	const PairID& phased_reads = (hap_id == undetermined_hap_id) ? dummy_pids : hap_reads.first.hap2phasedReads[hap_id];
 
-	const char q_min = getQual(0.0);
-	const char q_max = getQual(1.0);
+	const char q_min = getQual(0.0, 0, opt.max_qual);
+	const char q_max = getQual(1.0, 0, opt.max_qual);
 
 	string q_bw = q_fw;
 

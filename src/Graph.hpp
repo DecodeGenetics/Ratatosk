@@ -18,7 +18,7 @@ pair<vector<pair<size_t, const_UnitigMap<UnitigData>>>, vector<pair<size_t, cons
 																													unordered_map<Kmer, vector<const_UnitigMap<UnitigData>>, KmerHash>& m_km_um,
 																													const bool fill_map);
 
-void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads& hap_reads, const bool long_read_correct);
+void addCoverage(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads& hap_reads, const bool long_read_correct, const string long_graph);
 void addPhasing(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt, HapReads& hap_r, const bool long_read_phasing, const bool mapHapReads);
 
 void detectSNPs(CompactedDBG<UnitigData>& dbg, const Correct_Opt& opt);

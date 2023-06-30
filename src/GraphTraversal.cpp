@@ -135,11 +135,11 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS(	const Correct_Opt& opt, co
 				    back.len = max_len_path - opt.k + 1;
 				}
 
-			    p_tmp.extend(back, string(back.len + opt.k - 1, getQual(1.0)));
+			    p_tmp.extend(back, string(back.len + opt.k - 1, getQual(1.0, 0, opt.max_qual)));
 	    		v.push_back(move(p_tmp));
 			}
 
-		    p_tmp.extend(um_start_tmp, string(um_start_tmp.len + opt.k - 1, getQual(1.0)));
+		    p_tmp.extend(um_start_tmp, string(um_start_tmp.len + opt.k - 1, getQual(1.0, 0, opt.max_qual)));
 		    q.push(move(p_tmp));
 		}
 
@@ -352,12 +352,12 @@ pair<vector<Path<UnitigData>>, bool> explorePathsBFS2(	const Correct_Opt& opt, c
 				    	back_tmp.len -= um_e.dist;
 				    }
 
-				    p_start_tmp.extend(back_tmp, string(back_tmp.len + opt.k - 1, getQual(1.0)));
+				    p_start_tmp.extend(back_tmp, string(back_tmp.len + opt.k - 1, getQual(1.0, 0, opt.max_qual)));
 	        		v.push_back(move(p_start_tmp));
 				}
 			}
 
-			p_start_tmp.extend(um_start_tmp, string(um_start_tmp.len + opt.k - 1, getQual(1.0)));
+			p_start_tmp.extend(um_start_tmp, string(um_start_tmp.len + opt.k - 1, getQual(1.0, 0, opt.max_qual)));
 		    q.push(move(p_start_tmp));
 		}
 
@@ -731,9 +731,9 @@ string getScorePath(const Correct_Opt& opt, const Path<UnitigData>& path, const 
 
 	const size_t cigar_len = strlen(cigar);
 
-	const char c_best_score = getQual(score_best);
+	const char c_best_score = getQual(score_best, 0, opt.max_qual);
 
-	string qual_out(path_str.length(), getQual(score_comp, opt.out_qual));
+	string qual_out(path_str.length(), getQual(score_comp, opt.out_qual, opt.max_qual));
 
 	size_t cigar_pos = 0;
 	size_t prev_cigar_pos = 0;
@@ -1183,7 +1183,7 @@ vector<Path<UnitigData>> fixRepeats(const Correct_Opt& opt, const vector<Path<Un
 
 			string l_s_qual = s_qual;
 
-			l_s_qual.replace(len_prefix, v_um_path[pos_v_um].len + opt.k - 1, string(repeat.length(), getQual(1.0)), 0, repeat.length());
+			l_s_qual.replace(len_prefix, v_um_path[pos_v_um].len + opt.k - 1, string(repeat.length(), getQual(1.0, 0, opt.max_qual)), 0, repeat.length());
 
 			path_ext.setQuality(l_s_qual);
 
