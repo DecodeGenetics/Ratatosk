@@ -274,6 +274,7 @@ Usage: Ratatosk --cite
                                    List of input high quality long read files (one file per line)
                                    (Those reads are NOT corrected but assist the correction of reads in input)
    -g, --in-graph                  Load graph file prepared with the index command
+   -Q, --max-base-qual             Maximum base quality of input long reads (default: 40)
 
    > Optional with no argument:
 
@@ -288,6 +289,11 @@ Usage: Ratatosk --cite
    -i, --insert-sz                 Insert size of the input paired-end short reads (default: 500)
    -k, --k1                        Length of short k-mers for 1st pass (default: 31)
    -K, --k2                        Length of long k-mers for 2nd pass (default: 63)
+
+   > Mandatory with no argument:
+
+   -F, --no-snp-correction         Disable SNP detection and correction
+   -I, --no-graph-index            Disable graph index output
 ```
 
 ## FAQ
