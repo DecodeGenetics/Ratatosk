@@ -20,7 +20,7 @@ Ratatosk is a *de novo* error correction tool for erroneous long reads designed 
 ## Requirements
 
 * C++11 compiler:
-    * [GCC](https://gcc.gnu.org/) >= 4.8.5
+    * [GCC](https://gcc.gnu.org/) >= 5.1.0
     * [Clang](http://clang.llvm.org/) >= 3.5
 * [Cmake](https://cmake.org/) >= 2.8.12
 * [Zlib](https://zlib.net/)
