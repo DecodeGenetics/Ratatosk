@@ -72,21 +72,22 @@ By default, the installation creates:
 
 **Before starting**
 - Ratatosk works best with paired-end short reads in input (`-s`): **reads from the same pair must have the same FASTA/FASTQ name** (if the reads are extracted from a BAM file, use `samtools bam2fq -n`).
+- Make sure the maximum base quality value of the input long reads to correct is 40. Otherwise, `-Q` must be set to the maximum base quality value.
 - Several temporary files are written in the same repository has the output file (`-o`) so make sure the output folder has plenty of free space.
 
 ### Single compute node - one step
 
 ```
-Ratatosk correct -v -c 16 -s short_reads.fastq -l in_long_reads.fastq -o out_long_reads
+Ratatosk correct -v -G -c 16 -s short_reads.fastq -l in_long_reads.fastq -o out_long_reads
 ```
-Ratatosk corrects (`Ratatosk correct`) the long read file (`-l in_long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-s short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to file *out_long_reads.fastq* (`-o out_long_reads`).
+Ratatosk corrects (`Ratatosk correct`) the long read file (`-l in_long_reads.fastq`) with 16 threads (`-c 16`) using an index built from the short read file (`-s short_reads.fastq`). Information messages are printed during the execution (`-v`) and the corrected long reads are written to the compressed file *out_long_reads.fastq.gz* (`-G -o out_long_reads`).
 
 ### Single compute node - two steps
 
 The correction can be split in two steps which can be run on different compute nodes in the order given below. It can be beneficial if there is a time limit on the used compute nodes.
 ```
 Ratatosk correct -1 -v -c 16 -s short_reads.fastq -l in_long_reads.fastq -o out_long_reads
-Ratatosk correct -2 -v -c 16 -s short_reads.fastq -l out_long_reads.2.fastq -L in_long_reads.fastq -o out_long_reads
+Ratatosk correct -2 -v -G -c 16 -s short_reads.fastq -l out_long_reads.2.fastq -L in_long_reads.fastq -o out_long_reads
 ```
 These commands split the correction in the two different correction passes of Ratatosk (`-1` and `-2`). The first command is likely to be the most memory and time consuming of the two.
 
@@ -97,7 +98,7 @@ The correction can be split in four steps which can be run on different compute 
 Ratatosk index -1 -v -c 16 -s short_reads.fastq -l in_long_reads.fastq -o out_long_reads
 Ratatosk correct -1 -v -c 16 -g out_long_reads.index.k31.fasta -d out_long_reads.index.k31.rtsk -l in_long_reads.fastq -o out_long_reads
 Ratatosk index -2 -v -c 16 -g out_long_reads.index.k63.fasta -l out_long_reads.2.fastq -o out_long_reads
-Ratatosk correct -2 -v -c 16 -g out_long_reads.index.k63.fasta -d out_long_reads.index.k63.rtsk -l out_long_reads.2.fastq -L in_long_reads.fastq -o out_long_reads
+Ratatosk correct -2 -v -G -c 16 -g out_long_reads.index.k63.fasta -d out_long_reads.index.k63.rtsk -l out_long_reads.2.fastq -L in_long_reads.fastq -o out_long_reads
 ```
 These commands split the correction in the two different correction passes of Ratatosk (`-1` and `-2`) and each correction pass is split into its indexing part (`index`) and correction part (`correct`).
 
@@ -107,13 +108,17 @@ See [multiple machines de novo correction](scripts/multi_nodes_denovo_correction
 
 ### Options
 
+- **Base quality** (`-Q`)
+
+  By default, Ratatosk considers that the maximum base quality value of long reads is 40 but this can be changed to a different value using `-Q`. For example, newer ONT dataset can use a maximum quality vaue of 90 in which case `-Q 90` **must** be used.
+
 - **Insert size** (`-i`)
 
-  By default, Ratatosk considers that the input paired-end short reads insert size is roughly 500 (read length * 2 + fragment size). You can set the exact insert size with `-i`. If your input short reads are single end reads, set the insert size to the read length.
+  By default, Ratatosk uses an estimated paired-end short reads insert size (read length * 2 + fragment size) of about 500bp. You can set the exact insert size with `-i`. If your input short reads are single end reads, set the insert size to the read length.
 
 - **Trimming/Splitting** (`-t`)
 
-  By default, Ratatosk outputs all bases (corrected and uncorrected). By using `-t`, bases with a low correction quality score are trimmed and split. Specifically, given a minimum quality score *Q* (`-t Q`), only subsequences of the corrected long reads for which the bases have a correction quality score equal to or larger than *Q* are output. Each output subsequence will have `@name/i` as name where `name` is the input name of the long read and `i` is an integer subsequence ID for read `name`. Note that only subsequences larger than the *k2*-mer size in Ratatosk (63) are output.
+  By default, Ratatosk outputs all bases (corrected and uncorrected). By using `-t`, bases with a low correction quality score are trimmed and split. Specifically, given a minimum quality score *Q* (`-t Q`), only subsequences of the corrected long reads for which the bases have a correction quality score >=*Q* are output. Each output subsequence will have `@name/i` as name for which `name` is the input name of the long read and `i` is an integer subsequence ID for read `name`. Note that only subsequences larger than the *k2*-mer size in Ratatosk (63) are output.
 
 ### Advanced options
 
