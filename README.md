@@ -173,9 +173,9 @@ Usage: Ratatosk --cite
 
    > Mandatory with required argument:
 
-   -s, --in-short                  Input short read file to correct (FASTA/FASTQ possibly gzipped)
-                                   List of input short read files to correct (one file per line)
-   -l, --in-long                   Input long read file to correct (FASTA/FASTQ possibly gzipped)
+   -s, --in-short                  Input short read file in fasta/fastq(.gz)
+                                   List of input short read files (one file per line)
+   -l, --in-long                   Input long read file to correct in fasta/fastq(.gz)
                                    List of input long read files to correct (one file per line)
    -o, --out-long                  Output corrected long read file
 
@@ -192,9 +192,12 @@ Usage: Ratatosk --cite
                                    (Those reads are NOT corrected but assist the correction of reads in input)
    -g, --in-graph                  Load graph file prepared with the index command
    -d, --in-unitig-data            Load unitig data file prepared with the index command
+   -Q, --max-base-qual             Maximum base quality of input long reads (default: 40)
 
    > Optional with no argument:
 
+   -G, --gzip-out                  Output file is compressed with gzip
+   -O, --force-io-order            Force same long read input/output order
    -v, --verbose                   Print information
 
 [ADVANCED PARAMETERS]:
@@ -214,6 +217,8 @@ Usage: Ratatosk --cite
 
    -1, --1st-pass-only             Perform *only* the 1st correction pass (default: false)
    -2, --2nd-pass-only             Perform *only* the 2nd correction pass (default: false)
+   -F, --no-snp-correction         Disable SNP detection and correction
+   -I, --no-graph-index            Disable graph index output
 
 [EXPERIMENTAL PARAMETERS]:
 
