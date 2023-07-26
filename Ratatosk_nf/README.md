@@ -24,9 +24,9 @@ IMPORTANT: See [Cluster configuration](#cluster-configuration) before running `R
 
 ```bash
 nextflow run -profile cluster Ratatosk.nf \
---in_lr_fq in_long_reads.fastq.gz --in_sr_fq in_short_reads.fastq.gz --out_dir /my/output/directory/
+--in_lr_fq long_reads.fastq.gz --in_sr_fq short_reads.fastq.gz --out_dir /my/output/directory/
 ```
-This command runs the `Ratatosk.nf` pipeline with Nextflow: Ratatosk corrects the long read file (`--in_lr_fq in_long_reads.fastq.gz`) using an index built from the short read file (`--in_sr_fq in_short_reads.fastq.gz`). The output corrected reads are written to `/my/output/directory/lr.corrected.fastq.gz` (`--out_dir /my/output/directory/`).
+This command runs the `Ratatosk.nf` pipeline with Nextflow: Ratatosk corrects the long read file (`--in_lr_fq long_reads.fastq.gz`) using an index built from the short read file (`--in_sr_fq short_reads.fastq.gz`). The output corrected reads are written to `/my/output/directory/lr.corrected.fastq.gz` (`--out_dir /my/output/directory/`).
 
 ### Pipeline arguments
 The following are mandatory:
