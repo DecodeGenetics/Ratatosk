@@ -63,7 +63,7 @@ These profiles can be edited in `nextflow.config` to fit your cluster configurat
 
 By default, the pipeline assumes that all required tool binaries (ratatosk, samtools and pigz) are available in your PATH. If not:
 - the path to each tool binary can be set in `config/tools.config`
-```json
+```yaml
 tools.ratatosk.bin = '/local/path/to/ratatosk/binary'
 tools.samtools.bin = '/local/path/to/samtools/binary'
 tools.pigz.bin = '/local/path/to/pigz/binary'
