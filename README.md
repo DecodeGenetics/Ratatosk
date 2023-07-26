@@ -102,9 +102,9 @@ Ratatosk correct -2 -v -G -c 16 -g out_long_reads.index.k63.fasta -d out_long_re
 ```
 These commands split the correction in the two different correction passes of Ratatosk (`-1` and `-2`) and each correction pass is split into its indexing part (`index`) and correction part (`correct`).
 
-### Multiple compute nodes
+### Multiple compute nodes - cluster/cloud
 
-See [multiple machines de novo correction](scripts/multi_nodes_denovo_correction) to split the correction over multiple compute nodes.
+See our [Nextflow pipeline](Ratatosk_nf) to run the correction in parallel over multiple compute nodes.
 
 ### Options
 
