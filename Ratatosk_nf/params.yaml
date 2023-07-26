@@ -1,0 +1,22 @@
+### PIPELINE INPUT ###
+
+# BAM file of the long reads to correct
+in_lr_bam: ""
+# FASTQ file (gzipped or not) of the long reads to correct
+in_lr_fq: ""
+# BAM file of the short reads to use to correct the long reads
+in_sr_bam: ""
+# FASTQ file (gzipped or not) of the short reads to use to correct the long reads.
+# IMPORTANT: If short reads are provided in FASTQ, reads from the same pair MUST have the same FASTQ name,
+# i.e /1 and /2 are NOT allowed as suffixes in record names
+in_sr_fq: ""
+
+# Output directory
+out_dir: ""
+
+# Maximum base quality of the input long reads
+# This pipeline is designed for ONT R9.4 long read data for which the maximum base quality SHOULD be 40
+# However, ONT R10 long read data seems to use a maximum base quality of 90
+max_lr_bq: 40
+
+
