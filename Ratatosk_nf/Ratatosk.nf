@@ -259,7 +259,7 @@ workflow {
 	lr_fq = params.in_lr_fq ? [params.in_lr_fq] : []
 
 	// Split input long read fastq into smaller chunks
-	lr_chunked = chunkLR(lr_bam, lr_fq).collect()
+	lr_chunked = chunkLR(lr_bam, lr_fq)
 
 	// Extract short reads
 	sr_fq = params.in_sr_fq ? Channel.fromPath(params.in_sr_fq) : extractSR(Channel.fromPath(params.in_sr_bam))
