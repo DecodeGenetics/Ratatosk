@@ -72,7 +72,7 @@ By default, the installation creates:
 
 **Before starting**
 - Ratatosk works best with paired-end short reads in input (`-s`): **reads from the same pair must have the same FASTA/FASTQ name** (if the reads are extracted from a BAM file, use `samtools bam2fq -n`).
-- Make sure the maximum base quality value of the input long reads to correct is 40. Otherwise, `-Q` must be set to the maximum base quality value.
+- Ratatosk was designed primarily for correcting ONT R9.4 reads for which the maximum base quality is 40 (default value). When correcting a different type of long reads, adjust the maximum base quality accordingly with `-Q`, e.g `-Q 90` must be used with ONT R10.
 - Several temporary files are written in the same repository has the output file (`-o`) so make sure the output folder has plenty of free space.
 
 ### Single compute node - one step
