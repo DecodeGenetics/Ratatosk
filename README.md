@@ -6,8 +6,9 @@ Ratatosk is a *de novo* error correction tool for erroneous long reads designed 
 
 ## Table of Contents
 
-* [Requirements](#requirements)
 * [Installation](#installation)
+  * [Using conda](#using-conda)
+  * [From source](#from-source)
 * [Usage](#usage)
 * [Variant calling](#variant-calling)
 * [Interface](#interface)
@@ -17,7 +18,18 @@ Ratatosk is a *de novo* error correction tool for erroneous long reads designed 
 * [Contact](#contact)
 * [License](#license)
 
-## Requirements
+## Installation
+
+### Using conda
+Ratatosk is available on [bioconda](https://bioconda.github.io/recipes/ratatosk/README.html):
+
+```sh
+# Can also replace `conda` with `mamba`
+conda create -n ratatosk -c conda-forge -c bioconda ratatosk
+```
+### From source
+
+#### Requirements
 
 * C++11 compiler:
     * [GCC](https://gcc.gnu.org/) >= 5.1.0
@@ -46,8 +58,6 @@ brew install cmake zlib
 sudo apt-get install build-essential cmake zlib1g-dev
 ```
 5. Use the opened Ubuntu terminal for compiling, installing and running Ratatosk (see next section). See [Troubleshooting](#troubleshooting) if you have any problem during the installation.
-
-## Installation
 
 1. Clone the Git repository
   ```
