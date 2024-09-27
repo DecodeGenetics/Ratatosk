@@ -35,7 +35,7 @@ The following are mandatory:
 - **--out_dir**: Output directory of the corrected long reads
 
 The following are optional:
-- **--max-lr-bq**: Maximum base quality of the input long reads to correct. Default is 40.
+- **--max_lr_bq**: Maximum base quality of the input long reads to correct. Default is 40.
 
 Alternatively, one can skip the arguments on the command line and instead, edit the parameter file `params.yaml` which uses the same argument names as the command line. Once the file is edited, the pipeline can be run with the following command:
 ```bash
