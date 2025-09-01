@@ -216,7 +216,7 @@ class TinyBloomFilter {
 
 		inline bool empty() const {
 
-			const bool isEmpty = true;
+			bool isEmpty = true;
 
 			if (table != nullptr) {
 
