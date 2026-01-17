@@ -5,13 +5,19 @@ Variant calling on ONT reads Illumina-corrected with Ratatosk can be performed w
 ## Requirements
 
 * [Pepper-MARGIN-DeepVariant](https://github.com/kishwarshafin/pepper)
-* [Pepper-MARGIN-DeepVariant models for Ratatosk](https://drive.google.com/file/d/1AbkKIGY19xbnvVI6PUF_R4YhVOLeXiZw/view?usp=sharing)
 
 ## Installation
 
+Download the Pepper-MARGIN-DeepVariant models (web access only):
+```
+https://app.box.com/s/v5vgyjx70b0qjmnsqi6ojzbm3iuo1viu
+https://app.box.com/s/zdexj0tk51rrxxlfg52vyzu2grsm41mo
+https://app.box.com/s/evyl28f2y53lm1kqvlyim2dumu5so92z
+```
+
 Decompress the Pepper-MARGIN-DeepVariant models:
 ```
-tar -xvzf R9_GUPPY_SUP_MODELS.tar.gz
+gunzip R9_GUPPY_SUP_MODELS.zip
 ```
 
 The output should be 5 files:
